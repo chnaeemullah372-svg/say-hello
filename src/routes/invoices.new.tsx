@@ -80,7 +80,7 @@ function CreateInvoice() {
     <div className="space-y-6 pb-32 lg:pb-6">
       <PageHeader
         title="Create Invoice"
-        subtitle={<>Number <span className="font-mono font-semibold text-foreground">{nextNumber}</span> · Draft</> as unknown as string}
+        subtitle={<>Number <span className="font-mono font-semibold text-foreground">{nextNumber}</span> · Draft</>}
         action={
           <div className="hidden gap-2 lg:flex">
             <Button variant="outline" onClick={() => save({ print: true })}><Printer className="mr-1.5 h-4 w-4" />Save & Print</Button>
