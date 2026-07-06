@@ -1,10 +1,14 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowUpRight, TrendingUp, TrendingDown, FileText, Users, Package, AlertTriangle, PlusCircle } from "lucide-react";
+import {
+  ArrowUpRight, TrendingUp, TrendingDown, FileText, Users, Package, AlertTriangle, PlusCircle,
+  ShoppingCart, ClipboardList, Receipt, Landmark, Repeat, Trophy, ShieldCheck, Warehouse, Wallet,
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/PageHeader";
 import { useStore } from "@/lib/store";
+import { useAuth } from "@/lib/auth";
 import { calcInvoiceTotals, fmt, monthlySales } from "@/lib/dummy-data";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
@@ -20,6 +24,7 @@ export const Route = createFileRoute("/")({
 
 function Dashboard() {
   const { invoices, customers, products } = useStore();
+  const { user } = useAuth();
 
   const totals = invoices.map((i) => ({ ...i, ...calcInvoiceTotals(i.items, i.taxRate) }));
   const revenue = totals.reduce((s, i) => s + i.paid, 0);
@@ -33,10 +38,25 @@ function Dashboard() {
     { label: "Low-stock items", value: lowStock.toString(), delta: lowStock ? "Needs attention" : "All good", trend: lowStock ? "down" : "up", icon: AlertTriangle, tint: "bg-destructive/10 text-destructive" },
   ];
 
+  const modules = [
+    { title: "Invoicing & Sales", desc: "Create and send professional invoices in seconds.", to: "/invoices/new", icon: FileText, tint: "bg-primary/10 text-primary" },
+    { title: "Purchases", desc: "Track supplier bills linked to your inventory.", to: "/purchases", icon: ShoppingCart, tint: "bg-accent/10 text-accent" },
+    { title: "Purchase Orders", desc: "Issue digital POs before goods arrive.", to: "/purchase-orders", icon: ClipboardList, tint: "bg-gold/15 text-gold-foreground" },
+    { title: "Payments", desc: "Record cash, UPI, card & bank collections.", to: "/payments", icon: Wallet, tint: "bg-primary/10 text-primary" },
+    { title: "Expenses", desc: "Log operational spend on the go.", to: "/expenses", icon: Receipt, tint: "bg-destructive/10 text-destructive" },
+    { title: "Inventory", desc: "Live stock levels with low-stock alerts.", to: "/inventory", icon: Warehouse, tint: "bg-accent/10 text-accent" },
+    { title: "Fund Management", desc: "Bank, cash and wallet balances in one view.", to: "/funds", icon: Landmark, tint: "bg-primary/10 text-primary" },
+    { title: "Subscriptions", desc: "Automate recurring billing for repeat clients.", to: "/subscriptions", icon: Repeat, tint: "bg-gold/15 text-gold-foreground" },
+    { title: "Commissions", desc: "Reward your sales team fairly and on time.", to: "/commissions", icon: Trophy, tint: "bg-gold/15 text-gold-foreground" },
+    { title: "Team & Access", desc: "Roles and permissions for every teammate.", to: "/team", icon: ShieldCheck, tint: "bg-accent/10 text-accent" },
+  ] as const;
+
+  const firstName = (user?.name || "there").split(" ")[0];
+
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Good morning, Rajesh"
+        title={`Good morning, ${firstName}`}
         subtitle="Here's what's happening in your store today."
         action={
           <div className="flex flex-wrap gap-2">
@@ -65,6 +85,36 @@ function Dashboard() {
           </Card>
         ))}
       </div>
+
+      {/* Feature modules grid — everything the app covers */}
+      <div>
+        <div className="mb-3 flex items-end justify-between">
+          <div>
+            <h2 className="font-display text-lg font-semibold">Everything you can do</h2>
+            <p className="text-xs text-muted-foreground">Tap any card to open that module.</p>
+          </div>
+          <Badge variant="outline" className="bg-gold/10 text-gold-foreground border-gold/40">10 modules</Badge>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          {modules.map((m) => (
+            <Link
+              key={m.title}
+              to={m.to}
+              className="group rounded-xl border bg-card p-4 transition hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-lg"
+            >
+              <div className={`grid h-10 w-10 place-items-center rounded-xl ${m.tint}`}>
+                <m.icon className="h-5 w-5" />
+              </div>
+              <div className="mt-3 flex items-center gap-1 font-display text-sm font-semibold">
+                {m.title}
+                <ArrowUpRight className="h-3.5 w-3.5 opacity-0 transition group-hover:opacity-100" />
+              </div>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{m.desc}</p>
+            </Link>
+          ))}
+        </div>
+      </div>
+
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">

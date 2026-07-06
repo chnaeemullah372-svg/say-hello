@@ -13,6 +13,7 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { ThemeProvider } from "@/lib/theme";
 import { StoreProvider } from "@/lib/store";
+import { AuthProvider } from "@/lib/auth";
 import { AppShell } from "@/components/AppShell";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -113,12 +114,14 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        <StoreProvider>
-          <AppShell>
-            <Outlet />
-          </AppShell>
-          <Toaster richColors position="top-right" />
-        </StoreProvider>
+        <AuthProvider>
+          <StoreProvider>
+            <AppShell>
+              <Outlet />
+            </AppShell>
+            <Toaster richColors position="top-right" />
+          </StoreProvider>
+        </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );
