@@ -571,21 +571,19 @@ function CreateInvoice() {
         <DialogContent>
           <DialogHeader><DialogTitle>Quick add client</DialogTitle></DialogHeader>
           <div className="grid gap-3">
-            <div className="grid gap-1.5"><Label>Name</Label><Input value={newCust.name} onChange={(e) => setNewCust({ ...newCust, name: e.target.value })} /></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="grid gap-1.5"><Label>Phone</Label><Input value={newCust.phone} onChange={(e) => setNewCust({ ...newCust, phone: e.target.value })} /></div>
-              <div className="grid gap-1.5"><Label>Email</Label><Input value={newCust.email} onChange={(e) => setNewCust({ ...newCust, email: e.target.value })} /></div>
-            </div>
-            <div className="grid gap-1.5"><Label>Address</Label><Input value={newCust.address} onChange={(e) => setNewCust({ ...newCust, address: e.target.value })} /></div>
-            <div className="grid gap-1.5"><Label>GSTIN (optional)</Label><Input value={newCust.gstin} onChange={(e) => setNewCust({ ...newCust, gstin: e.target.value })} /></div>
+            <div className="grid gap-1.5"><Label>Customer Name</Label><Input autoFocus value={newCust.name} onChange={(e) => setNewCust({ ...newCust, name: e.target.value })} placeholder="Full name" /></div>
+            <div className="grid gap-1.5"><Label>Customer Contact Number</Label><Input value={newCust.phone} onChange={(e) => setNewCust({ ...newCust, phone: e.target.value })} placeholder="+92 300 …" /></div>
+            <div className="grid gap-1.5"><Label>Referral Name <span className="text-xs text-muted-foreground">(optional)</span></Label><Input value={newCust.referralName} onChange={(e) => setNewCust({ ...newCust, referralName: e.target.value })} placeholder="Who referred them" /></div>
+            <div className="grid gap-1.5"><Label>Referral Contact Number <span className="text-xs text-muted-foreground">(optional)</span></Label><Input value={newCust.referralPhone} onChange={(e) => setNewCust({ ...newCust, referralPhone: e.target.value })} placeholder="+92 300 …" /></div>
           </div>
+
           <DialogFooter>
             <Button variant="ghost" onClick={() => setAddCustOpen(false)}>Cancel</Button>
             <Button onClick={() => {
               if (!newCust.name) return toast.error("Name required");
               const c = addCustomer(newCust);
               setCustomerId(c.id);
-              setNewCust({ name: "", phone: "", email: "", address: "", gstin: "" });
+              setNewCust({ name: "", phone: "", referralName: "", referralPhone: "" });
               setAddCustOpen(false);
               toast.success("Client added & selected");
             }}>Add & select</Button>
