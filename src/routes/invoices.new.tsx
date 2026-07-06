@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Plus, Trash2, Send, Save, Printer, Eye, Calendar,
   Barcode, Package, MoreVertical, ArrowLeft, PencilLine,
@@ -9,12 +9,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useStore } from "@/lib/store";
 import { fmt, type InvoiceItem, type Product } from "@/lib/dummy-data";
 import { toast } from "sonner";
+
 
 export const Route = createFileRoute("/invoices/new")({
   head: () => ({ meta: [
@@ -31,7 +31,8 @@ type DraftLine = InvoiceItem & { unit?: string; code?: string; warehouse?: strin
 
 function CreateInvoice() {
   const nav = useNavigate();
-  const { customers, products, addCustomer, addInvoice, invoices } = useStore();
+  const { customers, products, addCustomer, addProduct, addInvoice, invoices } = useStore();
+
   const nextNumber = `INV${Math.max(3, invoices.length + 1)}`;
 
   const [customerId, setCustomerId] = useState<string>("");
@@ -67,7 +68,7 @@ function CreateInvoice() {
   const [addCustOpen, setAddCustOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [itemDlgOpen, setItemDlgOpen] = useState(false);
-  const [newCust, setNewCust] = useState({ name: "", phone: "", email: "", address: "", gstin: "" });
+  const [newCust, setNewCust] = useState({ name: "", phone: "", referralName: "", referralPhone: "" });
 
   const customer = customers.find((c) => c.id === customerId);
 
@@ -85,10 +86,15 @@ function CreateInvoice() {
   const openNewItem = () => { setEditingIndex(null); setItemDlgOpen(true); };
   const openEditItem = (i: number) => { setEditingIndex(i); setItemDlgOpen(true); };
   const saveLine = (line: DraftLine) => {
-    if (editingIndex === null) setItems((p) => [...p, line]);
-    else setItems((p) => p.map((it, i) => (i === editingIndex ? line : it)));
-    setItemDlgOpen(false);
+    if (editingIndex === null) {
+      setItems((p) => [...p, line]);
+      // keep dialog open so staff can add more items one after another
+    } else {
+      setItems((p) => p.map((it, i) => (i === editingIndex ? line : it)));
+      setItemDlgOpen(false);
+    }
   };
+
   const removeLine = (i: number) => setItems((p) => p.filter((_, idx) => idx !== i));
 
   const save = (opts: { print?: boolean; preview?: boolean } = {}) => {
@@ -565,21 +571,19 @@ function CreateInvoice() {
         <DialogContent>
           <DialogHeader><DialogTitle>Quick add client</DialogTitle></DialogHeader>
           <div className="grid gap-3">
-            <div className="grid gap-1.5"><Label>Name</Label><Input value={newCust.name} onChange={(e) => setNewCust({ ...newCust, name: e.target.value })} /></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="grid gap-1.5"><Label>Phone</Label><Input value={newCust.phone} onChange={(e) => setNewCust({ ...newCust, phone: e.target.value })} /></div>
-              <div className="grid gap-1.5"><Label>Email</Label><Input value={newCust.email} onChange={(e) => setNewCust({ ...newCust, email: e.target.value })} /></div>
-            </div>
-            <div className="grid gap-1.5"><Label>Address</Label><Input value={newCust.address} onChange={(e) => setNewCust({ ...newCust, address: e.target.value })} /></div>
-            <div className="grid gap-1.5"><Label>GSTIN (optional)</Label><Input value={newCust.gstin} onChange={(e) => setNewCust({ ...newCust, gstin: e.target.value })} /></div>
+            <div className="grid gap-1.5"><Label>Customer Name</Label><Input autoFocus value={newCust.name} onChange={(e) => setNewCust({ ...newCust, name: e.target.value })} placeholder="Full name" /></div>
+            <div className="grid gap-1.5"><Label>Customer Contact Number</Label><Input value={newCust.phone} onChange={(e) => setNewCust({ ...newCust, phone: e.target.value })} placeholder="+92 300 …" /></div>
+            <div className="grid gap-1.5"><Label>Referral Name <span className="text-xs text-muted-foreground">(optional)</span></Label><Input value={newCust.referralName} onChange={(e) => setNewCust({ ...newCust, referralName: e.target.value })} placeholder="Who referred them" /></div>
+            <div className="grid gap-1.5"><Label>Referral Contact Number <span className="text-xs text-muted-foreground">(optional)</span></Label><Input value={newCust.referralPhone} onChange={(e) => setNewCust({ ...newCust, referralPhone: e.target.value })} placeholder="+92 300 …" /></div>
           </div>
+
           <DialogFooter>
             <Button variant="ghost" onClick={() => setAddCustOpen(false)}>Cancel</Button>
             <Button onClick={() => {
               if (!newCust.name) return toast.error("Name required");
               const c = addCustomer(newCust);
               setCustomerId(c.id);
-              setNewCust({ name: "", phone: "", email: "", address: "", gstin: "" });
+              setNewCust({ name: "", phone: "", referralName: "", referralPhone: "" });
               setAddCustOpen(false);
               toast.success("Client added & selected");
             }}>Add & select</Button>
@@ -593,9 +597,12 @@ function CreateInvoice() {
         onOpenChange={setItemDlgOpen}
         mode={mode}
         products={products}
+        editing={editingIndex !== null}
         initial={editingIndex !== null ? items[editingIndex] : undefined}
         onSave={saveLine}
+        onRegisterProduct={(p) => addProduct(p)}
       />
+
     </div>
   );
 }
@@ -603,14 +610,16 @@ function CreateInvoice() {
 /* ---------------- Item dialog ---------------- */
 
 function ItemDialog({
-  open, onOpenChange, mode, products, initial, onSave,
+  open, onOpenChange, mode, products, editing, initial, onSave, onRegisterProduct,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   mode: ItemMode;
   products: Product[];
+  editing: boolean;
   initial?: DraftLine;
   onSave: (line: DraftLine) => void;
+  onRegisterProduct: (p: Omit<Product, "id">) => Product;
 }) {
   const [wholesale, setWholesale] = useState(initial?.wholesale ?? false);
   const [name, setName] = useState(initial?.name ?? "");
@@ -622,6 +631,8 @@ function ItemDialog({
   const [warehouse, setWarehouse] = useState(initial?.warehouse ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
   const [search, setSearch] = useState(false);
+  const [addedCount, setAddedCount] = useState(0);
+  const nameRef = useRef<HTMLInputElement | null>(null);
 
   const picked = products.find((p) => p.id === productId);
   const results = name
@@ -629,7 +640,7 @@ function ItemDialog({
     : products.slice(0, 8);
 
   // reset on open
-  useMemo(() => {
+  useEffect(() => {
     if (open) {
       setWholesale(initial?.wholesale ?? false);
       setName(initial?.name ?? "");
@@ -641,8 +652,10 @@ function ItemDialog({
       setWarehouse(initial?.warehouse ?? "");
       setDescription(initial?.description ?? "");
       setSearch(false);
+      setAddedCount(0);
+      setTimeout(() => nameRef.current?.focus(), 50);
     }
-  }, [open]);
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pickProduct = (p: Product) => {
     setProductId(p.id);
@@ -654,12 +667,50 @@ function ItemDialog({
   };
 
   const submit = () => {
-    if (!name.trim()) return toast.error("Please enter a product / service name");
+    const trimmed = name.trim();
+    if (!trimmed) return toast.error("Please enter a product / service name");
     if (qty <= 0) return toast.error("Quantity must be greater than zero");
-    onSave({ productId, name: name.trim(), qty, rate, discount: 0, code, unit, warehouse, description, wholesale });
+
+    // Auto-register brand-new products so they show up in future suggestions
+    let pid = productId;
+    if (!pid && mode === "product") {
+      const existing = products.find((p) => p.name.toLowerCase() === trimmed.toLowerCase());
+      if (existing) {
+        pid = existing.id;
+      } else {
+        const created = onRegisterProduct({
+          name: trimmed,
+          sku: code || trimmed.replace(/\s+/g, "-").slice(0, 12).toUpperCase(),
+          category: "Custom",
+          price: rate,
+          stock: 0,
+          lowStockAt: 5,
+          unit: unit || "pc",
+        });
+        pid = created.id;
+        toast.success(`Saved “${trimmed}” to products`);
+      }
+    }
+
+    onSave({ productId: pid, name: trimmed, qty, rate, discount: 0, code, unit, warehouse, description, wholesale });
+
+    if (editing) return; // parent closes for edit mode
+
+    // Add-more flow: clear line fields, keep dialog open, refocus name
+    setAddedCount((c) => c + 1);
+    setName("");
+    setProductId("");
+    setQty(1);
+    setRate(0);
+    setCode("");
+    setUnit("");
+    setDescription("");
+    setSearch(false);
+    setTimeout(() => nameRef.current?.focus(), 30);
   };
 
   const stock = picked?.stock ?? 0;
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -670,8 +721,14 @@ function ItemDialog({
             <Package className="h-7 w-7" />
           </div>
           <DialogTitle className="font-display text-base font-bold">
-            Add {mode === "service" ? "Service" : mode === "fixed" ? "Fixed Amount" : "Product / Service"}
+            {editing ? "Edit " : "Add "}{mode === "service" ? "Service" : mode === "fixed" ? "Fixed Amount" : "Product / Service"}
           </DialogTitle>
+          {!editing && addedCount > 0 && (
+            <div className="text-[11px] font-semibold text-accent">
+              {addedCount} item{addedCount > 1 ? "s" : ""} added · keep adding, then tap Close
+            </div>
+          )}
+
         </div>
 
         <div className="space-y-0 px-0 py-0">
@@ -697,12 +754,15 @@ function ItemDialog({
           {/* Name + barcode */}
           <div className="relative border-b px-4 py-2">
             <Input
+              ref={nameRef}
               value={name}
               onChange={(e) => { setName(e.target.value); setSearch(true); }}
               onFocus={() => setSearch(true)}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } }}
               placeholder={mode === "service" ? "Please Enter Service Name" : "Please Enter Product Name"}
               className="h-10 border-0 pl-0 pr-9 shadow-none focus-visible:ring-0"
             />
+
             <Barcode className="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
             {search && mode !== "fixed" && results.length > 0 && (
               <div className="absolute inset-x-2 top-full z-30 mt-1 max-h-56 overflow-auto rounded-md border bg-popover shadow-lg">
@@ -803,8 +863,11 @@ function ItemDialog({
 
         <DialogFooter className="grid grid-cols-2 gap-2 border-t bg-muted/40 p-3">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
-          <Button className="bg-accent text-accent-foreground hover:bg-accent/90" onClick={submit}>Add</Button>
+          <Button className="bg-accent text-accent-foreground hover:bg-accent/90" onClick={submit}>
+            {editing ? "Save" : addedCount > 0 ? "Add another" : "Add"}
+          </Button>
         </DialogFooter>
+
       </DialogContent>
     </Dialog>
   );

@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+
 import { useStore } from "@/lib/store";
 import { fmt } from "@/lib/dummy-data";
 import { toast } from "sonner";
@@ -25,10 +25,10 @@ function CustomersPage() {
   const { customers, addCustomer } = useStore();
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", phone: "", email: "", gstin: "", address: "" });
+  const [form, setForm] = useState({ name: "", phone: "", referralName: "", referralPhone: "" });
 
   const filtered = customers.filter((c) =>
-    [c.name, c.phone, c.email].join(" ").toLowerCase().includes(q.toLowerCase())
+    [c.name, c.phone, c.referralName ?? "", c.referralPhone ?? ""].join(" ").toLowerCase().includes(q.toLowerCase())
   );
 
   return (
@@ -44,21 +44,18 @@ function CustomersPage() {
             <DialogContent>
               <DialogHeader><DialogTitle>New customer</DialogTitle></DialogHeader>
               <div className="grid gap-3">
-                <div className="grid gap-1.5"><Label>Name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Business or person" /></div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="grid gap-1.5"><Label>Phone</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+91 …" /></div>
-                  <div className="grid gap-1.5"><Label>Email</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
-                </div>
-                <div className="grid gap-1.5"><Label>GSTIN (optional)</Label><Input value={form.gstin} onChange={(e) => setForm({ ...form, gstin: e.target.value })} /></div>
-                <div className="grid gap-1.5"><Label>Address</Label><Textarea rows={2} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></div>
+                <div className="grid gap-1.5"><Label>Customer Name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Full name" autoFocus /></div>
+                <div className="grid gap-1.5"><Label>Customer Contact Number</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+92 300 …" /></div>
+                <div className="grid gap-1.5"><Label>Referral Name <span className="text-xs text-muted-foreground">(optional)</span></Label><Input value={form.referralName} onChange={(e) => setForm({ ...form, referralName: e.target.value })} placeholder="Who referred them" /></div>
+                <div className="grid gap-1.5"><Label>Referral Contact Number <span className="text-xs text-muted-foreground">(optional)</span></Label><Input value={form.referralPhone} onChange={(e) => setForm({ ...form, referralPhone: e.target.value })} placeholder="+92 300 …" /></div>
               </div>
               <DialogFooter>
                 <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
                 <Button onClick={() => {
-                  if (!form.name) { toast.error("Name is required"); return; }
+                  if (!form.name) { toast.error("Customer name is required"); return; }
                   addCustomer(form);
                   toast.success("Customer added");
-                  setForm({ name: "", phone: "", email: "", gstin: "", address: "" });
+                  setForm({ name: "", phone: "", referralName: "", referralPhone: "" });
                   setOpen(false);
                 }}>Save customer</Button>
               </DialogFooter>
@@ -66,6 +63,7 @@ function CustomersPage() {
           </Dialog>
         }
       />
+
 
       <div className="relative max-w-md">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -88,10 +86,17 @@ function CustomersPage() {
                     </div>
                   </div>
                   <ul className="mt-3 space-y-1.5 text-xs text-muted-foreground">
-                    <li className="flex items-center gap-2"><Phone className="h-3 w-3" /> {c.phone}</li>
-                    <li className="flex items-center gap-2"><Mail className="h-3 w-3" /> <span className="truncate">{c.email}</span></li>
-                    <li className="flex items-start gap-2"><MapPin className="h-3 w-3 mt-0.5" /> {c.address}</li>
+                    <li className="flex items-center gap-2"><Phone className="h-3 w-3" /> {c.phone || "—"}</li>
+                    {c.referralName && (
+                      <li className="flex items-center gap-2">
+                        <UserPlus className="h-3 w-3" />
+                        <span className="truncate">Ref: {c.referralName}{c.referralPhone ? ` · ${c.referralPhone}` : ""}</span>
+                      </li>
+                    )}
+                    {c.email && <li className="flex items-center gap-2"><Mail className="h-3 w-3" /> <span className="truncate">{c.email}</span></li>}
+                    {c.address && <li className="flex items-start gap-2"><MapPin className="h-3 w-3 mt-0.5" /> {c.address}</li>}
                   </ul>
+
                 </div>
                 <Button variant="ghost" size="icon" className="shrink-0" onClick={() => toast.info("Edit is a demo action")}>
                   <Pencil className="h-4 w-4" />
