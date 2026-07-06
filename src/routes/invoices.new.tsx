@@ -597,9 +597,12 @@ function CreateInvoice() {
         onOpenChange={setItemDlgOpen}
         mode={mode}
         products={products}
+        editing={editingIndex !== null}
         initial={editingIndex !== null ? items[editingIndex] : undefined}
         onSave={saveLine}
+        onRegisterProduct={(p) => addProduct(p)}
       />
+
     </div>
   );
 }
