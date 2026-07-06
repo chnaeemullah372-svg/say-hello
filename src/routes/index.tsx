@@ -86,6 +86,36 @@ function Dashboard() {
         ))}
       </div>
 
+      {/* Feature modules grid — everything the app covers */}
+      <div>
+        <div className="mb-3 flex items-end justify-between">
+          <div>
+            <h2 className="font-display text-lg font-semibold">Everything you can do</h2>
+            <p className="text-xs text-muted-foreground">Tap any card to open that module.</p>
+          </div>
+          <Badge variant="outline" className="bg-gold/10 text-gold-foreground border-gold/40">10 modules</Badge>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          {modules.map((m) => (
+            <Link
+              key={m.title}
+              to={m.to}
+              className="group rounded-xl border bg-card p-4 transition hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-lg"
+            >
+              <div className={`grid h-10 w-10 place-items-center rounded-xl ${m.tint}`}>
+                <m.icon className="h-5 w-5" />
+              </div>
+              <div className="mt-3 flex items-center gap-1 font-display text-sm font-semibold">
+                {m.title}
+                <ArrowUpRight className="h-3.5 w-3.5 opacity-0 transition group-hover:opacity-100" />
+              </div>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{m.desc}</p>
+            </Link>
+          ))}
+        </div>
+      </div>
+
+
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader className="flex flex-row items-center justify-between">
