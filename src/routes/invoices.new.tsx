@@ -1,8 +1,8 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import {
-  Plus, Trash2, Send, Save, Printer, Eye, ChevronDown, Calendar,
-  Barcode, Package, MoreVertical, ArrowLeft, PencilLine, X,
+  Plus, Trash2, Send, Save, Printer, Eye, Calendar,
+  Barcode, Package, MoreVertical, ArrowLeft, PencilLine,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
