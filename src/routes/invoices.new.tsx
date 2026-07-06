@@ -31,7 +31,8 @@ type DraftLine = InvoiceItem & { unit?: string; code?: string; warehouse?: strin
 
 function CreateInvoice() {
   const nav = useNavigate();
-  const { customers, products, addCustomer, addInvoice, invoices } = useStore();
+  const { customers, products, addCustomer, addProduct, addInvoice, invoices } = useStore();
+
   const nextNumber = `INV${Math.max(3, invoices.length + 1)}`;
 
   const [customerId, setCustomerId] = useState<string>("");
@@ -67,7 +68,7 @@ function CreateInvoice() {
   const [addCustOpen, setAddCustOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [itemDlgOpen, setItemDlgOpen] = useState(false);
-  const [newCust, setNewCust] = useState({ name: "", phone: "", email: "", address: "", gstin: "" });
+  const [newCust, setNewCust] = useState({ name: "", phone: "", referralName: "", referralPhone: "" });
 
   const customer = customers.find((c) => c.id === customerId);
 
@@ -85,10 +86,15 @@ function CreateInvoice() {
   const openNewItem = () => { setEditingIndex(null); setItemDlgOpen(true); };
   const openEditItem = (i: number) => { setEditingIndex(i); setItemDlgOpen(true); };
   const saveLine = (line: DraftLine) => {
-    if (editingIndex === null) setItems((p) => [...p, line]);
-    else setItems((p) => p.map((it, i) => (i === editingIndex ? line : it)));
-    setItemDlgOpen(false);
+    if (editingIndex === null) {
+      setItems((p) => [...p, line]);
+      // keep dialog open so staff can add more items one after another
+    } else {
+      setItems((p) => p.map((it, i) => (i === editingIndex ? line : it)));
+      setItemDlgOpen(false);
+    }
   };
+
   const removeLine = (i: number) => setItems((p) => p.filter((_, idx) => idx !== i));
 
   const save = (opts: { print?: boolean; preview?: boolean } = {}) => {
