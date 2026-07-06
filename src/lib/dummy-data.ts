@@ -2,11 +2,14 @@ export type Customer = {
   id: string;
   name: string;
   phone: string;
-  email: string;
+  email?: string;
   gstin?: string;
-  address: string;
+  address?: string;
+  referralName?: string;
+  referralPhone?: string;
   balance: number;
 };
+
 
 export type Product = {
   id: string;
