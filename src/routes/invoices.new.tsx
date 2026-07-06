@@ -322,7 +322,7 @@ function CreateInvoice() {
                 <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Base Amount</div>
               </div>
               <div className="divide-y">
-                <SummaryLine label="Sub Total" value={fmt(base.subtotal)} />
+                <SummaryLine label="Sub Total" right={<span className="text-sm font-semibold tabular-nums">{fmt(base.subtotal)}</span>} />
                 <SummaryLine
                   label="Discount Rate"
                   right={
