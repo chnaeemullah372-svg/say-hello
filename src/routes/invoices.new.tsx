@@ -721,8 +721,14 @@ function ItemDialog({
             <Package className="h-7 w-7" />
           </div>
           <DialogTitle className="font-display text-base font-bold">
-            Add {mode === "service" ? "Service" : mode === "fixed" ? "Fixed Amount" : "Product / Service"}
+            {editing ? "Edit " : "Add "}{mode === "service" ? "Service" : mode === "fixed" ? "Fixed Amount" : "Product / Service"}
           </DialogTitle>
+          {!editing && addedCount > 0 && (
+            <div className="text-[11px] font-semibold text-accent">
+              {addedCount} item{addedCount > 1 ? "s" : ""} added · keep adding, then tap Close
+            </div>
+          )}
+
         </div>
 
         <div className="space-y-0 px-0 py-0">
@@ -748,12 +754,15 @@ function ItemDialog({
           {/* Name + barcode */}
           <div className="relative border-b px-4 py-2">
             <Input
+              ref={nameRef}
               value={name}
               onChange={(e) => { setName(e.target.value); setSearch(true); }}
               onFocus={() => setSearch(true)}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } }}
               placeholder={mode === "service" ? "Please Enter Service Name" : "Please Enter Product Name"}
               className="h-10 border-0 pl-0 pr-9 shadow-none focus-visible:ring-0"
             />
+
             <Barcode className="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
             {search && mode !== "fixed" && results.length > 0 && (
               <div className="absolute inset-x-2 top-full z-30 mt-1 max-h-56 overflow-auto rounded-md border bg-popover shadow-lg">
@@ -854,8 +863,11 @@ function ItemDialog({
 
         <DialogFooter className="grid grid-cols-2 gap-2 border-t bg-muted/40 p-3">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
-          <Button className="bg-accent text-accent-foreground hover:bg-accent/90" onClick={submit}>Add</Button>
+          <Button className="bg-accent text-accent-foreground hover:bg-accent/90" onClick={submit}>
+            {editing ? "Save" : addedCount > 0 ? "Add another" : "Add"}
+          </Button>
         </DialogFooter>
+
       </DialogContent>
     </Dialog>
   );
