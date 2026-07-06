@@ -1,10 +1,14 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowUpRight, TrendingUp, TrendingDown, FileText, Users, Package, AlertTriangle, PlusCircle } from "lucide-react";
+import {
+  ArrowUpRight, TrendingUp, TrendingDown, FileText, Users, Package, AlertTriangle, PlusCircle,
+  ShoppingCart, ClipboardList, Receipt, Landmark, Repeat, Trophy, ShieldCheck, Warehouse, Wallet,
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/PageHeader";
 import { useStore } from "@/lib/store";
+import { useAuth } from "@/lib/auth";
 import { calcInvoiceTotals, fmt, monthlySales } from "@/lib/dummy-data";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
