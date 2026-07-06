@@ -86,10 +86,17 @@ function CustomersPage() {
                     </div>
                   </div>
                   <ul className="mt-3 space-y-1.5 text-xs text-muted-foreground">
-                    <li className="flex items-center gap-2"><Phone className="h-3 w-3" /> {c.phone}</li>
-                    <li className="flex items-center gap-2"><Mail className="h-3 w-3" /> <span className="truncate">{c.email}</span></li>
-                    <li className="flex items-start gap-2"><MapPin className="h-3 w-3 mt-0.5" /> {c.address}</li>
+                    <li className="flex items-center gap-2"><Phone className="h-3 w-3" /> {c.phone || "—"}</li>
+                    {c.referralName && (
+                      <li className="flex items-center gap-2">
+                        <UserPlus className="h-3 w-3" />
+                        <span className="truncate">Ref: {c.referralName}{c.referralPhone ? ` · ${c.referralPhone}` : ""}</span>
+                      </li>
+                    )}
+                    {c.email && <li className="flex items-center gap-2"><Mail className="h-3 w-3" /> <span className="truncate">{c.email}</span></li>}
+                    {c.address && <li className="flex items-start gap-2"><MapPin className="h-3 w-3 mt-0.5" /> {c.address}</li>}
                   </ul>
+
                 </div>
                 <Button variant="ghost" size="icon" className="shrink-0" onClick={() => toast.info("Edit is a demo action")}>
                   <Pencil className="h-4 w-4" />
