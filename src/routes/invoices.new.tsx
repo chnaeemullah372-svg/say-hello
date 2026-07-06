@@ -610,14 +610,16 @@ function CreateInvoice() {
 /* ---------------- Item dialog ---------------- */
 
 function ItemDialog({
-  open, onOpenChange, mode, products, initial, onSave,
+  open, onOpenChange, mode, products, editing, initial, onSave, onRegisterProduct,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   mode: ItemMode;
   products: Product[];
+  editing: boolean;
   initial?: DraftLine;
   onSave: (line: DraftLine) => void;
+  onRegisterProduct: (p: Omit<Product, "id">) => Product;
 }) {
   const [wholesale, setWholesale] = useState(initial?.wholesale ?? false);
   const [name, setName] = useState(initial?.name ?? "");
@@ -629,6 +631,8 @@ function ItemDialog({
   const [warehouse, setWarehouse] = useState(initial?.warehouse ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
   const [search, setSearch] = useState(false);
+  const [addedCount, setAddedCount] = useState(0);
+  const nameRef = useRef<HTMLInputElement | null>(null);
 
   const picked = products.find((p) => p.id === productId);
   const results = name
@@ -636,7 +640,7 @@ function ItemDialog({
     : products.slice(0, 8);
 
   // reset on open
-  useMemo(() => {
+  useEffect(() => {
     if (open) {
       setWholesale(initial?.wholesale ?? false);
       setName(initial?.name ?? "");
@@ -648,8 +652,10 @@ function ItemDialog({
       setWarehouse(initial?.warehouse ?? "");
       setDescription(initial?.description ?? "");
       setSearch(false);
+      setAddedCount(0);
+      setTimeout(() => nameRef.current?.focus(), 50);
     }
-  }, [open]);
+  }, [open, initial]);
 
   const pickProduct = (p: Product) => {
     setProductId(p.id);
@@ -661,12 +667,50 @@ function ItemDialog({
   };
 
   const submit = () => {
-    if (!name.trim()) return toast.error("Please enter a product / service name");
+    const trimmed = name.trim();
+    if (!trimmed) return toast.error("Please enter a product / service name");
     if (qty <= 0) return toast.error("Quantity must be greater than zero");
-    onSave({ productId, name: name.trim(), qty, rate, discount: 0, code, unit, warehouse, description, wholesale });
+
+    // Auto-register brand-new products so they show up in future suggestions
+    let pid = productId;
+    if (!pid && mode === "product") {
+      const existing = products.find((p) => p.name.toLowerCase() === trimmed.toLowerCase());
+      if (existing) {
+        pid = existing.id;
+      } else {
+        const created = onRegisterProduct({
+          name: trimmed,
+          sku: code || trimmed.replace(/\s+/g, "-").slice(0, 12).toUpperCase(),
+          category: "Custom",
+          price: rate,
+          stock: 0,
+          lowStockAt: 5,
+          unit: unit || "pc",
+        });
+        pid = created.id;
+        toast.success(`Saved “${trimmed}” to products`);
+      }
+    }
+
+    onSave({ productId: pid, name: trimmed, qty, rate, discount: 0, code, unit, warehouse, description, wholesale });
+
+    if (editing) return; // parent closes for edit mode
+
+    // Add-more flow: clear line fields, keep dialog open, refocus name
+    setAddedCount((c) => c + 1);
+    setName("");
+    setProductId("");
+    setQty(1);
+    setRate(0);
+    setCode("");
+    setUnit("");
+    setDescription("");
+    setSearch(false);
+    setTimeout(() => nameRef.current?.focus(), 30);
   };
 
   const stock = picked?.stock ?? 0;
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
