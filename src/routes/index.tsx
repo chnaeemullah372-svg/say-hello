@@ -24,6 +24,7 @@ export const Route = createFileRoute("/")({
 
 function Dashboard() {
   const { invoices, customers, products } = useStore();
+  const { user } = useAuth();
 
   const totals = invoices.map((i) => ({ ...i, ...calcInvoiceTotals(i.items, i.taxRate) }));
   const revenue = totals.reduce((s, i) => s + i.paid, 0);
@@ -37,10 +38,25 @@ function Dashboard() {
     { label: "Low-stock items", value: lowStock.toString(), delta: lowStock ? "Needs attention" : "All good", trend: lowStock ? "down" : "up", icon: AlertTriangle, tint: "bg-destructive/10 text-destructive" },
   ];
 
+  const modules = [
+    { title: "Invoicing & Sales", desc: "Create and send professional invoices in seconds.", to: "/invoices/new", icon: FileText, tint: "bg-primary/10 text-primary" },
+    { title: "Purchases", desc: "Track supplier bills linked to your inventory.", to: "/purchases", icon: ShoppingCart, tint: "bg-accent/10 text-accent" },
+    { title: "Purchase Orders", desc: "Issue digital POs before goods arrive.", to: "/purchase-orders", icon: ClipboardList, tint: "bg-gold/15 text-gold-foreground" },
+    { title: "Payments", desc: "Record cash, UPI, card & bank collections.", to: "/payments", icon: Wallet, tint: "bg-primary/10 text-primary" },
+    { title: "Expenses", desc: "Log operational spend on the go.", to: "/expenses", icon: Receipt, tint: "bg-destructive/10 text-destructive" },
+    { title: "Inventory", desc: "Live stock levels with low-stock alerts.", to: "/inventory", icon: Warehouse, tint: "bg-accent/10 text-accent" },
+    { title: "Fund Management", desc: "Bank, cash and wallet balances in one view.", to: "/funds", icon: Landmark, tint: "bg-primary/10 text-primary" },
+    { title: "Subscriptions", desc: "Automate recurring billing for repeat clients.", to: "/subscriptions", icon: Repeat, tint: "bg-gold/15 text-gold-foreground" },
+    { title: "Commissions", desc: "Reward your sales team fairly and on time.", to: "/commissions", icon: Trophy, tint: "bg-gold/15 text-gold-foreground" },
+    { title: "Team & Access", desc: "Roles and permissions for every teammate.", to: "/team", icon: ShieldCheck, tint: "bg-accent/10 text-accent" },
+  ] as const;
+
+  const firstName = (user?.name || "there").split(" ")[0];
+
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Good morning, Rajesh"
+        title={`Good morning, ${firstName}`}
         subtitle="Here's what's happening in your store today."
         action={
           <div className="flex flex-wrap gap-2">
