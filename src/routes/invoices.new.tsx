@@ -655,7 +655,7 @@ function ItemDialog({
       setAddedCount(0);
       setTimeout(() => nameRef.current?.focus(), 50);
     }
-  }, [open, initial]);
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pickProduct = (p: Product) => {
     setProductId(p.id);
