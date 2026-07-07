@@ -33,6 +33,17 @@ async function ensureProfileAndRole(): Promise<AuthUser | null> {
     .from("profiles")
     .upsert({ user_id: user.id, full_name: displayName, email: user.email }, { onConflict: "user_id" });
 
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("status, full_name")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (profile?.status === "blocked") {
+    await supabase.auth.signOut();
+    return null;
+  }
+
   const { data: existingRole } = await supabase
     .from("user_roles")
     .select("role")
@@ -46,7 +57,7 @@ async function ensureProfileAndRole(): Promise<AuthUser | null> {
     if (!error) role = "admin";
   }
 
-  return { id: user.id, name: displayName, email: user.email, role: roleLabel(role || "staff") };
+  return { id: user.id, name: profile?.full_name || displayName, email: user.email, role: roleLabel(role || "staff") };
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
