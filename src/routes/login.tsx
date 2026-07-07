@@ -1,10 +1,10 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Sparkles, ShieldCheck, Zap, TrendingUp, Copy, Check, AlertCircle } from "lucide-react";
+import { Sparkles, ShieldCheck, Zap, TrendingUp, AlertCircle, Mail, Lock, User, Chrome } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useAuth, DEMO_USERS } from "@/lib/auth";
+import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/login")({
@@ -19,27 +19,33 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   const navigate = useNavigate();
-  const { login, isAuthenticated } = useAuth();
-  const [username, setUsername] = useState("");
+  const { login, signup, loginWithGoogle, isAuthenticated } = useAuth();
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => { if (isAuthenticated) navigate({ to: "/" }); }, [isAuthenticated, navigate]);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    const res = login(username, password);
+    setLoading(true);
+    const res = mode === "signin" ? await login(email, password) : await signup(name, email, password);
+    setLoading(false);
     if (!res.ok) { setError(res.error || "Login failed"); return; }
-    toast.success(`Welcome back, ${username}`);
+    toast.success(mode === "signin" ? "Welcome back" : "Account created");
     navigate({ to: "/" });
   };
 
-  const fill = (u: typeof DEMO_USERS[number]) => {
-    setUsername(u.username); setPassword(u.password); setError(null);
-    setCopied(u.username);
-    setTimeout(() => setCopied(null), 1200);
+  const google = async () => {
+    setError(null);
+    setLoading(true);
+    const res = await loginWithGoogle();
+    setLoading(false);
+    if (!res.ok) setError(res.error || "Google sign-in failed");
   };
 
   return (
@@ -94,20 +100,40 @@ function LoginPage() {
               <div className="font-display text-xl font-bold">Prestige</div>
             </div>
           </div>
-          <h2 className="font-display text-2xl font-bold">Welcome back</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Sign in to manage your invoices and inventory.</p>
+          <h2 className="font-display text-2xl font-bold">{mode === "signin" ? "Welcome back" : "Create admin account"}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Use email/password or Google to open your invoice workspace.</p>
 
-          <form className="mt-8 space-y-4" onSubmit={submit}>
+          <div className="mt-6 grid grid-cols-2 rounded-xl border bg-muted/40 p-1">
+            <button type="button" onClick={() => { setMode("signin"); setError(null); }} className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${mode === "signin" ? "bg-background shadow-sm" : "text-muted-foreground"}`}>Sign in</button>
+            <button type="button" onClick={() => { setMode("signup"); setError(null); }} className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${mode === "signup" ? "bg-background shadow-sm" : "text-muted-foreground"}`}>Sign up</button>
+          </div>
+
+          <form className="mt-6 space-y-4" onSubmit={submit}>
+            {mode === "signup" && (
+              <div className="space-y-2">
+                <Label htmlFor="name">Full name</Label>
+                <div className="relative">
+                  <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input id="name" autoComplete="name" placeholder="Rajesh Kumar" className="pl-9" value={name} onChange={(e) => setName(e.target.value)} />
+                </div>
+              </div>
+            )}
             <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
-              <Input id="username" autoComplete="username" placeholder="admin" value={username} onChange={(e) => setUsername(e.target.value)} />
+              <Label htmlFor="email">Email / Gmail</Label>
+              <div className="relative">
+                <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input id="email" type="email" autoComplete="email" placeholder="you@gmail.com" className="pl-9" value={email} onChange={(e) => setEmail(e.target.value)} required />
+              </div>
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">Password</Label>
-                <a className="text-xs text-accent hover:underline" href="#">Forgot?</a>
+                <span className="text-xs text-muted-foreground">Protected login</span>
               </div>
-              <Input id="password" type="password" autoComplete="current-password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} />
+              <div className="relative">
+                <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input id="password" type="password" autoComplete={mode === "signin" ? "current-password" : "new-password"} placeholder="••••••••" className="pl-9" value={password} onChange={(e) => setPassword(e.target.value)} required />
+              </div>
             </div>
 
             {error && (
@@ -117,28 +143,16 @@ function LoginPage() {
               </div>
             )}
 
-            <Button type="submit" className="w-full" size="lg">Sign in</Button>
+            <Button type="submit" className="w-full" size="lg" disabled={loading}>{loading ? "Please wait…" : mode === "signin" ? "Sign in" : "Create account"}</Button>
           </form>
 
-          <div className="mt-6 rounded-xl border bg-muted/40 p-3">
-            <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Demo accounts — click to fill</div>
-            <div className="space-y-1.5">
-              {DEMO_USERS.map((u) => (
-                <button
-                  key={u.username}
-                  type="button"
-                  onClick={() => fill(u)}
-                  className="flex w-full items-center gap-2 rounded-lg border border-transparent bg-background px-2.5 py-1.5 text-left text-xs transition hover:border-accent/40"
-                >
-                  <span className="grid h-6 w-6 place-items-center rounded-md bg-primary/10 text-[10px] font-bold text-primary">{u.role[0]}</span>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate font-medium text-foreground">{u.username} <span className="text-muted-foreground font-normal">· {u.role}</span></div>
-                    <div className="truncate text-muted-foreground">password: <span className="font-mono">{u.password}</span></div>
-                  </div>
-                  {copied === u.username ? <Check className="h-3.5 w-3.5 text-accent" /> : <Copy className="h-3.5 w-3.5 text-muted-foreground" />}
-                </button>
-              ))}
-            </div>
+          <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground"><span className="h-px flex-1 bg-border" />or<span className="h-px flex-1 bg-border" /></div>
+          <Button type="button" variant="outline" className="w-full" size="lg" onClick={google} disabled={loading}>
+            <Chrome className="mr-2 h-4 w-4" />Continue with Google
+          </Button>
+
+          <div className="mt-6 rounded-xl border bg-muted/40 p-3 text-xs text-muted-foreground">
+            First real user becomes the initial admin. After that, manage roles from Team &amp; Access.
           </div>
 
           <p className="mt-6 text-center text-xs text-muted-foreground">
