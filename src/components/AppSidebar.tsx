@@ -1,8 +1,9 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
-  LayoutDashboard, Users, Package, FileText, PlusCircle,
-  Warehouse, Wallet, BarChart3, Settings, Sparkles,
+  LayoutDashboard, Users, Package, FileText, PlusCircle, FileSpreadsheet,
+  Warehouse, Wallet, BarChart3, Settings, Sparkles, Truck, PackageMinus, PackageX,
   ShoppingCart, ClipboardList, Receipt, Landmark, Repeat, Trophy, ShieldCheck,
+  UserCircle2, Factory,
 } from "lucide-react";
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
@@ -17,6 +18,10 @@ const mainItems = [
 
 const salesItems = [
   { title: "Invoices", url: "/invoices", icon: FileText },
+  { title: "Estimates", url: "/estimates", icon: FileSpreadsheet },
+  { title: "Sale Orders", url: "/sale-order", icon: ClipboardList },
+  { title: "Delivery Notes", url: "/delivery-note", icon: Truck },
+  { title: "Sale Returns", url: "/sale-return", icon: PackageMinus },
   { title: "Customers", url: "/customers", icon: Users },
   { title: "Subscriptions", url: "/subscriptions", icon: Repeat },
 ];
@@ -26,6 +31,8 @@ const stockItems = [
   { title: "Inventory", url: "/inventory", icon: Warehouse },
   { title: "Purchases", url: "/purchases", icon: ShoppingCart },
   { title: "Purchase Orders", url: "/purchase-orders", icon: ClipboardList },
+  { title: "Purchase Returns", url: "/purchase-return", icon: PackageX },
+  { title: "Production Entry", url: "/production-entry", icon: Factory },
 ];
 
 const financeItems = [
@@ -33,6 +40,7 @@ const financeItems = [
   { title: "Expenses", url: "/expenses", icon: Receipt },
   { title: "Fund Management", url: "/funds", icon: Landmark },
   { title: "Commissions", url: "/commissions", icon: Trophy },
+  { title: "Agents", url: "/agent", icon: UserCircle2 },
 ];
 
 const insightItems = [
