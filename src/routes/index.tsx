@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   ChevronRight, FileText, Users, Package, PlusCircle, ShoppingCart, ClipboardList,
   Receipt, Landmark, Warehouse, Wallet, Trophy, ShieldCheck, BarChart3,
-  Truck, PackageMinus, PackageX, UserCircle2, Factory, FileSpreadsheet, Sparkles,
+  Truck, PackageMinus, PackageX, UserCircle2, Factory, FileSpreadsheet, Sparkles, Settings,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useStore } from "@/lib/store";
@@ -42,6 +42,8 @@ const modules = [
   { label: "Purchase Return", to: "/purchase-return" as const, icon: PackageX, tint: "text-orchid bg-orchid/12 ring-orchid/15" },
   { label: "Agent", to: "/agent" as const, icon: UserCircle2, tint: "text-sapphire bg-sapphire/12 ring-sapphire/15" },
   { label: "Production Entry", to: "/production-entry" as const, icon: Factory, tint: "text-jade bg-jade/12 ring-jade/15" },
+  { label: "Settings", to: "/settings" as const, icon: Settings, tint: "text-amber bg-amber/14 ring-amber/15" },
+  { label: "Admin", to: "/team" as const, icon: ShieldCheck, tint: "text-coral bg-coral/12 ring-coral/15" },
 ];
 
 function Dashboard() {

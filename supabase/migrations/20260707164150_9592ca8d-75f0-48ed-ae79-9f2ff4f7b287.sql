@@ -1,0 +1,104 @@
+CREATE SCHEMA IF NOT EXISTS private;
+
+CREATE OR REPLACE FUNCTION private.has_role(_user_id uuid, _role public.app_role)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.user_roles
+    WHERE user_id = _user_id
+      AND role = _role
+  )
+$$;
+
+REVOKE ALL ON FUNCTION private.has_role(uuid, public.app_role) FROM PUBLIC;
+REVOKE ALL ON FUNCTION private.has_role(uuid, public.app_role) FROM anon;
+GRANT EXECUTE ON FUNCTION private.has_role(uuid, public.app_role) TO authenticated;
+GRANT EXECUTE ON FUNCTION private.has_role(uuid, public.app_role) TO service_role;
+
+DROP POLICY IF EXISTS "Users can view their own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can create their own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can update their own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Admins can delete profiles" ON public.profiles;
+DROP POLICY IF EXISTS "Users can view their own roles" ON public.user_roles;
+DROP POLICY IF EXISTS "Admins can create roles" ON public.user_roles;
+DROP POLICY IF EXISTS "Admins can update roles" ON public.user_roles;
+DROP POLICY IF EXISTS "Admins can delete roles" ON public.user_roles;
+DROP POLICY IF EXISTS "Admins can create app settings" ON public.app_settings;
+DROP POLICY IF EXISTS "Admins can update app settings" ON public.app_settings;
+DROP POLICY IF EXISTS "Admins can delete app settings" ON public.app_settings;
+
+CREATE POLICY "Users can view their own profile"
+ON public.profiles
+FOR SELECT
+TO authenticated
+USING (auth.uid() = user_id OR private.has_role(auth.uid(), 'admin'));
+
+CREATE POLICY "Users can create their own profile"
+ON public.profiles
+FOR INSERT
+TO authenticated
+WITH CHECK (auth.uid() = user_id OR private.has_role(auth.uid(), 'admin'));
+
+CREATE POLICY "Users can update their own profile"
+ON public.profiles
+FOR UPDATE
+TO authenticated
+USING (auth.uid() = user_id OR private.has_role(auth.uid(), 'admin'))
+WITH CHECK (auth.uid() = user_id OR private.has_role(auth.uid(), 'admin'));
+
+CREATE POLICY "Admins can delete profiles"
+ON public.profiles
+FOR DELETE
+TO authenticated
+USING (private.has_role(auth.uid(), 'admin'));
+
+CREATE POLICY "Users can view their own roles"
+ON public.user_roles
+FOR SELECT
+TO authenticated
+USING (auth.uid() = user_id OR private.has_role(auth.uid(), 'admin'));
+
+CREATE POLICY "Admins can create roles"
+ON public.user_roles
+FOR INSERT
+TO authenticated
+WITH CHECK (private.has_role(auth.uid(), 'admin'));
+
+CREATE POLICY "Admins can update roles"
+ON public.user_roles
+FOR UPDATE
+TO authenticated
+USING (private.has_role(auth.uid(), 'admin'))
+WITH CHECK (private.has_role(auth.uid(), 'admin'));
+
+CREATE POLICY "Admins can delete roles"
+ON public.user_roles
+FOR DELETE
+TO authenticated
+USING (private.has_role(auth.uid(), 'admin'));
+
+CREATE POLICY "Admins can create app settings"
+ON public.app_settings
+FOR INSERT
+TO authenticated
+WITH CHECK (private.has_role(auth.uid(), 'admin'));
+
+CREATE POLICY "Admins can update app settings"
+ON public.app_settings
+FOR UPDATE
+TO authenticated
+USING (private.has_role(auth.uid(), 'admin'))
+WITH CHECK (private.has_role(auth.uid(), 'admin'));
+
+CREATE POLICY "Admins can delete app settings"
+ON public.app_settings
+FOR DELETE
+TO authenticated
+USING (private.has_role(auth.uid(), 'admin'));
+
+DROP FUNCTION IF EXISTS public.has_role(uuid, public.app_role);

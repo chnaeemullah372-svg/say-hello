@@ -1,5 +1,5 @@
-import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { Moon, Sun, Search, Bell, LogOut } from "lucide-react";
+import { useNavigate, useRouterState } from "@tanstack/react-router";
+import { Moon, Sun, Search, Bell, LogOut, Settings, ShieldCheck } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
@@ -27,8 +27,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   if (!ready) return null;
   if (!isAuthenticated) return null;
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     toast.success("Signed out");
     navigate({ to: "/login" });
   };
@@ -51,6 +51,12 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Button variant="ghost" size="icon" aria-label="Notifications" className="relative">
               <Bell className="h-4 w-4" />
               <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-gold" />
+            </Button>
+            <Button variant="ghost" size="icon" aria-label="Admin control" onClick={() => navigate({ to: "/team" })}>
+              <ShieldCheck className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" aria-label="Settings" onClick={() => navigate({ to: "/settings" })}>
+              <Settings className="h-4 w-4" />
             </Button>
             <Button variant="ghost" size="icon" aria-label="Toggle theme" onClick={toggle}>
               {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}

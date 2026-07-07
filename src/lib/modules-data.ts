@@ -92,8 +92,8 @@ export const teamSeed: TeamMember[] = [
 ];
 
 export const ROLE_PERMISSIONS: Record<string, string[]> = {
-  Owner: ["Full access", "Manage users", "View reports", "Delete records", "Change settings"],
+  Admin: ["Full access", "Manage users", "View reports", "Delete records", "Change settings"],
   Manager: ["Create invoices", "Manage inventory", "View reports", "Manage customers"],
   Cashier: ["Create invoices", "Record payments", "View own reports"],
-  Accountant: ["View invoices", "Manage expenses", "Reconcile funds", "View reports"],
+  Staff: ["View assigned modules", "Create basic entries", "Update own work"],
 };
