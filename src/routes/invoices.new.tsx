@@ -65,6 +65,8 @@ function CreateInvoice() {
   const [notesOpen, setNotesOpen] = useState(false);
   const [terms, setTerms] = useState("");
   const [termsOpen, setTermsOpen] = useState(false);
+  const [attachments, setAttachments] = useState<{ name: string; url: string; type: string }[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Dialogs
   const [custOpen, setCustOpen] = useState(false);
