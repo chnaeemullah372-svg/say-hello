@@ -360,7 +360,7 @@ function SettingsPage() {
           <SectionCard title="Users & roles" desc="Manage staff access and permissions">
             <div className="rounded-xl border">
               {[
-                { n: "Rajesh Kumar", e: "owner@prestige.store", r: "Owner" },
+                { n: "Rajesh Kumar", e: "owner@prestige.store", r: "Admin" },
                 { n: "Priya Sharma", e: "priya@prestige.store", r: "Manager" },
                 { n: "Amit Verma", e: "amit@prestige.store", r: "Cashier" },
               ].map((u, i) => (
@@ -369,10 +369,10 @@ function SettingsPage() {
                     <div className="truncate font-medium">{u.n}</div>
                     <div className="truncate text-xs text-muted-foreground">{u.e}</div>
                   </div>
-                  <Badge variant={u.r === "Owner" ? "default" : "secondary"} className="hidden justify-center sm:flex"><Shield className="mr-1 h-3 w-3" />{u.r}</Badge>
+                  <Badge variant={u.r === "Admin" ? "default" : "secondary"} className="hidden justify-center sm:flex"><Shield className="mr-1 h-3 w-3" />{u.r}</Badge>
                   <div className="flex gap-1">
                     <Button size="sm" variant="ghost">Edit</Button>
-                    {u.r !== "Owner" && <Button size="sm" variant="ghost" className="text-destructive"><Trash2 className="h-3.5 w-3.5" /></Button>}
+                    {u.r !== "Admin" && <Button size="sm" variant="ghost" className="text-destructive"><Trash2 className="h-3.5 w-3.5" /></Button>}
                   </div>
                 </div>
               ))}
@@ -384,7 +384,7 @@ function SettingsPage() {
               <div className="overflow-x-auto rounded-xl border">
                 <table className="w-full min-w-[520px] text-sm">
                   <thead className="bg-muted/40 text-left">
-                    <tr><th className="p-2">Module</th><th className="p-2 text-center">Owner</th><th className="p-2 text-center">Manager</th><th className="p-2 text-center">Cashier</th></tr>
+                    <tr><th className="p-2">Module</th><th className="p-2 text-center">Admin</th><th className="p-2 text-center">Manager</th><th className="p-2 text-center">Cashier</th></tr>
                   </thead>
                   <tbody>
                     {["Invoices","Estimates","Products","Inventory","Payments","Reports","Settings"].map(m => (
