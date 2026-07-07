@@ -1,25 +1,18 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
-  BadgeIndianRupee,
   Banknote,
   Bell,
-  BookOpenText,
   Boxes,
   Building2,
-  CalendarClock,
-  CheckCircle2,
   ChevronRight,
   DatabaseBackup,
   FileBarChart,
   FileCog,
   FileText,
-  Globe2,
   Hash,
   Image,
   Landmark,
-  Languages,
-  LayoutTemplate,
   ListChecks,
   LockKeyhole,
   Mail,
@@ -35,7 +28,6 @@ import {
   Save,
   Send,
   ShieldCheck,
-  SlidersHorizontal,
   Stamp,
   Store,
   Trash2,
@@ -51,7 +43,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
@@ -521,7 +512,7 @@ function InvoicePanel({ data, set }: PanelProps) {
 function TaxPanel({ data, set }: PanelProps) {
   return (
     <Panel>
-      <PanelHeader icon={BadgeIndianRupee} title="Tax, GST, TDS and currency" subtitle="Default calculations for invoice, purchase and payment entries." />
+      <PanelHeader icon={Percent} title="Tax, GST, TDS and currency" subtitle="Default calculations for invoice, purchase and payment entries." />
       <Grid>
         <SelectField label="Currency" value={data.currency} onChange={(v) => set("currency", v)} options={["INR", "USD", "EUR", "GBP", "AED", "PKR"]} />
         <TextField label="Currency symbol" value={data.symbol} onChange={(v) => set("symbol", v)} />
