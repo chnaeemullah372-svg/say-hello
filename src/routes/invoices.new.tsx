@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Plus, Trash2, Send, Save, Printer, Eye, Calendar,
-  Barcode, Package, MoreVertical, ArrowLeft, PencilLine,
+  Barcode, Package, MoreVertical, ArrowLeft, PencilLine, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
