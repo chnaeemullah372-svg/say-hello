@@ -62,6 +62,9 @@ function CreateInvoice() {
   const [invoiceDate] = useState(new Date());
   const [dueDate, setDueDate] = useState<string>("");
   const [notes, setNotes] = useState("");
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [terms, setTerms] = useState("");
+  const [termsOpen, setTermsOpen] = useState(false);
 
   // Dialogs
   const [custOpen, setCustOpen] = useState(false);
