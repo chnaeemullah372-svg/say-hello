@@ -68,7 +68,9 @@ function CreateInvoice() {
   const [addCustOpen, setAddCustOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [itemDlgOpen, setItemDlgOpen] = useState(false);
-  const [newCust, setNewCust] = useState({ name: "", phone: "", referralName: "", referralPhone: "" });
+  const emptyNewCust = { name: "", phone: "", whatsapp: "", email: "", address: "", referralName: "", referralPhone: "", referralEmail: "", referralAddress: "" };
+  const [newCust, setNewCust] = useState(emptyNewCust);
+  const [newCustMore, setNewCustMore] = useState(false);
 
   const customer = customers.find((c) => c.id === customerId);
 
