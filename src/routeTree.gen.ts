@@ -11,7 +11,6 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TeamRouteImport } from './routes/team'
 import { Route as SubscriptionsRouteImport } from './routes/subscriptions'
-import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SaleReturnRouteImport } from './routes/sale-return'
 import { Route as SaleOrderRouteImport } from './routes/sale-order'
 import { Route as ReportsRouteImport } from './routes/reports'
@@ -43,11 +42,6 @@ const TeamRoute = TeamRouteImport.update({
 const SubscriptionsRoute = SubscriptionsRouteImport.update({
   id: '/subscriptions',
   path: '/subscriptions',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SettingsRoute = SettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SaleReturnRoute = SaleReturnRouteImport.update({
@@ -181,7 +175,6 @@ export interface FileRoutesByFullPath {
   '/reports': typeof ReportsRoute
   '/sale-order': typeof SaleOrderRoute
   '/sale-return': typeof SaleReturnRoute
-  '/settings': typeof SettingsRoute
   '/subscriptions': typeof SubscriptionsRoute
   '/team': typeof TeamRoute
   '/invoices/$id': typeof InvoicesIdRoute
@@ -208,7 +201,6 @@ export interface FileRoutesByTo {
   '/reports': typeof ReportsRoute
   '/sale-order': typeof SaleOrderRoute
   '/sale-return': typeof SaleReturnRoute
-  '/settings': typeof SettingsRoute
   '/subscriptions': typeof SubscriptionsRoute
   '/team': typeof TeamRoute
   '/invoices/$id': typeof InvoicesIdRoute
@@ -236,7 +228,6 @@ export interface FileRoutesById {
   '/reports': typeof ReportsRoute
   '/sale-order': typeof SaleOrderRoute
   '/sale-return': typeof SaleReturnRoute
-  '/settings': typeof SettingsRoute
   '/subscriptions': typeof SubscriptionsRoute
   '/team': typeof TeamRoute
   '/invoices/$id': typeof InvoicesIdRoute
@@ -265,7 +256,6 @@ export interface FileRouteTypes {
     | '/reports'
     | '/sale-order'
     | '/sale-return'
-    | '/settings'
     | '/subscriptions'
     | '/team'
     | '/invoices/$id'
@@ -292,7 +282,6 @@ export interface FileRouteTypes {
     | '/reports'
     | '/sale-order'
     | '/sale-return'
-    | '/settings'
     | '/subscriptions'
     | '/team'
     | '/invoices/$id'
@@ -319,7 +308,6 @@ export interface FileRouteTypes {
     | '/reports'
     | '/sale-order'
     | '/sale-return'
-    | '/settings'
     | '/subscriptions'
     | '/team'
     | '/invoices/$id'
@@ -347,7 +335,6 @@ export interface RootRouteChildren {
   ReportsRoute: typeof ReportsRoute
   SaleOrderRoute: typeof SaleOrderRoute
   SaleReturnRoute: typeof SaleReturnRoute
-  SettingsRoute: typeof SettingsRoute
   SubscriptionsRoute: typeof SubscriptionsRoute
   TeamRoute: typeof TeamRoute
   InvoicesIdRoute: typeof InvoicesIdRoute
@@ -369,13 +356,6 @@ declare module '@tanstack/react-router' {
       path: '/subscriptions'
       fullPath: '/subscriptions'
       preLoaderRoute: typeof SubscriptionsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/settings': {
-      id: '/settings'
-      path: '/settings'
-      fullPath: '/settings'
-      preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sale-return': {
@@ -555,7 +535,6 @@ const rootRouteChildren: RootRouteChildren = {
   ReportsRoute: ReportsRoute,
   SaleOrderRoute: SaleOrderRoute,
   SaleReturnRoute: SaleReturnRoute,
-  SettingsRoute: SettingsRoute,
   SubscriptionsRoute: SubscriptionsRoute,
   TeamRoute: TeamRoute,
   InvoicesIdRoute: InvoicesIdRoute,
