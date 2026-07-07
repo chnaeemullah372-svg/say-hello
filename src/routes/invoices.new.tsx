@@ -554,6 +554,55 @@ function CreateInvoice() {
             </div>
           )}
         </div>
+
+        {/* Attach Documents */}
+        <div className="border-b bg-muted/40 px-4 py-4">
+          <div className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">Attach Documents</div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept="image/*,application/pdf"
+            className="hidden"
+            onChange={(e) => {
+              const files = Array.from(e.target.files ?? []);
+              const next = files.map((f) => ({ name: f.name, url: URL.createObjectURL(f), type: f.type }));
+              setAttachments((prev) => [...prev, ...next]);
+              if (fileInputRef.current) fileInputRef.current.value = "";
+            }}
+          />
+          <div className="flex flex-wrap gap-3">
+            {attachments.map((a, i) => (
+              <div key={i} className="relative h-24 w-24 overflow-hidden rounded-md border bg-card">
+                {a.type.startsWith("image/") ? (
+                  <img src={a.url} alt={a.name} className="h-full w-full object-cover" />
+                ) : (
+                  <div className="grid h-full w-full place-items-center px-1 text-center text-[10px] text-muted-foreground">
+                    {a.name}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setAttachments((prev) => prev.filter((_, idx) => idx !== i))}
+                  className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-background/90 text-destructive shadow"
+                  aria-label="Remove attachment"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="grid h-24 w-24 place-items-center rounded-md border-2 border-dashed border-muted-foreground/40 bg-card text-muted-foreground transition hover:border-primary hover:text-primary"
+            >
+              <div className="flex flex-col items-center gap-1">
+                <Plus className="h-5 w-5" />
+                <span className="text-[10px] font-medium">Add File</span>
+              </div>
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Bottom action bar */}
