@@ -12,17 +12,19 @@ import { toast } from "sonner";
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { theme, toggle } = useTheme();
-  const { isAuthenticated, logout, user } = useAuth();
+  const { isAuthenticated, logout, user, ready } = useAuth();
   const navigate = useNavigate();
 
   const isLogin = pathname.startsWith("/login");
 
   // Redirect to /login when not authenticated
   useEffect(() => {
+    if (!ready) return;
     if (!isLogin && !isAuthenticated) navigate({ to: "/login" });
-  }, [isLogin, isAuthenticated, navigate]);
+  }, [isLogin, isAuthenticated, navigate, ready]);
 
   if (isLogin) return <>{children}</>;
+  if (!ready) return null;
   if (!isAuthenticated) return null;
 
   const handleLogout = () => {

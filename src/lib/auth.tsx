@@ -13,6 +13,7 @@ export type AuthUser = { username: string; name: string; role: string; email: st
 type AuthCtx = {
   user: AuthUser | null;
   isAuthenticated: boolean;
+  ready: boolean;
   login: (u: string, p: string) => { ok: boolean; error?: string };
   logout: () => void;
 };
@@ -22,12 +23,14 @@ const KEY = "prestige_auth_user";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     try {
       const raw = typeof window !== "undefined" ? window.localStorage.getItem(KEY) : null;
       if (raw) setUser(JSON.parse(raw));
     } catch {}
+    setReady(true);
   }, []);
 
   const login = (username: string, password: string) => {
@@ -44,7 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try { window.localStorage.removeItem(KEY); } catch {}
   };
 
-  return <Ctx.Provider value={{ user, isAuthenticated: !!user, login, logout }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ user, isAuthenticated: !!user, ready, login, logout }}>{children}</Ctx.Provider>;
 }
 
 export function useAuth() {
