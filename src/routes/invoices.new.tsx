@@ -664,7 +664,8 @@ function CreateInvoice() {
           <DialogHeader><DialogTitle>Quick add client</DialogTitle></DialogHeader>
           <div className="grid gap-3">
             <div className="grid gap-1.5"><Label>Customer Name</Label><Input autoFocus value={newCust.name} onChange={(e) => setNewCust({ ...newCust, name: e.target.value })} placeholder="Full name" /></div>
-            <div className="grid gap-1.5"><Label>Customer WhatsApp Number</Label><Input value={newCust.phone} onChange={(e) => setNewCust({ ...newCust, phone: e.target.value })} placeholder="+92 300 …" /></div>
+            <div className="grid gap-1.5"><Label>Customer Contact Number</Label><Input value={newCust.phone} onChange={(e) => setNewCust({ ...newCust, phone: e.target.value })} placeholder="+92 300 …" /></div>
+            <div className="grid gap-1.5"><Label>Customer WhatsApp Number</Label><Input value={newCust.whatsapp} onChange={(e) => setNewCust({ ...newCust, whatsapp: e.target.value })} placeholder="+92 300 …" /></div>
             <div className="grid gap-1.5"><Label>Referral Name <span className="text-xs text-muted-foreground">(optional)</span></Label><Input value={newCust.referralName} onChange={(e) => setNewCust({ ...newCust, referralName: e.target.value })} placeholder="Who referred them" /></div>
             <div className="grid gap-1.5"><Label>Referral Contact Number <span className="text-xs text-muted-foreground">(optional)</span></Label><Input value={newCust.referralPhone} onChange={(e) => setNewCust({ ...newCust, referralPhone: e.target.value })} placeholder="+92 300 …" /></div>
 
@@ -675,7 +676,6 @@ function CreateInvoice() {
 
             {newCustMore && (
               <div className="grid gap-3 rounded-md border bg-muted/30 p-3">
-                <div className="grid gap-1.5"><Label>Customer WhatsApp (alternate)</Label><Input value={newCust.whatsapp} onChange={(e) => setNewCust({ ...newCust, whatsapp: e.target.value })} placeholder="+92 300 …" /></div>
                 <div className="grid gap-1.5"><Label>Customer Email</Label><Input type="email" value={newCust.email} onChange={(e) => setNewCust({ ...newCust, email: e.target.value })} placeholder="name@gmail.com" /></div>
                 <div className="grid gap-1.5"><Label>Customer Address</Label><Textarea rows={2} value={newCust.address} onChange={(e) => setNewCust({ ...newCust, address: e.target.value })} placeholder="Street, City" /></div>
                 <div className="border-t pt-3 grid gap-3">

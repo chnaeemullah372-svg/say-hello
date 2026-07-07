@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useTheme } from "@/lib/theme";
-import { Sun, Moon, Sparkles } from "lucide-react";
+import { MessageCircle, Sun, Moon, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/settings")({
@@ -28,6 +28,7 @@ function SettingsPage() {
         <TabsList className="flex-wrap">
           <TabsTrigger value="business">Business</TabsTrigger>
           <TabsTrigger value="tax">Tax & Currency</TabsTrigger>
+          <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
           <TabsTrigger value="template">Invoice template</TabsTrigger>
           <TabsTrigger value="appearance">Appearance</TabsTrigger>
         </TabsList>
@@ -55,6 +56,23 @@ function SettingsPage() {
             <Field label="Currency symbol" defaultValue="₹" />
             <Field label="Financial year start" defaultValue="April" />
             <div className="md:col-span-2"><Button onClick={() => toast.success("Tax settings saved")}>Save changes</Button></div>
+          </CardContent></Card>
+        </TabsContent>
+
+        <TabsContent value="whatsapp">
+          <Card><CardContent className="grid gap-4 p-6 md:grid-cols-2">
+            <div className="md:col-span-2 flex items-center gap-3 rounded-xl border bg-muted/30 p-4">
+              <div className="grid h-10 w-10 place-items-center rounded-xl bg-accent/15 text-accent">
+                <MessageCircle className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="font-semibold">WhatsApp Name</div>
+                <div className="text-sm text-muted-foreground">Future WhatsApp message and reminder setup placeholder.</div>
+              </div>
+            </div>
+            <Field label="WhatsApp Name" defaultValue="Prestige Store" />
+            <Field label="Default WhatsApp Number" defaultValue="" />
+            <div className="md:col-span-2"><Button onClick={() => toast.success("WhatsApp settings saved")}>Save changes</Button></div>
           </CardContent></Card>
         </TabsContent>
 
