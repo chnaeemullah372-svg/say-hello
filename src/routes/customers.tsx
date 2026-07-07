@@ -1,9 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { UserPlus, Search, Phone, Mail, MapPin, Pencil } from "lucide-react";
+import { UserPlus, Search, Phone, Mail, MapPin, Pencil, ChevronDown, ChevronUp, MessageCircle } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
@@ -25,7 +26,9 @@ function CustomersPage() {
   const { customers, addCustomer } = useStore();
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", phone: "", referralName: "", referralPhone: "" });
+  const emptyForm = { name: "", phone: "", whatsapp: "", email: "", address: "", referralName: "", referralPhone: "", referralEmail: "", referralAddress: "" };
+  const [form, setForm] = useState(emptyForm);
+  const [showMore, setShowMore] = useState(false);
 
   const filtered = customers.filter((c) =>
     [c.name, c.phone, c.referralName ?? "", c.referralPhone ?? ""].join(" ").toLowerCase().includes(q.toLowerCase())
@@ -37,17 +40,35 @@ function CustomersPage() {
         title="Customers"
         subtitle={`${customers.length} customers · ${fmt(customers.reduce((s, c) => s + c.balance, 0))} outstanding`}
         action={
-          <Dialog open={open} onOpenChange={setOpen}>
+          <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setShowMore(false); }}>
             <DialogTrigger asChild>
               <Button><UserPlus className="mr-1.5 h-4 w-4" />Add Customer</Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-h-[85vh] overflow-y-auto">
               <DialogHeader><DialogTitle>New customer</DialogTitle></DialogHeader>
               <div className="grid gap-3">
                 <div className="grid gap-1.5"><Label>Customer Name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Full name" autoFocus /></div>
-                <div className="grid gap-1.5"><Label>Customer Contact Number</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+92 300 …" /></div>
+                <div className="grid gap-1.5"><Label>Customer WhatsApp Number</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+92 300 …" /></div>
                 <div className="grid gap-1.5"><Label>Referral Name <span className="text-xs text-muted-foreground">(optional)</span></Label><Input value={form.referralName} onChange={(e) => setForm({ ...form, referralName: e.target.value })} placeholder="Who referred them" /></div>
                 <div className="grid gap-1.5"><Label>Referral Contact Number <span className="text-xs text-muted-foreground">(optional)</span></Label><Input value={form.referralPhone} onChange={(e) => setForm({ ...form, referralPhone: e.target.value })} placeholder="+92 300 …" /></div>
+
+                <Button type="button" variant="ghost" size="sm" className="justify-start px-2 text-accent hover:text-accent" onClick={() => setShowMore((v) => !v)}>
+                  {showMore ? <ChevronUp className="mr-1 h-4 w-4" /> : <ChevronDown className="mr-1 h-4 w-4" />}
+                  {showMore ? "Hide additional details" : "Add More Details"}
+                </Button>
+
+                {showMore && (
+                  <div className="grid gap-3 rounded-md border bg-muted/30 p-3">
+                    <div className="grid gap-1.5"><Label>Customer WhatsApp (alternate)</Label><Input value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: e.target.value })} placeholder="+92 300 …" /></div>
+                    <div className="grid gap-1.5"><Label>Customer Email</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="name@gmail.com" /></div>
+                    <div className="grid gap-1.5"><Label>Customer Address</Label><Textarea rows={2} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="Street, City" /></div>
+                    <div className="border-t pt-3 grid gap-3">
+                      <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Referral details</div>
+                      <div className="grid gap-1.5"><Label>Referral Email</Label><Input type="email" value={form.referralEmail} onChange={(e) => setForm({ ...form, referralEmail: e.target.value })} placeholder="referral@gmail.com" /></div>
+                      <div className="grid gap-1.5"><Label>Referral Address</Label><Textarea rows={2} value={form.referralAddress} onChange={(e) => setForm({ ...form, referralAddress: e.target.value })} placeholder="Street, City" /></div>
+                    </div>
+                  </div>
+                )}
               </div>
               <DialogFooter>
                 <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
@@ -55,7 +76,8 @@ function CustomersPage() {
                   if (!form.name) { toast.error("Customer name is required"); return; }
                   addCustomer(form);
                   toast.success("Customer added");
-                  setForm({ name: "", phone: "", referralName: "", referralPhone: "" });
+                  setForm(emptyForm);
+                  setShowMore(false);
                   setOpen(false);
                 }}>Save customer</Button>
               </DialogFooter>

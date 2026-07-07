@@ -2,11 +2,14 @@ export type Customer = {
   id: string;
   name: string;
   phone: string;
+  whatsapp?: string;
   email?: string;
   gstin?: string;
   address?: string;
   referralName?: string;
   referralPhone?: string;
+  referralEmail?: string;
+  referralAddress?: string;
   balance: number;
 };
 

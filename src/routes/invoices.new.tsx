@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Plus, Trash2, Send, Save, Printer, Eye, Calendar,
-  Barcode, Package, MoreVertical, ArrowLeft, PencilLine,
+  Barcode, Package, MoreVertical, ArrowLeft, PencilLine, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -68,7 +68,9 @@ function CreateInvoice() {
   const [addCustOpen, setAddCustOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [itemDlgOpen, setItemDlgOpen] = useState(false);
-  const [newCust, setNewCust] = useState({ name: "", phone: "", referralName: "", referralPhone: "" });
+  const emptyNewCust = { name: "", phone: "", whatsapp: "", email: "", address: "", referralName: "", referralPhone: "", referralEmail: "", referralAddress: "" };
+  const [newCust, setNewCust] = useState(emptyNewCust);
+  const [newCustMore, setNewCustMore] = useState(false);
 
   const customer = customers.find((c) => c.id === customerId);
 
@@ -567,14 +569,32 @@ function CreateInvoice() {
       </Dialog>
 
       {/* Add client */}
-      <Dialog open={addCustOpen} onOpenChange={setAddCustOpen}>
-        <DialogContent>
+      <Dialog open={addCustOpen} onOpenChange={(o) => { setAddCustOpen(o); if (!o) setNewCustMore(false); }}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Quick add client</DialogTitle></DialogHeader>
           <div className="grid gap-3">
             <div className="grid gap-1.5"><Label>Customer Name</Label><Input autoFocus value={newCust.name} onChange={(e) => setNewCust({ ...newCust, name: e.target.value })} placeholder="Full name" /></div>
-            <div className="grid gap-1.5"><Label>Customer Contact Number</Label><Input value={newCust.phone} onChange={(e) => setNewCust({ ...newCust, phone: e.target.value })} placeholder="+92 300 …" /></div>
+            <div className="grid gap-1.5"><Label>Customer WhatsApp Number</Label><Input value={newCust.phone} onChange={(e) => setNewCust({ ...newCust, phone: e.target.value })} placeholder="+92 300 …" /></div>
             <div className="grid gap-1.5"><Label>Referral Name <span className="text-xs text-muted-foreground">(optional)</span></Label><Input value={newCust.referralName} onChange={(e) => setNewCust({ ...newCust, referralName: e.target.value })} placeholder="Who referred them" /></div>
             <div className="grid gap-1.5"><Label>Referral Contact Number <span className="text-xs text-muted-foreground">(optional)</span></Label><Input value={newCust.referralPhone} onChange={(e) => setNewCust({ ...newCust, referralPhone: e.target.value })} placeholder="+92 300 …" /></div>
+
+            <Button type="button" variant="ghost" size="sm" className="justify-start px-2 text-accent hover:text-accent" onClick={() => setNewCustMore((v) => !v)}>
+              {newCustMore ? <ChevronUp className="mr-1 h-4 w-4" /> : <ChevronDown className="mr-1 h-4 w-4" />}
+              {newCustMore ? "Hide additional details" : "Add More Details"}
+            </Button>
+
+            {newCustMore && (
+              <div className="grid gap-3 rounded-md border bg-muted/30 p-3">
+                <div className="grid gap-1.5"><Label>Customer WhatsApp (alternate)</Label><Input value={newCust.whatsapp} onChange={(e) => setNewCust({ ...newCust, whatsapp: e.target.value })} placeholder="+92 300 …" /></div>
+                <div className="grid gap-1.5"><Label>Customer Email</Label><Input type="email" value={newCust.email} onChange={(e) => setNewCust({ ...newCust, email: e.target.value })} placeholder="name@gmail.com" /></div>
+                <div className="grid gap-1.5"><Label>Customer Address</Label><Textarea rows={2} value={newCust.address} onChange={(e) => setNewCust({ ...newCust, address: e.target.value })} placeholder="Street, City" /></div>
+                <div className="border-t pt-3 grid gap-3">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Referral details</div>
+                  <div className="grid gap-1.5"><Label>Referral Email</Label><Input type="email" value={newCust.referralEmail} onChange={(e) => setNewCust({ ...newCust, referralEmail: e.target.value })} placeholder="referral@gmail.com" /></div>
+                  <div className="grid gap-1.5"><Label>Referral Address</Label><Textarea rows={2} value={newCust.referralAddress} onChange={(e) => setNewCust({ ...newCust, referralAddress: e.target.value })} placeholder="Street, City" /></div>
+                </div>
+              </div>
+            )}
           </div>
 
           <DialogFooter>
@@ -583,13 +603,15 @@ function CreateInvoice() {
               if (!newCust.name) return toast.error("Name required");
               const c = addCustomer(newCust);
               setCustomerId(c.id);
-              setNewCust({ name: "", phone: "", referralName: "", referralPhone: "" });
+              setNewCust(emptyNewCust);
+              setNewCustMore(false);
               setAddCustOpen(false);
               toast.success("Client added & selected");
             }}>Add & select</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
 
       {/* Add / Edit Item modal */}
       <ItemDialog
