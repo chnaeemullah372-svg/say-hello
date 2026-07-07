@@ -1,559 +1,829 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  Banknote,
+  Bell,
+  Boxes,
+  Building2,
+  ChevronRight,
+  DatabaseBackup,
+  FileBarChart,
+  FileCog,
+  FileText,
+  Hash,
+  Image,
+  Landmark,
+  ListChecks,
+  LockKeyhole,
+  Mail,
+  MessageCircle,
+  MonitorSmartphone,
+  Palette,
+  PenLine,
+  Percent,
+  Plus,
+  Printer,
+  ReceiptText,
+  RefreshCw,
+  Save,
+  Send,
+  ShieldCheck,
+  Stamp,
+  Store,
+  Trash2,
+  Upload,
+  UserCog,
+  Users,
+  WalletCards,
+} from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
-import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
-import {
-  MessageCircle, Sun, Moon, Sparkles, Building2, Percent, FileText, Layout,
-  Hash, ScrollText, Landmark, PenLine, Users, Bell, DatabaseBackup, Palette,
-  Trash2, Plus, Upload, Shield,
-} from "lucide-react";
 import { toast } from "sonner";
-import type { ReactNode } from "react";
 
 export const Route = createFileRoute("/settings")({
-  head: () => ({ meta: [
-    { title: "Settings — Prestige Invoice" },
-    { name: "description", content: "Business profile, tax, TDS, invoice template, page layout, numbering, bank, signature, users, notifications, backup, WhatsApp and appearance." },
-  ]}),
+  head: () => ({
+    meta: [
+      { title: "Settings — UniPay Invoice Control" },
+      {
+        name: "description",
+        content:
+          "Complete invoice app settings: business, GST, TDS, numbering, template, print, users, Gmail, WhatsApp, backup and admin controls.",
+      },
+    ],
+  }),
   component: SettingsPage,
 });
 
-const TABS: { value: string; label: string; icon: any }[] = [
-  { value: "business", label: "Business", icon: Building2 },
-  { value: "tax", label: "Tax & TDS", icon: Percent },
-  { value: "numbering", label: "Numbering", icon: Hash },
-  { value: "template", label: "Template", icon: FileText },
-  { value: "page", label: "Page Layout", icon: Layout },
-  { value: "terms", label: "Terms", icon: ScrollText },
-  { value: "bank", label: "Bank", icon: Landmark },
-  { value: "signature", label: "Signature", icon: PenLine },
-  { value: "users", label: "Users & Roles", icon: Users },
-  { value: "notifications", label: "Notifications", icon: Bell },
-  { value: "backup", label: "Backup", icon: DatabaseBackup },
-  { value: "whatsapp", label: "WhatsApp", icon: MessageCircle },
-  { value: "appearance", label: "Appearance", icon: Palette },
+type SectionKey = keyof SettingsState;
+type Category = {
+  key: SectionKey;
+  title: string;
+  subtitle: string;
+  icon: typeof Store;
+  badge?: string;
+  tone: string;
+};
+
+type SettingsState = {
+  business: Record<string, string | boolean>;
+  invoice: Record<string, string | boolean>;
+  tax: Record<string, string | boolean>;
+  numbering: Record<string, string | boolean>;
+  print: Record<string, string | boolean>;
+  items: Record<string, string | boolean>;
+  payment: Record<string, string | boolean>;
+  bank: Record<string, string | boolean>;
+  users: Record<string, string | boolean>;
+  notifications: Record<string, string | boolean>;
+  gmail: Record<string, string | boolean>;
+  whatsapp: Record<string, string | boolean>;
+  backup: Record<string, string | boolean>;
+  appearance: Record<string, string | boolean>;
+  security: Record<string, string | boolean>;
+};
+
+const defaults: SettingsState = {
+  business: {
+    businessName: "Prestige Store",
+    legalName: "Prestige Store Pvt Ltd",
+    ownerName: "Admin User",
+    mobile: "+91 90000 00000",
+    whatsapp: "+91 90000 00000",
+    email: "billing@prestige.store",
+    website: "prestige.store",
+    gstin: "27PPPPP1234P1Z5",
+    pan: "PPPPP1234P",
+    address: "Main market, Mumbai, Maharashtra 400001",
+    state: "Maharashtra",
+    country: "India",
+    showLogo: true,
+    showBusinessStamp: true,
+  },
+  invoice: {
+    title: "TAX INVOICE",
+    duplicateLabel: "ORIGINAL FOR RECIPIENT",
+    defaultDueDays: "7",
+    invoiceType: "gst",
+    itemDescription: true,
+    hsn: true,
+    mrp: false,
+    batch: false,
+    serial: false,
+    discount: true,
+    receivedBalance: true,
+    qrCode: true,
+    signature: true,
+    terms: "Goods once sold will not be taken back. Subject to local jurisdiction.",
+    notes: "Thank you for your business.",
+  },
+  tax: {
+    currency: "INR",
+    symbol: "₹",
+    gstEnabled: true,
+    defaultTax: "18",
+    taxMode: "exclusive",
+    interstateTax: "auto",
+    cess: false,
+    tds: true,
+    tcs: false,
+    rcm: false,
+    tds194c: "1",
+    tds194j: "10",
+    tds194h: "5",
+    tds194q: "0.1",
+  },
+  numbering: {
+    invoicePrefix: "INV-",
+    invoiceNext: "1042",
+    estimatePrefix: "EST-",
+    estimateNext: "312",
+    saleOrderPrefix: "SO-",
+    saleOrderNext: "128",
+    deliveryPrefix: "DN-",
+    deliveryNext: "76",
+    purchasePrefix: "PUR-",
+    purchaseNext: "612",
+    paymentPrefix: "RCPT-",
+    paymentNext: "540",
+    expensePrefix: "EXP-",
+    expenseNext: "220",
+    financialYear: "2026-27",
+    autoReset: true,
+  },
+  print: {
+    paper: "a4",
+    orientation: "portrait",
+    marginTop: "12",
+    marginRight: "10",
+    marginBottom: "12",
+    marginLeft: "10",
+    copies: "1",
+    thermal: false,
+    repeatHeader: true,
+    pageNumbers: true,
+    paidWatermark: true,
+    draftWatermark: true,
+  },
+  items: {
+    stockTracking: true,
+    lowStockAlert: true,
+    lowStockQty: "5",
+    negativeStock: false,
+    barcode: true,
+    productImage: false,
+    unit: "PCS",
+    priceList: "Retail",
+    purchasePrice: true,
+    salePrice: true,
+  },
+  payment: {
+    cash: true,
+    bank: true,
+    upi: true,
+    card: true,
+    wallet: true,
+    partialPayment: true,
+    roundOff: true,
+    dueReminderDays: "3,7,15",
+    defaultMethod: "upi",
+  },
+  bank: {
+    accountName: "Prestige Store",
+    bankName: "HDFC Bank",
+    accountNumber: "50100xxxxxx0021",
+    ifsc: "HDFC0000123",
+    branch: "Mumbai Fort",
+    upi: "prestige@hdfcbank",
+    showOnInvoice: true,
+  },
+  users: {
+    allowStaffInvoice: true,
+    allowStaffDelete: false,
+    allowCashierReports: false,
+    requireAdminForSettings: true,
+    defaultRole: "staff",
+    inviteByEmail: true,
+  },
+  notifications: {
+    invoiceCreated: true,
+    paymentReceived: true,
+    lowStock: true,
+    dailySummary: false,
+    weeklyReport: true,
+    overdueReminder: true,
+    ownerEmail: "owner@prestige.store",
+    reminderTime: "10:00",
+  },
+  gmail: {
+    fromName: "Prestige Store",
+    fromEmail: "",
+    replyTo: "",
+    smtpHost: "smtp.gmail.com",
+    smtpPort: "587",
+    invoiceMail: true,
+    estimateMail: true,
+    paymentMail: true,
+  },
+  whatsapp: {
+    displayName: "Prestige Store",
+    number: "",
+    provider: "not-connected",
+    invoiceMessage:
+      "Hello {customer}, your invoice {invoice_no} of {amount} is ready. Please find the copy attached.",
+    reminderMessage:
+      "Hello {customer}, payment of {amount} is pending for invoice {invoice_no}.",
+    sendInvoice: false,
+    sendReminder: false,
+    sendPaymentThanks: true,
+  },
+  backup: {
+    autoBackup: true,
+    backupTime: "02:00",
+    includeImages: true,
+    exportFormat: "xlsx",
+    lastBackup: "Not generated yet",
+  },
+  appearance: {
+    language: "en",
+    dateFormat: "dd-mm-yyyy",
+    numberFormat: "indian",
+    density: "comfortable",
+    dashboardStyle: "tile-grid",
+    colorTheme: "prestige",
+  },
+  security: {
+    sessionTimeout: "60",
+    requireStrongPassword: true,
+    allowGoogleLogin: true,
+    allowPasswordLogin: true,
+    blockInactiveUser: true,
+    auditLog: true,
+  },
+};
+
+const categories: Category[] = [
+  { key: "business", title: "Business Profile", subtitle: "Logo, GST, address", icon: Store, badge: "Main", tone: "text-primary bg-primary/10 ring-primary/20" },
+  { key: "invoice", title: "Invoice Setup", subtitle: "Columns, terms, QR", icon: ReceiptText, badge: "A-Z", tone: "text-sapphire bg-sapphire/10 ring-sapphire/20" },
+  { key: "tax", title: "Tax / GST / TDS", subtitle: "Rates and sections", icon: Percent, badge: "TDS", tone: "text-coral bg-coral/10 ring-coral/20" },
+  { key: "numbering", title: "Numbering", subtitle: "Prefixes and counters", icon: Hash, tone: "text-amber bg-amber/10 ring-amber/20" },
+  { key: "print", title: "Page & Print", subtitle: "A4, thermal, PDF", icon: Printer, tone: "text-jade bg-jade/10 ring-jade/20" },
+  { key: "items", title: "Items & Stock", subtitle: "Products, units, alerts", icon: Boxes, tone: "text-orchid bg-orchid/10 ring-orchid/20" },
+  { key: "payment", title: "Payment", subtitle: "Cash, UPI, due", icon: WalletCards, tone: "text-aqua bg-aqua/10 ring-aqua/20" },
+  { key: "bank", title: "Bank / UPI", subtitle: "Invoice bank details", icon: Landmark, tone: "text-primary bg-primary/10 ring-primary/20" },
+  { key: "users", title: "Admin & Users", subtitle: "Roles and access", icon: ShieldCheck, badge: "Admin", tone: "text-coral bg-coral/10 ring-coral/20" },
+  { key: "notifications", title: "Alerts", subtitle: "Reminders and reports", icon: Bell, tone: "text-amber bg-amber/10 ring-amber/20" },
+  { key: "gmail", title: "Gmail / Email", subtitle: "SMTP templates", icon: Mail, badge: "Secret", tone: "text-sapphire bg-sapphire/10 ring-sapphire/20" },
+  { key: "whatsapp", title: "WhatsApp", subtitle: "Future API setup", icon: MessageCircle, tone: "text-jade bg-jade/10 ring-jade/20" },
+  { key: "backup", title: "Backup / Export", subtitle: "CSV, Excel, restore", icon: DatabaseBackup, tone: "text-orchid bg-orchid/10 ring-orchid/20" },
+  { key: "appearance", title: "Appearance", subtitle: "Language and theme", icon: Palette, tone: "text-aqua bg-aqua/10 ring-aqua/20" },
+  { key: "security", title: "Security", subtitle: "Login and audit", icon: LockKeyhole, tone: "text-primary bg-primary/10 ring-primary/20" },
 ];
 
 function SettingsPage() {
+  const { user } = useAuth();
   const { theme, toggle } = useTheme();
-  const save = (label: string) => () => toast.success(`${label} saved`);
+  const [active, setActive] = useState<SectionKey>("business");
+  const [settings, setSettings] = useState<SettingsState>(defaults);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState<SectionKey | null>(null);
+
+  const activeCategory = useMemo(() => categories.find((c) => c.key === active) ?? categories[0], [active]);
+
+  useEffect(() => {
+    let mounted = true;
+    async function loadSettings() {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from("app_settings")
+        .select("setting_key, setting_value")
+        .like("setting_key", "settings.%");
+      if (!mounted) return;
+      setLoading(false);
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      const next = structuredClone(defaults) as SettingsState;
+      for (const row of data ?? []) {
+        const key = row.setting_key.replace("settings.", "") as SectionKey;
+        if (key in next && row.setting_value && typeof row.setting_value === "object" && !Array.isArray(row.setting_value)) {
+          next[key] = { ...next[key], ...(row.setting_value as Record<string, string | boolean>) };
+        }
+      }
+      setSettings(next);
+    }
+    loadSettings();
+    return () => { mounted = false; };
+  }, []);
+
+  const setField = (section: SectionKey, field: string, value: string | boolean) => {
+    setSettings((current) => ({ ...current, [section]: { ...current[section], [field]: value } }));
+  };
+
+  const saveSection = async (section: SectionKey) => {
+    setSaving(section);
+    const settingKey = `settings.${section}`;
+    const { data: existing, error: readError } = await supabase
+      .from("app_settings")
+      .select("id")
+      .eq("setting_key", settingKey)
+      .maybeSingle();
+    if (readError) {
+      setSaving(null);
+      toast.error(readError.message);
+      return;
+    }
+
+    const payload = {
+      setting_key: settingKey,
+      setting_value: settings[section],
+      updated_by: user?.id ?? null,
+    };
+    const result = existing?.id
+      ? await supabase.from("app_settings").update(payload).eq("id", existing.id)
+      : await supabase.from("app_settings").insert(payload);
+
+    setSaving(null);
+    if (result.error) {
+      toast.error(result.error.message);
+      return;
+    }
+    toast.success(`${activeCategory.title} saved`);
+  };
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="Settings" subtitle="Complete configuration for your business, invoices and app" />
+    <div className="space-y-5">
+      <PageHeader
+        title="Settings"
+        subtitle="UniPay-style complete control panel for invoice, tax, print, users, Gmail, WhatsApp and backup"
+        action={
+          <Button asChild variant="outline">
+            <Link to="/team"><ShieldCheck className="mr-1.5 h-4 w-4" />Admin Control</Link>
+          </Button>
+        }
+      />
 
-      <Tabs defaultValue="business" className="gap-4">
-        <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-          <TabsList className="flex w-max flex-nowrap gap-1 sm:w-full sm:flex-wrap">
-            {TABS.map(t => (
-              <TabsTrigger key={t.value} value={t.value} className="gap-1.5 whitespace-nowrap">
-                <t.icon className="h-3.5 w-3.5" />{t.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard icon={FileText} label="Invoice controls" value="42+" />
+        <StatCard icon={UserCog} label="Admin access" value={user?.role ?? "staff"} />
+        <StatCard icon={MessageCircle} label="WhatsApp" value="Ready" />
+        <StatCard icon={Mail} label="Gmail" value="Secure" />
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
+        <Card className="xl:sticky xl:top-20 xl:self-start">
+          <CardContent className="p-3">
+            <div className="mb-2 flex items-center justify-between px-2 py-1">
+              <div>
+                <div className="font-display text-base font-semibold">All settings</div>
+                <div className="text-xs text-muted-foreground">Tap any option to edit</div>
+              </div>
+              {loading && <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />}
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-1">
+              {categories.map((category) => (
+                <button
+                  key={category.key}
+                  type="button"
+                  onClick={() => setActive(category.key)}
+                  className={`group flex min-h-[82px] items-center gap-3 rounded-lg border p-3 text-left transition hover:bg-muted/60 xl:min-h-0 ${active === category.key ? "border-primary bg-primary/5 shadow-sm" : "bg-card"}`}
+                >
+                  <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg ring-1 ${category.tone}`}>
+                    <category.icon className="h-5 w-5" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center gap-1.5">
+                      <span className="truncate text-sm font-semibold leading-tight">{category.title}</span>
+                      {category.badge && <Badge variant="secondary" className="hidden px-1.5 py-0 text-[10px] sm:inline-flex">{category.badge}</Badge>}
+                    </span>
+                    <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{category.subtitle}</span>
+                  </span>
+                  <ChevronRight className="hidden h-4 w-4 text-muted-foreground xl:block" />
+                </button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="min-w-0 space-y-4">
+          <div className="flex items-center gap-3 rounded-lg border bg-card p-4">
+            <div className={`grid h-12 w-12 shrink-0 place-items-center rounded-lg ring-1 ${activeCategory.tone}`}>
+              <activeCategory.icon className="h-6 w-6" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h1 className="font-display text-xl font-bold leading-tight">{activeCategory.title}</h1>
+              <p className="text-sm text-muted-foreground">{activeCategory.subtitle}</p>
+            </div>
+            <Button onClick={() => saveSection(active)} disabled={saving === active}>
+              {saving === active ? <RefreshCw className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}
+              Save
+            </Button>
+          </div>
+
+          {active === "business" && <BusinessPanel data={settings.business} set={(k, v) => setField("business", k, v)} />}
+          {active === "invoice" && <InvoicePanel data={settings.invoice} set={(k, v) => setField("invoice", k, v)} />}
+          {active === "tax" && <TaxPanel data={settings.tax} set={(k, v) => setField("tax", k, v)} />}
+          {active === "numbering" && <NumberingPanel data={settings.numbering} set={(k, v) => setField("numbering", k, v)} />}
+          {active === "print" && <PrintPanel data={settings.print} set={(k, v) => setField("print", k, v)} />}
+          {active === "items" && <ItemsPanel data={settings.items} set={(k, v) => setField("items", k, v)} />}
+          {active === "payment" && <PaymentPanel data={settings.payment} set={(k, v) => setField("payment", k, v)} />}
+          {active === "bank" && <BankPanel data={settings.bank} set={(k, v) => setField("bank", k, v)} />}
+          {active === "users" && <UsersPanel data={settings.users} set={(k, v) => setField("users", k, v)} />}
+          {active === "notifications" && <NotificationsPanel data={settings.notifications} set={(k, v) => setField("notifications", k, v)} />}
+          {active === "gmail" && <GmailPanel data={settings.gmail} set={(k, v) => setField("gmail", k, v)} />}
+          {active === "whatsapp" && <WhatsAppPanel data={settings.whatsapp} set={(k, v) => setField("whatsapp", k, v)} />}
+          {active === "backup" && <BackupPanel data={settings.backup} set={(k, v) => setField("backup", k, v)} />}
+          {active === "appearance" && <AppearancePanel data={settings.appearance} set={(k, v) => setField("appearance", k, v)} theme={theme} toggleTheme={toggle} />}
+          {active === "security" && <SecurityPanel data={settings.security} set={(k, v) => setField("security", k, v)} />}
         </div>
-
-        {/* BUSINESS */}
-        <TabsContent value="business">
-          <SectionCard title="Business profile" desc="Shown on invoices, estimates and reports">
-            <Grid>
-              <Field label="Business name" defaultValue="Prestige Store" />
-              <Field label="Legal / trade name" defaultValue="Prestige Store Pvt Ltd" />
-              <Field label="Owner name" defaultValue="Rajesh Kumar" />
-              <Field label="Business type">
-                <Select defaultValue="retail"><SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="retail">Retail</SelectItem>
-                    <SelectItem value="wholesale">Wholesale</SelectItem>
-                    <SelectItem value="service">Service</SelectItem>
-                    <SelectItem value="manufacturing">Manufacturing</SelectItem>
-                    <SelectItem value="distributor">Distributor</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field label="Industry" defaultValue="Jewellery & Accessories" />
-              <Field label="Email" defaultValue="billing@prestige.store" type="email" />
-              <Field label="Phone" defaultValue="+91 90000 00000" />
-              <Field label="Alternate phone" defaultValue="+91 90000 00001" />
-              <Field label="Website" defaultValue="prestige.store" />
-              <Field label="GSTIN" defaultValue="27PPPPP1234P1Z5" />
-              <Field label="PAN" defaultValue="PPPPP1234P" />
-              <Field label="CIN / Reg. no." defaultValue="U74999MH2020PTC000000" />
-              <FullWidth>
-                <Label>Registered address</Label>
-                <Textarea rows={2} defaultValue="221B Baker Street, Mumbai, MH 400001" />
-              </FullWidth>
-              <FullWidth>
-                <Label>Shipping address (if different)</Label>
-                <Textarea rows={2} placeholder="Leave blank if same as registered address" />
-              </FullWidth>
-              <Field label="City" defaultValue="Mumbai" />
-              <Field label="State" defaultValue="Maharashtra" />
-              <Field label="Country" defaultValue="India" />
-              <Field label="Pincode" defaultValue="400001" />
-            </Grid>
-            <UploadRow label="Business logo" hint="PNG or JPG, up to 2 MB" />
-            <SaveBar onSave={save("Business profile")} />
-          </SectionCard>
-        </TabsContent>
-
-        {/* TAX & TDS */}
-        <TabsContent value="tax">
-          <SectionCard title="Tax & currency" desc="Applied by default on new invoices">
-            <Grid>
-              <Field label="Currency">
-                <Select defaultValue="INR"><SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {["INR","USD","EUR","GBP","AED","SAR","PKR"].map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field label="Currency symbol" defaultValue="₹" />
-              <Field label="Decimal places" defaultValue="2" type="number" />
-              <Field label="Rounding">
-                <Select defaultValue="nearest"><SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No rounding</SelectItem>
-                    <SelectItem value="nearest">Nearest</SelectItem>
-                    <SelectItem value="up">Round up</SelectItem>
-                    <SelectItem value="down">Round down</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field label="Financial year starts">
-                <Select defaultValue="apr"><SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {["Jan","Apr","Jul","Oct"].map(m => <SelectItem key={m} value={m.toLowerCase()}>{m}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field label="Default tax rate (%)" defaultValue="18" type="number" />
-            </Grid>
-            <Separator className="my-2" />
-            <div className="grid gap-3">
-              <ToggleRow label="Enable GST" desc="Show CGST / SGST / IGST split on invoices" defaultChecked />
-              <ToggleRow label="Inclusive of tax by default" desc="Item rate already contains tax" />
-              <ToggleRow label="Enable cess" desc="Additional cess on specific goods" />
-              <ToggleRow label="Enable TDS" desc="Deduct tax at source on eligible invoices" defaultChecked />
-              <ToggleRow label="Enable TCS" desc="Collect tax at source" />
-              <ToggleRow label="Reverse charge (RCM)" desc="Show RCM option on invoices" />
-            </div>
-            <Separator className="my-2" />
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="font-display font-semibold">TDS sections</div>
-                <Button size="sm" variant="outline"><Plus className="mr-1 h-3.5 w-3.5" />Add section</Button>
-              </div>
-              <div className="rounded-xl border">
-                {[
-                  { s: "194C", d: "Contractor payments", r: "1%" },
-                  { s: "194J", d: "Professional / technical", r: "10%" },
-                  { s: "194H", d: "Commission / brokerage", r: "5%" },
-                  { s: "194Q", d: "Purchase of goods", r: "0.1%" },
-                ].map((t, i) => (
-                  <div key={t.s} className={`grid grid-cols-[80px_minmax(0,1fr)_60px_40px] items-center gap-3 p-3 ${i ? "border-t" : ""}`}>
-                    <Badge variant="outline" className="justify-center">{t.s}</Badge>
-                    <div className="truncate text-sm">{t.d}</div>
-                    <div className="text-right text-sm font-medium">{t.r}</div>
-                    <Button size="icon" variant="ghost" className="h-8 w-8"><Trash2 className="h-3.5 w-3.5" /></Button>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <SaveBar onSave={save("Tax settings")} />
-          </SectionCard>
-        </TabsContent>
-
-        {/* NUMBERING */}
-        <TabsContent value="numbering">
-          <SectionCard title="Document numbering" desc="Prefix, suffix and next number for each document type">
-            <div className="grid gap-3">
-              {[
-                { k: "Invoice", p: "INV-", n: "1042" },
-                { k: "Estimate", p: "EST-", n: "312" },
-                { k: "Sale order", p: "SO-", n: "128" },
-                { k: "Delivery note", p: "DN-", n: "76" },
-                { k: "Sale return", p: "SR-", n: "18" },
-                { k: "Purchase order", p: "PO-", n: "204" },
-                { k: "Purchase", p: "PUR-", n: "612" },
-                { k: "Purchase return", p: "PR-", n: "9" },
-                { k: "Payment in", p: "RCPT-", n: "540" },
-                { k: "Payment out", p: "PAY-", n: "301" },
-                { k: "Expense", p: "EXP-", n: "220" },
-              ].map(d => (
-                <div key={d.k} className="grid grid-cols-1 items-end gap-3 rounded-xl border p-3 sm:grid-cols-[1fr_1fr_1fr_1fr_auto]">
-                  <div className="grid gap-1.5"><Label>Document</Label><Input value={d.k} readOnly className="bg-muted/40" /></div>
-                  <div className="grid gap-1.5"><Label>Prefix</Label><Input defaultValue={d.p} /></div>
-                  <div className="grid gap-1.5"><Label>Next number</Label><Input defaultValue={d.n} type="number" /></div>
-                  <div className="grid gap-1.5"><Label>Suffix</Label><Input placeholder="-25/26" /></div>
-                  <div className="flex items-center gap-2 pb-0.5">
-                    <Switch defaultChecked id={`auto-${d.k}`} />
-                    <Label htmlFor={`auto-${d.k}`} className="text-xs">Auto</Label>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <SaveBar onSave={save("Numbering")} />
-          </SectionCard>
-        </TabsContent>
-
-        {/* TEMPLATE */}
-        <TabsContent value="template">
-          <SectionCard title="Invoice template" desc="Choose a template and customise columns">
-            <div className="grid gap-6 md:grid-cols-[240px_minmax(0,1fr)]">
-              <div className="grid gap-3">
-                {["Classic Emerald", "Minimal Cream", "Bold Gold", "Compact GST", "Thermal 80mm"].map((t, i) => (
-                  <button key={t} className={`rounded-xl border p-3 text-left transition hover:border-accent ${i === 0 ? "border-primary bg-primary/5" : ""}`}>
-                    <div className="font-display font-semibold text-sm">{t}</div>
-                    <div className="text-xs text-muted-foreground">Preview →</div>
-                  </button>
-                ))}
-              </div>
-              <div className="grid gap-4">
-                <Grid>
-                  <Field label="Accent colour" defaultValue="#064e3b" />
-                  <Field label="Font">
-                    <Select defaultValue="sora"><SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="sora">Sora + Manrope</SelectItem>
-                        <SelectItem value="inter">Inter</SelectItem>
-                        <SelectItem value="roboto">Roboto</SelectItem>
-                        <SelectItem value="serif">Playfair (serif)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                  <Field label="Title label" defaultValue="TAX INVOICE" />
-                  <Field label="Duplicate label" defaultValue="ORIGINAL / DUPLICATE / TRIPLICATE" />
-                </Grid>
-                <div className="grid gap-2 rounded-xl border p-3">
-                  <div className="font-display font-semibold text-sm">Show on invoice</div>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {["Logo","Company address","GSTIN","PAN","Bank details","Signature","QR / UPI","Terms & conditions","Notes","Discount column","HSN / SAC","Tax split (CGST/SGST)","Received / balance","Item image","Batch / expiry","Serial number"].map(k => (
-                      <label key={k} className="flex items-center gap-2 text-sm"><Switch defaultChecked={!["Item image","Batch / expiry","Serial number"].includes(k)} /> {k}</label>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-            <SaveBar onSave={save("Template")} />
-          </SectionCard>
-        </TabsContent>
-
-        {/* PAGE LAYOUT */}
-        <TabsContent value="page">
-          <SectionCard title="Page layout" desc="Paper size, orientation and margins for printing / PDF">
-            <Grid>
-              <Field label="Page size">
-                <Select defaultValue="a4"><SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="a4">A4 (210 × 297 mm)</SelectItem>
-                    <SelectItem value="a5">A5 (148 × 210 mm)</SelectItem>
-                    <SelectItem value="letter">Letter (8.5 × 11 in)</SelectItem>
-                    <SelectItem value="legal">Legal (8.5 × 14 in)</SelectItem>
-                    <SelectItem value="thermal80">Thermal 80 mm</SelectItem>
-                    <SelectItem value="thermal58">Thermal 58 mm</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field label="Orientation">
-                <Select defaultValue="portrait"><SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="portrait">Portrait</SelectItem>
-                    <SelectItem value="landscape">Landscape</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field label="Copies per print" defaultValue="1" type="number" />
-              <Field label="Print scale (%)" defaultValue="100" type="number" />
-              <Field label="Margin top (mm)" defaultValue="12" type="number" />
-              <Field label="Margin right (mm)" defaultValue="10" type="number" />
-              <Field label="Margin bottom (mm)" defaultValue="12" type="number" />
-              <Field label="Margin left (mm)" defaultValue="10" type="number" />
-              <Field label="Header height (mm)" defaultValue="24" type="number" />
-              <Field label="Footer height (mm)" defaultValue="18" type="number" />
-            </Grid>
-            <Separator className="my-2" />
-            <div className="grid gap-3">
-              <ToggleRow label="Show page numbers" defaultChecked />
-              <ToggleRow label="Repeat header on every page" defaultChecked />
-              <ToggleRow label="Watermark 'PAID' when settled" />
-              <ToggleRow label="Watermark 'DRAFT' when unsent" defaultChecked />
-            </div>
-            <SaveBar onSave={save("Page layout")} />
-          </SectionCard>
-        </TabsContent>
-
-        {/* TERMS */}
-        <TabsContent value="terms">
-          <SectionCard title="Terms & conditions / Notes" desc="Default text printed at the bottom of documents">
-            <div className="grid gap-4">
-              <FullWidth><Label>Invoice terms</Label>
-                <Textarea rows={4} defaultValue={"1. Goods once sold will not be taken back.\n2. Interest @ 18% p.a. on overdue bills.\n3. Subject to Mumbai jurisdiction."} />
-              </FullWidth>
-              <FullWidth><Label>Estimate terms</Label>
-                <Textarea rows={3} defaultValue={"Quotation valid for 15 days. Prices exclusive of GST."} />
-              </FullWidth>
-              <FullWidth><Label>Purchase order terms</Label>
-                <Textarea rows={3} defaultValue={"Delivery within 7 days. Payment against delivery."} />
-              </FullWidth>
-              <FullWidth><Label>Default notes</Label>
-                <Textarea rows={2} placeholder="Thank you for your business!" defaultValue="Thank you for your business!" />
-              </FullWidth>
-            </div>
-            <SaveBar onSave={save("Terms")} />
-          </SectionCard>
-        </TabsContent>
-
-        {/* BANK */}
-        <TabsContent value="bank">
-          <SectionCard title="Bank accounts" desc="Shown on invoices for payment">
-            <div className="grid gap-3">
-              {[
-                { n: "HDFC Bank — Current", a: "50100xxxxxx0021", i: "HDFC0000123" },
-                { n: "ICICI Bank — Savings", a: "00281xxxxxx0044", i: "ICIC0000028" },
-              ].map((b, idx) => (
-                <div key={b.n} className="grid gap-3 rounded-xl border p-4 sm:grid-cols-2">
-                  <Field label="Account name" defaultValue={b.n} />
-                  <Field label="Account holder" defaultValue="Prestige Store" />
-                  <Field label="Account number" defaultValue={b.a} />
-                  <Field label="IFSC" defaultValue={b.i} />
-                  <Field label="Branch" defaultValue="Mumbai — Fort" />
-                  <Field label="UPI ID" defaultValue={`prestige${idx + 1}@hdfcbank`} />
-                  <FullWidth className="flex items-center justify-between">
-                    <label className="flex items-center gap-2 text-sm"><Switch defaultChecked={idx === 0} /> Default account</label>
-                    <Button size="sm" variant="ghost" className="text-destructive"><Trash2 className="mr-1 h-3.5 w-3.5" />Remove</Button>
-                  </FullWidth>
-                </div>
-              ))}
-              <Button variant="outline"><Plus className="mr-1.5 h-4 w-4" />Add bank account</Button>
-            </div>
-            <SaveBar onSave={save("Bank details")} />
-          </SectionCard>
-        </TabsContent>
-
-        {/* SIGNATURE */}
-        <TabsContent value="signature">
-          <SectionCard title="Signature & stamp" desc="Printed on invoices and estimates">
-            <div className="grid gap-4 md:grid-cols-2">
-              <UploadRow label="Signature image" hint="Transparent PNG recommended" />
-              <UploadRow label="Company stamp" hint="Square PNG works best" />
-              <Field label="Authorised signatory" defaultValue="Rajesh Kumar" />
-              <Field label="Designation" defaultValue="Proprietor" />
-            </div>
-            <ToggleRow label="Show signature on invoice" defaultChecked />
-            <ToggleRow label="Show stamp on invoice" />
-            <SaveBar onSave={save("Signature")} />
-          </SectionCard>
-        </TabsContent>
-
-        {/* USERS & ROLES */}
-        <TabsContent value="users">
-          <SectionCard title="Users & roles" desc="Manage staff access and permissions">
-            <div className="rounded-xl border">
-              {[
-                { n: "Rajesh Kumar", e: "owner@prestige.store", r: "Admin" },
-                { n: "Priya Sharma", e: "priya@prestige.store", r: "Manager" },
-                { n: "Amit Verma", e: "amit@prestige.store", r: "Cashier" },
-              ].map((u, i) => (
-                <div key={u.e} className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 p-3 sm:grid-cols-[minmax(0,1fr)_140px_auto] ${i ? "border-t" : ""}`}>
-                  <div className="min-w-0">
-                    <div className="truncate font-medium">{u.n}</div>
-                    <div className="truncate text-xs text-muted-foreground">{u.e}</div>
-                  </div>
-                  <Badge variant={u.r === "Admin" ? "default" : "secondary"} className="hidden justify-center sm:flex"><Shield className="mr-1 h-3 w-3" />{u.r}</Badge>
-                  <div className="flex gap-1">
-                    <Button size="sm" variant="ghost">Edit</Button>
-                    {u.r !== "Admin" && <Button size="sm" variant="ghost" className="text-destructive"><Trash2 className="h-3.5 w-3.5" /></Button>}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <Button variant="outline"><Plus className="mr-1.5 h-4 w-4" />Invite user</Button>
-            <Separator className="my-2" />
-            <div className="grid gap-2">
-              <div className="font-display font-semibold text-sm">Role permissions</div>
-              <div className="overflow-x-auto rounded-xl border">
-                <table className="w-full min-w-[520px] text-sm">
-                  <thead className="bg-muted/40 text-left">
-                    <tr><th className="p-2">Module</th><th className="p-2 text-center">Admin</th><th className="p-2 text-center">Manager</th><th className="p-2 text-center">Cashier</th></tr>
-                  </thead>
-                  <tbody>
-                    {["Invoices","Estimates","Products","Inventory","Payments","Reports","Settings"].map(m => (
-                      <tr key={m} className="border-t">
-                        <td className="p-2">{m}</td>
-                        <td className="p-2 text-center"><Switch defaultChecked disabled /></td>
-                        <td className="p-2 text-center"><Switch defaultChecked={m !== "Settings"} /></td>
-                        <td className="p-2 text-center"><Switch defaultChecked={["Invoices","Payments"].includes(m)} /></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            <SaveBar onSave={save("Users & roles")} />
-          </SectionCard>
-        </TabsContent>
-
-        {/* NOTIFICATIONS */}
-        <TabsContent value="notifications">
-          <SectionCard title="Notifications & reminders" desc="Email, SMS and WhatsApp alerts">
-            <div className="grid gap-3">
-              <ToggleRow label="New invoice created" desc="Notify owner when a new invoice is saved" defaultChecked />
-              <ToggleRow label="Payment received" desc="Ping when a customer pays" defaultChecked />
-              <ToggleRow label="Overdue invoice reminder" desc="Auto reminder 3, 7 and 15 days after due date" defaultChecked />
-              <ToggleRow label="Low stock alert" desc="When any product falls below its minimum" defaultChecked />
-              <ToggleRow label="Daily sales summary" desc="9:00 PM daily digest" />
-              <ToggleRow label="Weekly report" desc="Every Monday morning" />
-            </div>
-            <Separator className="my-2" />
-            <Grid>
-              <Field label="Notification email" defaultValue="owner@prestige.store" />
-              <Field label="SMS sender ID" defaultValue="PRSTGE" />
-              <Field label="Reminder time" defaultValue="10:00" type="time" />
-              <Field label="Timezone">
-                <Select defaultValue="ist"><SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ist">Asia/Kolkata (IST)</SelectItem>
-                    <SelectItem value="dxb">Asia/Dubai</SelectItem>
-                    <SelectItem value="utc">UTC</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Field>
-            </Grid>
-            <SaveBar onSave={save("Notifications")} />
-          </SectionCard>
-        </TabsContent>
-
-        {/* BACKUP */}
-        <TabsContent value="backup">
-          <SectionCard title="Backup, import & export" desc="Keep your data safe">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <ActionCard title="Export all data" desc="Download a full JSON backup" btn="Download backup" onClick={() => toast.success("Backup ready")} />
-              <ActionCard title="Import data" desc="Restore from a previous backup file" btn="Choose file" onClick={() => toast.info("Choose a .json file")} />
-              <ActionCard title="Export invoices (CSV)" desc="For accountant / Excel" btn="Export CSV" onClick={() => toast.success("CSV downloaded")} />
-              <ActionCard title="Export products (CSV)" desc="Item master export" btn="Export CSV" onClick={() => toast.success("CSV downloaded")} />
-            </div>
-            <Separator className="my-2" />
-            <div className="grid gap-3">
-              <ToggleRow label="Auto backup daily" desc="Runs every night at 2:00 AM" defaultChecked />
-              <ToggleRow label="Include images in backup" />
-            </div>
-            <Separator className="my-2" />
-            <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-4">
-              <div className="font-display font-semibold text-destructive">Danger zone</div>
-              <p className="mt-1 text-sm text-muted-foreground">Permanently delete all transactions. This cannot be undone.</p>
-              <Button variant="destructive" size="sm" className="mt-3"><Trash2 className="mr-1.5 h-3.5 w-3.5" />Reset business data</Button>
-            </div>
-          </SectionCard>
-        </TabsContent>
-
-        {/* WHATSAPP */}
-        <TabsContent value="whatsapp">
-          <SectionCard title="WhatsApp" desc="Send invoices and reminders on WhatsApp (coming soon)">
-            <div className="flex items-center gap-3 rounded-xl border bg-muted/30 p-4">
-              <div className="grid h-10 w-10 place-items-center rounded-xl bg-accent/15 text-accent"><MessageCircle className="h-5 w-5" /></div>
-              <div>
-                <div className="font-semibold">WhatsApp Business</div>
-                <div className="text-sm text-muted-foreground">Placeholder for future WhatsApp API integration.</div>
-              </div>
-            </div>
-            <Grid>
-              <Field label="WhatsApp display name" defaultValue="Prestige Store" />
-              <Field label="Default WhatsApp number" placeholder="+91…" />
-              <Field label="Business category" defaultValue="Retail" />
-              <Field label="Reply-to number" defaultValue="+91 90000 00000" />
-            </Grid>
-            <FullWidth>
-              <Label>Default message template</Label>
-              <Textarea rows={3} defaultValue={"Hello {customer}, your invoice {number} of ₹{amount} is ready. Please find the copy attached. — Prestige Store"} />
-            </FullWidth>
-            <div className="grid gap-3">
-              <ToggleRow label="Send invoice on WhatsApp automatically" />
-              <ToggleRow label="Send payment reminders on WhatsApp" />
-              <ToggleRow label="Send thank-you note after payment" defaultChecked />
-            </div>
-            <SaveBar onSave={save("WhatsApp")} />
-          </SectionCard>
-        </TabsContent>
-
-        {/* APPEARANCE */}
-        <TabsContent value="appearance">
-          <SectionCard title="Appearance" desc="Theme, density and language">
-            <div className="flex items-center justify-between rounded-xl border p-4">
-              <div>
-                <div className="font-semibold flex items-center gap-2"><Sparkles className="h-4 w-4 text-gold" />Theme</div>
-                <div className="text-sm text-muted-foreground">Currently using <span className="capitalize font-medium text-foreground">{theme}</span> mode</div>
-              </div>
-              <Button variant="outline" onClick={toggle}>
-                {theme === "dark" ? <><Sun className="mr-1.5 h-4 w-4" />Switch to light</> : <><Moon className="mr-1.5 h-4 w-4" />Switch to dark</>}
-              </Button>
-            </div>
-            <Grid>
-              <Field label="Language">
-                <Select defaultValue="en"><SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="en">English</SelectItem>
-                    <SelectItem value="hi">हिन्दी</SelectItem>
-                    <SelectItem value="ur">اردو</SelectItem>
-                    <SelectItem value="mr">मराठी</SelectItem>
-                    <SelectItem value="gu">ગુજરાતી</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field label="Density">
-                <Select defaultValue="comfortable"><SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="compact">Compact</SelectItem>
-                    <SelectItem value="comfortable">Comfortable</SelectItem>
-                    <SelectItem value="spacious">Spacious</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field label="Date format">
-                <Select defaultValue="dmy"><SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="dmy">DD/MM/YYYY</SelectItem>
-                    <SelectItem value="mdy">MM/DD/YYYY</SelectItem>
-                    <SelectItem value="ymd">YYYY-MM-DD</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field label="Number format">
-                <Select defaultValue="in"><SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="in">1,23,456.78 (Indian)</SelectItem>
-                    <SelectItem value="intl">123,456.78 (International)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Field>
-            </Grid>
-            <SaveBar onSave={save("Appearance")} />
-          </SectionCard>
-        </TabsContent>
-      </Tabs>
+      </div>
     </div>
   );
 }
 
-/* ---------- helpers ---------- */
-function SectionCard({ title, desc, children }: { title: string; desc?: string; children: ReactNode }) {
+function BusinessPanel({ data, set }: PanelProps) {
   return (
-    <Card><CardContent className="grid gap-5 p-5 sm:p-6">
-      <div>
-        <div className="font-display text-lg font-semibold">{title}</div>
-        {desc && <div className="text-sm text-muted-foreground">{desc}</div>}
+    <Panel>
+      <PanelHeader icon={Building2} title="Business identity" subtitle="This information prints on every invoice and report." />
+      <Grid>
+        <TextField label="Business / shop name" value={data.businessName} onChange={(v) => set("businessName", v)} />
+        <TextField label="Legal / registered name" value={data.legalName} onChange={(v) => set("legalName", v)} />
+        <TextField label="Owner / admin name" value={data.ownerName} onChange={(v) => set("ownerName", v)} />
+        <TextField label="Mobile number" value={data.mobile} onChange={(v) => set("mobile", v)} />
+        <TextField label="WhatsApp number" value={data.whatsapp} onChange={(v) => set("whatsapp", v)} />
+        <TextField label="Email" value={data.email} onChange={(v) => set("email", v)} type="email" />
+        <TextField label="Website" value={data.website} onChange={(v) => set("website", v)} />
+        <TextField label="GSTIN" value={data.gstin} onChange={(v) => set("gstin", v)} />
+        <TextField label="PAN" value={data.pan} onChange={(v) => set("pan", v)} />
+        <TextField label="State" value={data.state} onChange={(v) => set("state", v)} />
+        <TextField label="Country" value={data.country} onChange={(v) => set("country", v)} />
+        <TextAreaField label="Full business address" value={data.address} onChange={(v) => set("address", v)} />
+      </Grid>
+      <div className="grid gap-3 md:grid-cols-2">
+        <UploadBox icon={Image} title="Business logo" subtitle="Used in invoice header" />
+        <UploadBox icon={Stamp} title="Shop stamp" subtitle="Optional stamp image" />
       </div>
-      {children}
-    </CardContent></Card>
+      <ToggleGrid>
+        <ToggleField label="Show logo on invoice" checked={data.showLogo} onChange={(v) => set("showLogo", v)} />
+        <ToggleField label="Show stamp on invoice" checked={data.showBusinessStamp} onChange={(v) => set("showBusinessStamp", v)} />
+      </ToggleGrid>
+    </Panel>
+  );
+}
+
+function InvoicePanel({ data, set }: PanelProps) {
+  const columns = [
+    ["itemDescription", "Description column"], ["hsn", "HSN / SAC"], ["mrp", "MRP column"], ["batch", "Batch / expiry"],
+    ["serial", "Serial number"], ["discount", "Discount column"], ["receivedBalance", "Received / balance"],
+    ["qrCode", "UPI QR code"], ["signature", "Signature area"],
+  ] as const;
+  return (
+    <Panel>
+      <PanelHeader icon={FileCog} title="Invoice design and fields" subtitle="Controls every line, label and section on create-invoice and print." />
+      <Grid>
+        <TextField label="Invoice title" value={data.title} onChange={(v) => set("title", v)} />
+        <TextField label="Copy label" value={data.duplicateLabel} onChange={(v) => set("duplicateLabel", v)} />
+        <TextField label="Default due days" value={data.defaultDueDays} onChange={(v) => set("defaultDueDays", v)} type="number" />
+        <SelectField label="Invoice type" value={data.invoiceType} onChange={(v) => set("invoiceType", v)} options={["gst", "bill-of-supply", "proforma", "retail", "export"]} />
+      </Grid>
+      <SettingBlock title="Visible invoice columns" icon={ListChecks}>
+        <ToggleGrid>
+          {columns.map(([key, label]) => <ToggleField key={key} label={label} checked={data[key]} onChange={(v) => set(key, v)} />)}
+        </ToggleGrid>
+      </SettingBlock>
+      <Grid>
+        <TextAreaField label="Default terms & conditions" value={data.terms} onChange={(v) => set("terms", v)} />
+        <TextAreaField label="Default invoice notes" value={data.notes} onChange={(v) => set("notes", v)} />
+      </Grid>
+    </Panel>
+  );
+}
+
+function TaxPanel({ data, set }: PanelProps) {
+  return (
+    <Panel>
+      <PanelHeader icon={Percent} title="Tax, GST, TDS and currency" subtitle="Default calculations for invoice, purchase and payment entries." />
+      <Grid>
+        <SelectField label="Currency" value={data.currency} onChange={(v) => set("currency", v)} options={["INR", "USD", "EUR", "GBP", "AED", "PKR"]} />
+        <TextField label="Currency symbol" value={data.symbol} onChange={(v) => set("symbol", v)} />
+        <TextField label="Default GST %" value={data.defaultTax} onChange={(v) => set("defaultTax", v)} type="number" />
+        <SelectField label="Tax mode" value={data.taxMode} onChange={(v) => set("taxMode", v)} options={["exclusive", "inclusive"]} />
+        <SelectField label="Interstate GST" value={data.interstateTax} onChange={(v) => set("interstateTax", v)} options={["auto", "igst", "cgst-sgst"]} />
+      </Grid>
+      <ToggleGrid>
+        <ToggleField label="Enable GST" checked={data.gstEnabled} onChange={(v) => set("gstEnabled", v)} />
+        <ToggleField label="Enable cess" checked={data.cess} onChange={(v) => set("cess", v)} />
+        <ToggleField label="Enable TDS" checked={data.tds} onChange={(v) => set("tds", v)} />
+        <ToggleField label="Enable TCS" checked={data.tcs} onChange={(v) => set("tcs", v)} />
+        <ToggleField label="Reverse charge (RCM)" checked={data.rcm} onChange={(v) => set("rcm", v)} />
+      </ToggleGrid>
+      <SettingBlock title="TDS sections" icon={Percent}>
+        <div className="grid gap-3 md:grid-cols-2">
+          <TextField label="194C Contractor %" value={data.tds194c} onChange={(v) => set("tds194c", v)} type="number" />
+          <TextField label="194J Professional %" value={data.tds194j} onChange={(v) => set("tds194j", v)} type="number" />
+          <TextField label="194H Commission %" value={data.tds194h} onChange={(v) => set("tds194h", v)} type="number" />
+          <TextField label="194Q Purchase %" value={data.tds194q} onChange={(v) => set("tds194q", v)} type="number" />
+        </div>
+      </SettingBlock>
+    </Panel>
+  );
+}
+
+function NumberingPanel({ data, set }: PanelProps) {
+  const docs = [
+    ["Invoice", "invoicePrefix", "invoiceNext"], ["Estimate", "estimatePrefix", "estimateNext"],
+    ["Sale Order", "saleOrderPrefix", "saleOrderNext"], ["Delivery Note", "deliveryPrefix", "deliveryNext"],
+    ["Purchase", "purchasePrefix", "purchaseNext"], ["Payment", "paymentPrefix", "paymentNext"], ["Expense", "expensePrefix", "expenseNext"],
+  ] as const;
+  return (
+    <Panel>
+      <PanelHeader icon={Hash} title="Document numbering" subtitle="Prefix, next number and yearly reset for every document." />
+      <Grid>
+        <TextField label="Financial year label" value={data.financialYear} onChange={(v) => set("financialYear", v)} />
+        <ToggleField label="Auto reset numbers every financial year" checked={data.autoReset} onChange={(v) => set("autoReset", v)} />
+      </Grid>
+      <div className="grid gap-3">
+        {docs.map(([label, prefix, next]) => (
+          <div key={label} className="grid gap-3 rounded-lg border p-3 sm:grid-cols-[1fr_140px_140px]">
+            <div className="flex items-center gap-3 font-medium"><FileText className="h-4 w-4 text-primary" />{label}</div>
+            <TextField label="Prefix" value={data[prefix]} onChange={(v) => set(prefix, v)} />
+            <TextField label="Next no." value={data[next]} onChange={(v) => set(next, v)} type="number" />
+          </div>
+        ))}
+      </div>
+    </Panel>
+  );
+}
+
+function PrintPanel({ data, set }: PanelProps) {
+  return (
+    <Panel>
+      <PanelHeader icon={Printer} title="Page layout and print" subtitle="A4, A5, thermal print, PDF margins and watermarks." />
+      <Grid>
+        <SelectField label="Paper size" value={data.paper} onChange={(v) => set("paper", v)} options={["a4", "a5", "letter", "legal", "thermal-80mm", "thermal-58mm"]} />
+        <SelectField label="Orientation" value={data.orientation} onChange={(v) => set("orientation", v)} options={["portrait", "landscape"]} />
+        <TextField label="Top margin (mm)" value={data.marginTop} onChange={(v) => set("marginTop", v)} type="number" />
+        <TextField label="Right margin (mm)" value={data.marginRight} onChange={(v) => set("marginRight", v)} type="number" />
+        <TextField label="Bottom margin (mm)" value={data.marginBottom} onChange={(v) => set("marginBottom", v)} type="number" />
+        <TextField label="Left margin (mm)" value={data.marginLeft} onChange={(v) => set("marginLeft", v)} type="number" />
+        <TextField label="Copies per print" value={data.copies} onChange={(v) => set("copies", v)} type="number" />
+      </Grid>
+      <ToggleGrid>
+        <ToggleField label="Thermal printer mode" checked={data.thermal} onChange={(v) => set("thermal", v)} />
+        <ToggleField label="Repeat header on each page" checked={data.repeatHeader} onChange={(v) => set("repeatHeader", v)} />
+        <ToggleField label="Show page numbers" checked={data.pageNumbers} onChange={(v) => set("pageNumbers", v)} />
+        <ToggleField label="Paid watermark" checked={data.paidWatermark} onChange={(v) => set("paidWatermark", v)} />
+        <ToggleField label="Draft watermark" checked={data.draftWatermark} onChange={(v) => set("draftWatermark", v)} />
+      </ToggleGrid>
+    </Panel>
+  );
+}
+
+function ItemsPanel({ data, set }: PanelProps) {
+  return (
+    <Panel>
+      <PanelHeader icon={Boxes} title="Product, service and inventory" subtitle="Stock controls used by products, purchases and invoices." />
+      <Grid>
+        <TextField label="Default unit" value={data.unit} onChange={(v) => set("unit", v)} />
+        <TextField label="Low stock quantity" value={data.lowStockQty} onChange={(v) => set("lowStockQty", v)} type="number" />
+        <SelectField label="Default price list" value={data.priceList} onChange={(v) => set("priceList", v)} options={["Retail", "Wholesale", "Distributor", "MRP"]} />
+      </Grid>
+      <ToggleGrid>
+        <ToggleField label="Track stock" checked={data.stockTracking} onChange={(v) => set("stockTracking", v)} />
+        <ToggleField label="Low stock alert" checked={data.lowStockAlert} onChange={(v) => set("lowStockAlert", v)} />
+        <ToggleField label="Allow negative stock" checked={data.negativeStock} onChange={(v) => set("negativeStock", v)} />
+        <ToggleField label="Barcode field" checked={data.barcode} onChange={(v) => set("barcode", v)} />
+        <ToggleField label="Product image" checked={data.productImage} onChange={(v) => set("productImage", v)} />
+        <ToggleField label="Purchase price" checked={data.purchasePrice} onChange={(v) => set("purchasePrice", v)} />
+        <ToggleField label="Sale price" checked={data.salePrice} onChange={(v) => set("salePrice", v)} />
+      </ToggleGrid>
+    </Panel>
+  );
+}
+
+function PaymentPanel({ data, set }: PanelProps) {
+  return (
+    <Panel>
+      <PanelHeader icon={Banknote} title="Payment and due settings" subtitle="Payment modes, partial payments, due reminders and rounding." />
+      <Grid>
+        <SelectField label="Default payment method" value={data.defaultMethod} onChange={(v) => set("defaultMethod", v)} options={["cash", "upi", "bank", "card", "wallet"]} />
+        <TextField label="Due reminder days" value={data.dueReminderDays} onChange={(v) => set("dueReminderDays", v)} />
+      </Grid>
+      <ToggleGrid>
+        <ToggleField label="Cash" checked={data.cash} onChange={(v) => set("cash", v)} />
+        <ToggleField label="Bank transfer" checked={data.bank} onChange={(v) => set("bank", v)} />
+        <ToggleField label="UPI" checked={data.upi} onChange={(v) => set("upi", v)} />
+        <ToggleField label="Card" checked={data.card} onChange={(v) => set("card", v)} />
+        <ToggleField label="Wallet" checked={data.wallet} onChange={(v) => set("wallet", v)} />
+        <ToggleField label="Partial payment" checked={data.partialPayment} onChange={(v) => set("partialPayment", v)} />
+        <ToggleField label="Round off totals" checked={data.roundOff} onChange={(v) => set("roundOff", v)} />
+      </ToggleGrid>
+    </Panel>
+  );
+}
+
+function BankPanel({ data, set }: PanelProps) {
+  return (
+    <Panel>
+      <PanelHeader icon={Landmark} title="Bank account and UPI" subtitle="Details printed in invoice payment section." />
+      <Grid>
+        <TextField label="Account holder" value={data.accountName} onChange={(v) => set("accountName", v)} />
+        <TextField label="Bank name" value={data.bankName} onChange={(v) => set("bankName", v)} />
+        <TextField label="Account number" value={data.accountNumber} onChange={(v) => set("accountNumber", v)} />
+        <TextField label="IFSC / routing code" value={data.ifsc} onChange={(v) => set("ifsc", v)} />
+        <TextField label="Branch" value={data.branch} onChange={(v) => set("branch", v)} />
+        <TextField label="UPI ID" value={data.upi} onChange={(v) => set("upi", v)} />
+      </Grid>
+      <ToggleField label="Show bank / UPI details on invoice" checked={data.showOnInvoice} onChange={(v) => set("showOnInvoice", v)} />
+    </Panel>
+  );
+}
+
+function UsersPanel({ data, set }: PanelProps) {
+  return (
+    <Panel>
+      <PanelHeader icon={Users} title="Admin, users and permissions" subtitle="Global permission defaults. Real member control is in Admin Control." />
+      <div className="rounded-lg border bg-muted/25 p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="font-semibold">Team member management</div>
+            <div className="text-sm text-muted-foreground">Open Admin Control to create admin, block users and change live roles.</div>
+          </div>
+          <Button asChild><Link to="/team"><ShieldCheck className="mr-1.5 h-4 w-4" />Open Admin Control</Link></Button>
+        </div>
+      </div>
+      <Grid>
+        <SelectField label="Default role for new users" value={data.defaultRole} onChange={(v) => set("defaultRole", v)} options={["staff", "cashier", "manager", "admin"]} />
+      </Grid>
+      <ToggleGrid>
+        <ToggleField label="Staff can create invoices" checked={data.allowStaffInvoice} onChange={(v) => set("allowStaffInvoice", v)} />
+        <ToggleField label="Staff can delete records" checked={data.allowStaffDelete} onChange={(v) => set("allowStaffDelete", v)} />
+        <ToggleField label="Cashier can view reports" checked={data.allowCashierReports} onChange={(v) => set("allowCashierReports", v)} />
+        <ToggleField label="Admin required for settings" checked={data.requireAdminForSettings} onChange={(v) => set("requireAdminForSettings", v)} />
+        <ToggleField label="Invite users by email" checked={data.inviteByEmail} onChange={(v) => set("inviteByEmail", v)} />
+      </ToggleGrid>
+    </Panel>
+  );
+}
+
+function NotificationsPanel({ data, set }: PanelProps) {
+  return (
+    <Panel>
+      <PanelHeader icon={Bell} title="Notifications and reminders" subtitle="Invoice, payment, stock and report alerts." />
+      <Grid>
+        <TextField label="Owner notification email" value={data.ownerEmail} onChange={(v) => set("ownerEmail", v)} type="email" />
+        <TextField label="Reminder time" value={data.reminderTime} onChange={(v) => set("reminderTime", v)} type="time" />
+      </Grid>
+      <ToggleGrid>
+        <ToggleField label="Invoice created" checked={data.invoiceCreated} onChange={(v) => set("invoiceCreated", v)} />
+        <ToggleField label="Payment received" checked={data.paymentReceived} onChange={(v) => set("paymentReceived", v)} />
+        <ToggleField label="Low stock alert" checked={data.lowStock} onChange={(v) => set("lowStock", v)} />
+        <ToggleField label="Daily summary" checked={data.dailySummary} onChange={(v) => set("dailySummary", v)} />
+        <ToggleField label="Weekly report" checked={data.weeklyReport} onChange={(v) => set("weeklyReport", v)} />
+        <ToggleField label="Overdue reminder" checked={data.overdueReminder} onChange={(v) => set("overdueReminder", v)} />
+      </ToggleGrid>
+    </Panel>
+  );
+}
+
+function GmailPanel({ data, set }: PanelProps) {
+  return (
+    <Panel>
+      <PanelHeader icon={Mail} title="Gmail / Email setup" subtitle="Password is stored only in project secrets; this screen keeps non-secret mail settings." />
+      <div className="rounded-lg border border-amber/40 bg-amber/10 p-4 text-sm">
+        Gmail password / app password is not shown here for security. Use the saved secret for backend mail sending; never paste it into visible UI.
+      </div>
+      <Grid>
+        <TextField label="From name" value={data.fromName} onChange={(v) => set("fromName", v)} />
+        <TextField label="From Gmail" value={data.fromEmail} onChange={(v) => set("fromEmail", v)} type="email" />
+        <TextField label="Reply-to email" value={data.replyTo} onChange={(v) => set("replyTo", v)} type="email" />
+        <TextField label="SMTP host" value={data.smtpHost} onChange={(v) => set("smtpHost", v)} />
+        <TextField label="SMTP port" value={data.smtpPort} onChange={(v) => set("smtpPort", v)} type="number" />
+      </Grid>
+      <ToggleGrid>
+        <ToggleField label="Email invoice after save" checked={data.invoiceMail} onChange={(v) => set("invoiceMail", v)} />
+        <ToggleField label="Email estimate" checked={data.estimateMail} onChange={(v) => set("estimateMail", v)} />
+        <ToggleField label="Email payment receipt" checked={data.paymentMail} onChange={(v) => set("paymentMail", v)} />
+      </ToggleGrid>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" onClick={() => toast.info("Email test will be connected after mail backend step")}><Send className="mr-1.5 h-4 w-4" />Send test email</Button>
+      </div>
+    </Panel>
+  );
+}
+
+function WhatsAppPanel({ data, set }: PanelProps) {
+  return (
+    <Panel>
+      <PanelHeader icon={MessageCircle} title="WhatsApp" subtitle="Placeholder and templates for the separate WhatsApp API process." />
+      <Grid>
+        <TextField label="WhatsApp display name" value={data.displayName} onChange={(v) => set("displayName", v)} />
+        <TextField label="WhatsApp number" value={data.number} onChange={(v) => set("number", v)} />
+        <SelectField label="Provider status" value={data.provider} onChange={(v) => set("provider", v)} options={["not-connected", "business-api", "blito", "manual"]} />
+        <TextAreaField label="Invoice message template" value={data.invoiceMessage} onChange={(v) => set("invoiceMessage", v)} />
+        <TextAreaField label="Reminder message template" value={data.reminderMessage} onChange={(v) => set("reminderMessage", v)} />
+      </Grid>
+      <ToggleGrid>
+        <ToggleField label="Send invoice on WhatsApp" checked={data.sendInvoice} onChange={(v) => set("sendInvoice", v)} />
+        <ToggleField label="Send due reminders" checked={data.sendReminder} onChange={(v) => set("sendReminder", v)} />
+        <ToggleField label="Thank-you after payment" checked={data.sendPaymentThanks} onChange={(v) => set("sendPaymentThanks", v)} />
+      </ToggleGrid>
+    </Panel>
+  );
+}
+
+function BackupPanel({ data, set }: PanelProps) {
+  return (
+    <Panel>
+      <PanelHeader icon={DatabaseBackup} title="Backup, import and export" subtitle="Business data safety tools." />
+      <Grid>
+        <TextField label="Backup time" value={data.backupTime} onChange={(v) => set("backupTime", v)} type="time" />
+        <SelectField label="Export format" value={data.exportFormat} onChange={(v) => set("exportFormat", v)} options={["xlsx", "csv", "json", "pdf"]} />
+        <TextField label="Last backup" value={data.lastBackup} onChange={(v) => set("lastBackup", v)} />
+      </Grid>
+      <ToggleGrid>
+        <ToggleField label="Auto backup daily" checked={data.autoBackup} onChange={(v) => set("autoBackup", v)} />
+        <ToggleField label="Include images" checked={data.includeImages} onChange={(v) => set("includeImages", v)} />
+      </ToggleGrid>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <ActionButton icon={DatabaseBackup} label="Download backup" />
+        <ActionButton icon={Upload} label="Import backup" />
+        <ActionButton icon={FileBarChart} label="Export Excel" />
+        <ActionButton icon={Trash2} label="Reset data" danger />
+      </div>
+    </Panel>
+  );
+}
+
+function AppearancePanel({ data, set, theme, toggleTheme }: PanelProps & { theme: string; toggleTheme: () => void }) {
+  return (
+    <Panel>
+      <PanelHeader icon={Palette} title="Appearance and app format" subtitle="Language, dashboard style, dates and visual density." />
+      <Grid>
+        <SelectField label="Language" value={data.language} onChange={(v) => set("language", v)} options={["en", "ur", "hi", "ar"]} />
+        <SelectField label="Date format" value={data.dateFormat} onChange={(v) => set("dateFormat", v)} options={["dd-mm-yyyy", "mm-dd-yyyy", "yyyy-mm-dd"]} />
+        <SelectField label="Number format" value={data.numberFormat} onChange={(v) => set("numberFormat", v)} options={["indian", "international"]} />
+        <SelectField label="Screen density" value={data.density} onChange={(v) => set("density", v)} options={["compact", "comfortable", "spacious"]} />
+        <SelectField label="Dashboard style" value={data.dashboardStyle} onChange={(v) => set("dashboardStyle", v)} options={["tile-grid", "list", "analytics"]} />
+        <SelectField label="Color theme" value={data.colorTheme} onChange={(v) => set("colorTheme", v)} options={["prestige", "emerald", "blue", "gold"]} />
+      </Grid>
+      <div className="flex items-center justify-between rounded-lg border p-4">
+        <div>
+          <div className="font-semibold">Current theme</div>
+          <div className="text-sm capitalize text-muted-foreground">{theme}</div>
+        </div>
+        <Button variant="outline" onClick={toggleTheme}><MonitorSmartphone className="mr-1.5 h-4 w-4" />Toggle theme</Button>
+      </div>
+    </Panel>
+  );
+}
+
+function SecurityPanel({ data, set }: PanelProps) {
+  return (
+    <Panel>
+      <PanelHeader icon={LockKeyhole} title="Security and login" subtitle="Password login, Google login, session timeout and audit controls." />
+      <Grid>
+        <TextField label="Session timeout minutes" value={data.sessionTimeout} onChange={(v) => set("sessionTimeout", v)} type="number" />
+      </Grid>
+      <ToggleGrid>
+        <ToggleField label="Require strong password" checked={data.requireStrongPassword} onChange={(v) => set("requireStrongPassword", v)} />
+        <ToggleField label="Allow Google login" checked={data.allowGoogleLogin} onChange={(v) => set("allowGoogleLogin", v)} />
+        <ToggleField label="Allow password login" checked={data.allowPasswordLogin} onChange={(v) => set("allowPasswordLogin", v)} />
+        <ToggleField label="Block inactive users" checked={data.blockInactiveUser} onChange={(v) => set("blockInactiveUser", v)} />
+        <ToggleField label="Keep audit log" checked={data.auditLog} onChange={(v) => set("auditLog", v)} />
+      </ToggleGrid>
+    </Panel>
+  );
+}
+
+type PanelProps = {
+  data: Record<string, string | boolean>;
+  set: (field: string, value: string | boolean) => void;
+};
+
+function Panel({ children }: { children: ReactNode }) {
+  return <Card><CardContent className="space-y-5 p-4 sm:p-5">{children}</CardContent></Card>;
+}
+
+function PanelHeader({ icon: Icon, title, subtitle }: { icon: typeof Store; title: string; subtitle: string }) {
+  return (
+    <div className="flex items-start gap-3">
+      <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary"><Icon className="h-5 w-5" /></div>
+      <div>
+        <div className="font-display text-lg font-bold">{title}</div>
+        <div className="text-sm text-muted-foreground">{subtitle}</div>
+      </div>
+    </div>
   );
 }
 
@@ -561,58 +831,85 @@ function Grid({ children }: { children: ReactNode }) {
   return <div className="grid gap-4 md:grid-cols-2">{children}</div>;
 }
 
-function FullWidth({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <div className={`md:col-span-2 grid gap-1.5 ${className}`}>{children}</div>;
+function ToggleGrid({ children }: { children: ReactNode }) {
+  return <div className="grid gap-3 md:grid-cols-2">{children}</div>;
 }
 
-function Field({ label, defaultValue, type = "text", placeholder, children }: { label: string; defaultValue?: string; type?: string; placeholder?: string; children?: ReactNode }) {
+function TextField({ label, value, onChange, type = "text" }: { label: string; value: string | boolean; onChange: (value: string) => void; type?: string }) {
   return (
     <div className="grid gap-1.5">
       <Label>{label}</Label>
-      {children ?? <Input type={type} defaultValue={defaultValue} placeholder={placeholder} />}
+      <Input type={type} value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} />
     </div>
   );
 }
 
-function ToggleRow({ label, desc, defaultChecked }: { label: string; desc?: string; defaultChecked?: boolean }) {
+function TextAreaField({ label, value, onChange }: { label: string; value: string | boolean; onChange: (value: string) => void }) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-xl border p-3">
-      <div className="min-w-0">
-        <div className="text-sm font-medium truncate">{label}</div>
-        {desc && <div className="text-xs text-muted-foreground">{desc}</div>}
-      </div>
-      <Switch defaultChecked={defaultChecked} />
+    <div className="grid gap-1.5 md:col-span-2">
+      <Label>{label}</Label>
+      <Textarea rows={3} value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} />
     </div>
   );
 }
 
-function UploadRow({ label, hint }: { label: string; hint?: string }) {
+function SelectField({ label, value, onChange, options }: { label: string; value: string | boolean; onChange: (value: string) => void; options: string[] }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed p-4">
-      <div>
-        <div className="text-sm font-medium">{label}</div>
-        {hint && <div className="text-xs text-muted-foreground">{hint}</div>}
+    <div className="grid gap-1.5">
+      <Label>{label}</Label>
+      <Select value={String(value)} onValueChange={onChange}>
+        <SelectTrigger><SelectValue /></SelectTrigger>
+        <SelectContent>
+          {options.map((option) => <SelectItem key={option} value={option}>{humanize(option)}</SelectItem>)}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+function ToggleField({ label, checked, onChange }: { label: string; checked: string | boolean; onChange: (value: boolean) => void }) {
+  return (
+    <div className="flex min-h-12 items-center justify-between gap-3 rounded-lg border p-3">
+      <Label className="text-sm font-medium leading-tight">{label}</Label>
+      <Switch checked={Boolean(checked)} onCheckedChange={onChange} />
+    </div>
+  );
+}
+
+function SettingBlock({ title, icon: Icon, children }: { title: string; icon: typeof Store; children: ReactNode }) {
+  return (
+    <div className="rounded-lg border p-4">
+      <div className="mb-3 flex items-center gap-2 font-display font-semibold"><Icon className="h-4 w-4 text-primary" />{title}</div>
+      {children}
+    </div>
+  );
+}
+
+function UploadBox({ icon: Icon, title, subtitle }: { icon: typeof Store; title: string; subtitle: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-dashed p-4">
+      <div className="flex items-center gap-3">
+        <div className="grid h-10 w-10 place-items-center rounded-lg bg-muted text-muted-foreground"><Icon className="h-5 w-5" /></div>
+        <div><div className="font-medium">{title}</div><div className="text-xs text-muted-foreground">{subtitle}</div></div>
       </div>
       <Button variant="outline" size="sm"><Upload className="mr-1.5 h-3.5 w-3.5" />Upload</Button>
     </div>
   );
 }
 
-function ActionCard({ title, desc, btn, onClick }: { title: string; desc: string; btn: string; onClick: () => void }) {
+function StatCard({ icon: Icon, label, value }: { icon: typeof Store; label: string; value: string }) {
   return (
-    <div className="rounded-xl border p-4">
-      <div className="font-display font-semibold">{title}</div>
-      <div className="text-sm text-muted-foreground">{desc}</div>
-      <Button variant="outline" size="sm" className="mt-3" onClick={onClick}>{btn}</Button>
-    </div>
+    <Card><CardContent className="flex items-center gap-3 p-4">
+      <div className="grid h-10 w-10 place-items-center rounded-lg bg-primary/10 text-primary"><Icon className="h-5 w-5" /></div>
+      <div className="min-w-0"><div className="truncate text-xs uppercase tracking-wide text-muted-foreground">{label}</div><div className="truncate font-display text-xl font-bold capitalize">{value}</div></div>
+    </CardContent></Card>
   );
 }
 
-function SaveBar({ onSave }: { onSave: () => void }) {
-  return (
-    <div className="flex justify-end gap-2 pt-2">
-      <Button variant="ghost">Reset</Button>
-      <Button onClick={onSave}>Save changes</Button>
-    </div>
-  );
+function ActionButton({ icon: Icon, label, danger }: { icon: typeof Store; label: string; danger?: boolean }) {
+  return <Button variant={danger ? "destructive" : "outline"} onClick={() => toast.info(`${label} action ready`)}><Icon className="mr-1.5 h-4 w-4" />{label}</Button>;
+}
+
+function humanize(value: string) {
+  return value.replace(/-/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
 }
