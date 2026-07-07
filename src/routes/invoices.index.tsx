@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useStore } from "@/lib/store";
 import { calcInvoiceTotals, fmt } from "@/lib/dummy-data";
-import { StatusPill } from "./index";
+import { StatusPill } from "@/components/StatusPill";
 
 export const Route = createFileRoute("/invoices/")({
   head: () => ({ meta: [

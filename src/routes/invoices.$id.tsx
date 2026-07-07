@@ -4,7 +4,7 @@ import { Printer, ArrowLeft, Sparkles, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useStore } from "@/lib/store";
 import { calcInvoiceTotals, fmt } from "@/lib/dummy-data";
-import { StatusPill } from "./index";
+import { StatusPill } from "@/components/StatusPill";
 
 export const Route = createFileRoute("/invoices/$id")({
   head: () => ({ meta: [
