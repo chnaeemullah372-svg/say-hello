@@ -48,7 +48,8 @@ function CustomersPage() {
               <DialogHeader><DialogTitle>New customer</DialogTitle></DialogHeader>
               <div className="grid gap-3">
                 <div className="grid gap-1.5"><Label>Customer Name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Full name" autoFocus /></div>
-                <div className="grid gap-1.5"><Label>Customer WhatsApp Number</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+92 300 …" /></div>
+                <div className="grid gap-1.5"><Label>Customer Contact Number</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+92 300 …" /></div>
+                <div className="grid gap-1.5"><Label>Customer WhatsApp Number</Label><Input value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: e.target.value })} placeholder="+92 300 …" /></div>
                 <div className="grid gap-1.5"><Label>Referral Name <span className="text-xs text-muted-foreground">(optional)</span></Label><Input value={form.referralName} onChange={(e) => setForm({ ...form, referralName: e.target.value })} placeholder="Who referred them" /></div>
                 <div className="grid gap-1.5"><Label>Referral Contact Number <span className="text-xs text-muted-foreground">(optional)</span></Label><Input value={form.referralPhone} onChange={(e) => setForm({ ...form, referralPhone: e.target.value })} placeholder="+92 300 …" /></div>
 
@@ -59,7 +60,6 @@ function CustomersPage() {
 
                 {showMore && (
                   <div className="grid gap-3 rounded-md border bg-muted/30 p-3">
-                    <div className="grid gap-1.5"><Label>Customer WhatsApp (alternate)</Label><Input value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: e.target.value })} placeholder="+92 300 …" /></div>
                     <div className="grid gap-1.5"><Label>Customer Email</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="name@gmail.com" /></div>
                     <div className="grid gap-1.5"><Label>Customer Address</Label><Textarea rows={2} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="Street, City" /></div>
                     <div className="border-t pt-3 grid gap-3">
@@ -109,6 +109,7 @@ function CustomersPage() {
                   </div>
                   <ul className="mt-3 space-y-1.5 text-xs text-muted-foreground">
                     <li className="flex items-center gap-2"><Phone className="h-3 w-3" /> {c.phone || "—"}</li>
+                    {c.whatsapp && <li className="flex items-center gap-2"><MessageCircle className="h-3 w-3" /> {c.whatsapp}</li>}
                     {c.referralName && (
                       <li className="flex items-center gap-2">
                         <UserPlus className="h-3 w-3" />

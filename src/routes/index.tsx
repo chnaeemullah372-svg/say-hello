@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   ChevronRight, FileText, Users, Package, PlusCircle, ShoppingCart, ClipboardList,
   Receipt, Landmark, Warehouse, Wallet, Trophy, ShieldCheck, BarChart3,
-  Truck, PackageMinus, PackageX, UserCircle2, Factory, FileSpreadsheet,
+  Truck, PackageMinus, PackageX, UserCircle2, Factory, FileSpreadsheet, Sparkles,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useStore } from "@/lib/store";
@@ -26,22 +26,22 @@ const quickActions = [
 ];
 
 const modules = [
-  { label: "Invoice", to: "/invoices" as const, icon: FileText, tint: "text-primary bg-primary/10" },
-  { label: "Estimate", to: "/estimates" as const, icon: FileSpreadsheet, tint: "text-accent bg-accent/10" },
-  { label: "Client / Supplier", to: "/customers" as const, icon: Users, tint: "text-accent bg-accent/10" },
-  { label: "Product / Service", to: "/products" as const, icon: Package, tint: "text-primary bg-primary/10" },
-  { label: "Payment", to: "/payments" as const, icon: Wallet, tint: "text-accent bg-accent/10" },
-  { label: "Purchase", to: "/purchases" as const, icon: ShoppingCart, tint: "text-primary bg-primary/10" },
-  { label: "Sale Order", to: "/sale-order" as const, icon: ClipboardList, tint: "text-accent bg-accent/10" },
-  { label: "Purchase Order", to: "/purchase-orders" as const, icon: ClipboardList, tint: "text-primary bg-primary/10" },
-  { label: "Delivery Note", to: "/delivery-note" as const, icon: Truck, tint: "text-primary bg-primary/10" },
-  { label: "Inventory", to: "/inventory" as const, icon: Warehouse, tint: "text-accent bg-accent/10" },
-  { label: "Sale Return", to: "/sale-return" as const, icon: PackageMinus, tint: "text-primary bg-primary/10" },
-  { label: "Expense", to: "/expenses" as const, icon: Receipt, tint: "text-gold-foreground bg-gold/15" },
-  { label: "Reports", to: "/reports" as const, icon: BarChart3, tint: "text-primary bg-primary/10" },
-  { label: "Purchase Return", to: "/purchase-return" as const, icon: PackageX, tint: "text-accent bg-accent/10" },
-  { label: "Agent", to: "/agent" as const, icon: UserCircle2, tint: "text-accent bg-accent/10" },
-  { label: "Production Entry", to: "/production-entry" as const, icon: Factory, tint: "text-primary bg-primary/10" },
+  { label: "Invoice", to: "/invoices" as const, icon: FileText, tint: "text-primary bg-primary/12 ring-primary/15" },
+  { label: "Estimate", to: "/estimates" as const, icon: FileSpreadsheet, tint: "text-sapphire bg-sapphire/12 ring-sapphire/15" },
+  { label: "Client / Supplier", to: "/customers" as const, icon: Users, tint: "text-orchid bg-orchid/12 ring-orchid/15" },
+  { label: "Product / Service", to: "/products" as const, icon: Package, tint: "text-jade bg-jade/12 ring-jade/15" },
+  { label: "Payment", to: "/payments" as const, icon: Wallet, tint: "text-aqua bg-aqua/12 ring-aqua/15" },
+  { label: "Purchase", to: "/purchases" as const, icon: ShoppingCart, tint: "text-coral bg-coral/12 ring-coral/15" },
+  { label: "Sale Order", to: "/sale-order" as const, icon: ClipboardList, tint: "text-amber bg-amber/14 ring-amber/15" },
+  { label: "Purchase Order", to: "/purchase-orders" as const, icon: ClipboardList, tint: "text-sapphire bg-sapphire/12 ring-sapphire/15" },
+  { label: "Delivery Note", to: "/delivery-note" as const, icon: Truck, tint: "text-aqua bg-aqua/12 ring-aqua/15" },
+  { label: "Inventory", to: "/inventory" as const, icon: Warehouse, tint: "text-jade bg-jade/12 ring-jade/15" },
+  { label: "Sale Return", to: "/sale-return" as const, icon: PackageMinus, tint: "text-coral bg-coral/12 ring-coral/15" },
+  { label: "Expense", to: "/expenses" as const, icon: Receipt, tint: "text-gold-foreground bg-gold/18 ring-gold/20" },
+  { label: "Reports", to: "/reports" as const, icon: BarChart3, tint: "text-primary bg-primary/12 ring-primary/15" },
+  { label: "Purchase Return", to: "/purchase-return" as const, icon: PackageX, tint: "text-orchid bg-orchid/12 ring-orchid/15" },
+  { label: "Agent", to: "/agent" as const, icon: UserCircle2, tint: "text-sapphire bg-sapphire/12 ring-sapphire/15" },
+  { label: "Production Entry", to: "/production-entry" as const, icon: Factory, tint: "text-jade bg-jade/12 ring-jade/15" },
 ];
 
 function Dashboard() {
@@ -59,13 +59,18 @@ function Dashboard() {
   return (
     <div className="-m-4 sm:-m-6 lg:-m-8">
       {/* Hero header + quick actions */}
-      <section className="bg-sidebar px-4 pt-4 pb-6 text-sidebar-foreground sm:px-6 sm:pt-6">
+      <section className="gradient-prestige px-4 pt-4 pb-6 text-sidebar-foreground sm:px-6 sm:pt-6">
         <div className="mb-4 flex items-center justify-between">
-          <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="hidden h-11 w-11 place-items-center rounded-2xl bg-gold text-gold-foreground shadow-sm sm:grid">
+              <Sparkles className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
             <div className="text-[11px] uppercase tracking-widest text-sidebar-foreground/60">Welcome back</div>
             <h1 className="font-display text-xl font-bold sm:text-2xl">Hi, {firstName}</h1>
+            </div>
           </div>
-          <div className="rounded-lg bg-sidebar-accent px-3 py-1.5 text-[11px] font-medium text-sidebar-accent-foreground">
+          <div className="rounded-full border border-sidebar-border/60 bg-sidebar-accent/80 px-3 py-1.5 text-[11px] font-medium text-sidebar-accent-foreground shadow-sm">
             Prestige Store
           </div>
         </div>
@@ -74,7 +79,7 @@ function Dashboard() {
             <Link
               key={a.label}
               to={a.to}
-              className="flex items-center gap-2 rounded-xl border border-sidebar-border/50 bg-sidebar-accent/40 px-2.5 py-3 text-left transition hover:border-gold/60 hover:bg-sidebar-accent"
+              className="flex items-center gap-2 rounded-2xl border border-sidebar-border/50 bg-sidebar-accent/55 px-2.5 py-3 text-left shadow-sm transition hover:border-gold/60 hover:bg-sidebar-accent"
             >
               <a.icon className="h-5 w-5 shrink-0 text-gold" />
               <span className="text-[13px] font-semibold leading-tight">{a.label}</span>
@@ -84,16 +89,16 @@ function Dashboard() {
       </section>
 
       {/* Module tiles — 4-column mobile grid, UniInvoice style */}
-      <section className="border-b bg-card">
+      <section className="border-b bg-card/95">
         <div className="grid grid-cols-4">
           {modules.map((m) => (
             <Link
               key={m.label}
               to={m.to}
-              className="flex flex-col items-center gap-1.5 border-b border-r px-2 py-4 text-center transition hover:bg-muted/60"
+              className="group flex flex-col items-center gap-1.5 border-b border-r px-2 py-4 text-center transition hover:bg-muted/60"
             >
-              <div className={`grid h-11 w-11 place-items-center rounded-xl ${m.tint}`}>
-                <m.icon className="h-5 w-5" />
+              <div className={`grid h-12 w-12 place-items-center rounded-2xl ring-1 jewel-shadow transition group-hover:scale-105 ${m.tint}`}>
+                <m.icon className="h-5 w-5 stroke-[2.4]" />
               </div>
               <div className="text-[11px] font-medium leading-tight sm:text-xs">{m.label}</div>
             </Link>
