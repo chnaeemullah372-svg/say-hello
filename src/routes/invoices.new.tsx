@@ -62,6 +62,9 @@ function CreateInvoice() {
   const [invoiceDate] = useState(new Date());
   const [dueDate, setDueDate] = useState<string>("");
   const [notes, setNotes] = useState("");
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [terms, setTerms] = useState("");
+  const [termsOpen, setTermsOpen] = useState(false);
 
   // Dialogs
   const [custOpen, setCustOpen] = useState(false);
@@ -499,19 +502,55 @@ function CreateInvoice() {
           <span className="font-display text-lg font-bold tabular-nums text-primary">{fmt(balance)}</span>
         </div>
 
-        {/* Notes */}
-        <div className="border-b bg-card px-4 py-3">
-          <div className="mb-1 flex items-center justify-between">
+        {/* Notes — single row like reference */}
+        <div className="border-b bg-card">
+          <button
+            type="button"
+            onClick={() => setNotesOpen((v) => !v)}
+            className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+          >
             <span className="text-sm font-bold uppercase tracking-widest">Notes</span>
-            <PencilLine className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="flex items-center gap-2 truncate text-sm text-muted-foreground">
+              <span className="max-w-[200px] truncate">{notes || "write your notes"}</span>
+              <PencilLine className="h-3.5 w-3.5" />
+            </span>
+          </button>
+          {notesOpen && (
+            <div className="border-t px-4 py-3">
+              <Textarea
+                rows={3}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Write your notes…"
+                autoFocus
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Terms & Condition */}
+        <div className="border-b bg-card">
+          <div className="flex items-center justify-between gap-3 px-4 py-3">
+            <span className="text-sm font-bold uppercase tracking-widest">Terms &amp; Condition</span>
+            <button
+              type="button"
+              onClick={() => setTermsOpen((v) => !v)}
+              className="rounded-md border px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider hover:bg-muted"
+            >
+              {terms ? "Edit Terms" : "Add Terms"}
+            </button>
           </div>
-          <Textarea
-            rows={2}
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Write your notes…"
-            className="border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0"
-          />
+          {termsOpen && (
+            <div className="border-t px-4 py-3">
+              <Textarea
+                rows={3}
+                value={terms}
+                onChange={(e) => setTerms(e.target.value)}
+                placeholder="Payment due within 15 days. Goods once sold will not be taken back…"
+                autoFocus
+              />
+            </div>
+          )}
         </div>
       </div>
 
