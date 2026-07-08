@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   PlusCircle, Search, FileText, Eye, Pencil, Printer, MessageCircle, Trash2, MoreHorizontal, X,
 } from "lucide-react";
@@ -34,8 +34,19 @@ function InvoiceList() {
   const { invoices, customers, deleteInvoice } = useStore();
   const navigate = useNavigate();
   const [q, setQ] = useState("");
+  const [debouncedQ, setDebouncedQ] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [toDelete, setToDelete] = useState<string | null>(null);
+
+  // Debounce input; empty query flushes immediately so "Clear" instantly restores the full list.
+  useEffect(() => {
+    if (q === "") {
+      setDebouncedQ("");
+      return;
+    }
+    const t = setTimeout(() => setDebouncedQ(q), 200);
+    return () => clearTimeout(t);
+  }, [q]);
 
   const enriched = useMemo(
     () => invoices.map((i) => ({
@@ -46,11 +57,11 @@ function InvoiceList() {
     [invoices, customers],
   );
 
-  const rows = enriched
-    .filter((r) => (filter === "all" ? true : r.status === filter))
-    .filter((r) => {
-      if (!q.trim()) return true;
-      const needle = q.trim().toLowerCase();
+  const rows = useMemo(() => {
+    const statusFiltered = filter === "all" ? enriched : enriched.filter((r) => r.status === filter);
+    const needle = debouncedQ.trim().toLowerCase();
+    if (!needle) return statusFiltered;
+    return statusFiltered.filter((r) => {
       const hay = [
         r.number,
         r.customer?.name,
@@ -63,6 +74,7 @@ function InvoiceList() {
       ].filter(Boolean).join(" ").toLowerCase();
       return hay.includes(needle);
     });
+  }, [enriched, filter, debouncedQ]);
 
   const counts = {
     all: invoices.length,
