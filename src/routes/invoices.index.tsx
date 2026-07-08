@@ -107,27 +107,54 @@ function InvoiceList() {
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              className="h-11 pl-10 text-sm"
+              className="h-11 pl-10 pr-9 text-sm"
               placeholder="Search by invoice #, customer name, phone, or reference…"
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
-          </div>
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            {(["all", "paid", "partial", "unpaid"] as Filter[]).map((f) => (
-              <Button
-                key={f}
-                size="sm"
-                variant={filter === f ? "default" : "outline"}
-                onClick={() => setFilter(f)}
-                className="h-8 rounded-full px-3 text-xs font-medium capitalize"
+            {q && (
+              <button
+                type="button"
+                aria-label="Clear search"
+                onClick={() => setQ("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
               >
-                {f}
-                <span className="ml-1.5 rounded-full bg-black/10 px-1.5 py-0.5 text-[10px] dark:bg-white/15">
-                  {counts[f]}
-                </span>
-              </Button>
-            ))}
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            {(["all", "paid", "partial", "unpaid"] as Filter[]).map((f) => {
+              const active = filter === f;
+              return (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => setFilter(f)}
+                  className={`inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-medium capitalize transition ${
+                    active
+                      ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                      : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                  }`}
+                >
+                  {f}
+                  <span className={`rounded-full px-1.5 py-0.5 text-[10px] leading-none ${
+                    active ? "bg-primary-foreground/20 text-primary-foreground" : "bg-muted text-muted-foreground"
+                  }`}>
+                    {counts[f]}
+                  </span>
+                </button>
+              );
+            })}
+            {(filter !== "all" || q) && (
+              <button
+                type="button"
+                onClick={() => { setFilter("all"); setQ(""); }}
+                className="ml-auto inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[11px] font-medium text-muted-foreground hover:text-destructive"
+              >
+                <X className="h-3 w-3" />Clear
+              </button>
+            )}
           </div>
         </CardContent>
       </Card>
