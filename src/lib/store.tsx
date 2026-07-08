@@ -13,6 +13,8 @@ type Store = {
   addProduct: (p: Omit<Product, "id">) => Product;
   addInvoice: (i: Omit<Invoice, "id">) => Invoice;
   addPayment: (p: Omit<Payment, "id">) => void;
+  updateInvoice: (id: string, patch: Partial<Invoice>) => void;
+  deleteInvoice: (id: string) => void;
   getCustomer: (id: string) => Customer | undefined;
   getInvoice: (id: string) => Invoice | undefined;
 };
@@ -44,6 +46,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     addPayment: (p) => {
       setPayments((prev) => [{ ...p, id: `pay${Date.now()}` }, ...prev]);
+    },
+    updateInvoice: (id, patch) => {
+      setInvoices((prev) => prev.map((i) => (i.id === id ? { ...i, ...patch } : i)));
+    },
+    deleteInvoice: (id) => {
+      setInvoices((prev) => prev.filter((i) => i.id !== id));
     },
     getCustomer: (id) => customers.find((c) => c.id === id),
     getInvoice: (id) => invoices.find((i) => i.id === id || i.number === id),
