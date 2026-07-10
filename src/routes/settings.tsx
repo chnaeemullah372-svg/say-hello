@@ -15,6 +15,7 @@ import {
   Hash,
   Image,
   Landmark,
+  LayoutDashboard,
   ListChecks,
   LockKeyhole,
   Mail,
@@ -69,7 +70,7 @@ export const Route = createFileRoute("/settings")({
 });
 
 type SectionKey = keyof SettingsState;
-type ActiveKey = SectionKey | "accounts" | "fundManagement";
+type ActiveKey = SectionKey | "accounts" | "fundManagement" | "import";
 type Category = {
   key: ActiveKey;
   title: string;
@@ -94,6 +95,7 @@ type SettingsState = {
   gmail: Record<string, string | boolean>;
   whatsapp: Record<string, string | boolean>;
   backup: Record<string, string | boolean>;
+  homeScreen: Record<string, string | boolean>;
   appearance: Record<string, string | boolean>;
   security: Record<string, string | boolean>;
 };
@@ -209,6 +211,11 @@ const defaults: SettingsState = {
     pageNumbers: true,
     paidWatermark: true,
     draftWatermark: true,
+    printerChoice: "normal",
+    printerConnection: "usb",
+    printFormat: "text",
+    printerSize: "58",
+    maxCharsPerLine: "40",
   },
   items: {
     stockTracking: true,
@@ -259,6 +266,11 @@ const defaults: SettingsState = {
     overdueReminder: true,
     ownerEmail: "owner@prestige.store",
     reminderTime: "10:00",
+    outstandingReminderEnabled: false,
+    outstandingReminderDays: "7",
+    outstandingReminderMode: "whatsapp",
+    outstandingReminderTemplate:
+      "Dear #CompanyName, this is a reminder that payment of #InvoiceNumber (of #Balance) is due today. It might be busy with your work, but it would be appreciated if you could look into this. Please let me know if you have any queries.",
   },
   gmail: {
     fromName: "Prestige Store",
@@ -274,6 +286,8 @@ const defaults: SettingsState = {
     displayName: "Prestige Store",
     number: "",
     provider: "not-connected",
+    webhookUrl: "",
+    webhookApiKey: "",
     invoiceMessage:
       "Hello {customer}, your invoice {invoice_no} of {amount} is ready. Please find the copy attached.",
     reminderMessage:
@@ -281,6 +295,14 @@ const defaults: SettingsState = {
     sendInvoice: false,
     sendReminder: false,
     sendPaymentThanks: true,
+    orderBookedMode: "whatsapp",
+    orderBookedMessage: "Dear Customer, your order #OrderNo is booked successfully. Thanks",
+    orderProcessingMode: "whatsapp",
+    orderProcessingMessage: "Dear Customer, we are very excited to get your order on way, letting you know that your order #OrderNo is processing. This will be one of our best works to date. Regards",
+    orderCompletedMode: "whatsapp",
+    orderCompletedMessage: "Dear Customer, We are very happy to tell you that your order #OrderNo is completed and it will be out for delivery",
+    orderCancelledMode: "whatsapp",
+    orderCancelledMessage: "Dear Customer, we regret to inform you that your order #OrderNo has been cancelled. Please contact us for any queries.",
   },
   backup: {
     autoBackup: true,
@@ -288,6 +310,16 @@ const defaults: SettingsState = {
     includeImages: true,
     exportFormat: "xlsx",
     lastBackup: "Not generated yet",
+  },
+  homeScreen: {
+    salesWidget: true, salesRange: "monthly",
+    purchaseWidget: true, purchaseRange: "monthly",
+    paymentReceivedWidget: true, paymentReceivedRange: "monthly",
+    paymentPaidWidget: true, paymentPaidRange: "monthly",
+    outstandingBalanceWidget: true, outstandingBalanceRange: "allTime",
+    expenseWidget: true, expenseRange: "monthly",
+    profitLossWidget: true, profitLossRange: "monthly",
+    orderStatisticsWidget: true, orderStatisticsRange: "allTime",
   },
   appearance: {
     language: "en",
@@ -324,6 +356,8 @@ const categories: Category[] = [
   { key: "gmail", title: "Gmail / Email", subtitle: "SMTP templates", icon: Mail, badge: "Secret", tone: "text-sapphire bg-sapphire/10 ring-sapphire/20" },
   { key: "whatsapp", title: "WhatsApp", subtitle: "Future API setup", icon: MessageCircle, tone: "text-jade bg-jade/10 ring-jade/20" },
   { key: "backup", title: "Backup / Export", subtitle: "CSV, Excel, restore", icon: DatabaseBackup, tone: "text-orchid bg-orchid/10 ring-orchid/20" },
+  { key: "homeScreen", title: "Home Screen", subtitle: "Dashboard widgets, monthly or all-time", icon: LayoutDashboard, tone: "text-sapphire bg-sapphire/10 ring-sapphire/20" },
+  { key: "import", title: "Import", subtitle: "Bulk-add clients and products from Excel", icon: Upload, tone: "text-jade bg-jade/10 ring-jade/20" },
   { key: "appearance", title: "Appearance", subtitle: "Language and theme", icon: Palette, tone: "text-aqua bg-aqua/10 ring-aqua/20" },
   { key: "security", title: "Security", subtitle: "Login and audit", icon: LockKeyhole, tone: "text-primary bg-primary/10 ring-primary/20" },
 ];
@@ -463,7 +497,7 @@ function SettingsPage() {
               <h1 className="font-display text-xl font-bold leading-tight">{activeCategory.title}</h1>
               <p className="text-sm text-muted-foreground">{activeCategory.subtitle}</p>
             </div>
-            {active !== "accounts" && active !== "fundManagement" && (
+            {active !== "accounts" && active !== "fundManagement" && active !== "import" && (
               <Button onClick={() => saveSection(active as SectionKey)} disabled={saving === active}>
                 {saving === active ? <RefreshCw className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}
                 Save
@@ -477,6 +511,7 @@ function SettingsPage() {
           {active === "terms" && <TermsPanel data={settings.terms} set={(k, v) => setField("terms", k, v)} />}
           {active === "accounts" && <AccountsPanel />}
           {active === "fundManagement" && <FundManagementPanel />}
+          {active === "import" && <ImportLinkPanel />}
           {active === "numbering" && <NumberingPanel data={settings.numbering} set={(k, v) => setField("numbering", k, v)} />}
           {active === "print" && <PrintPanel data={settings.print} set={(k, v) => setField("print", k, v)} />}
           {active === "items" && <ItemsPanel data={settings.items} set={(k, v) => setField("items", k, v)} />}
@@ -487,6 +522,7 @@ function SettingsPage() {
           {active === "gmail" && <GmailPanel data={settings.gmail} set={(k, v) => setField("gmail", k, v)} />}
           {active === "whatsapp" && <WhatsAppPanel data={settings.whatsapp} set={(k, v) => setField("whatsapp", k, v)} />}
           {active === "backup" && <BackupPanel data={settings.backup} set={(k, v) => setField("backup", k, v)} />}
+          {active === "homeScreen" && <HomeScreenPanel data={settings.homeScreen} set={(k, v) => setField("homeScreen", k, v)} />}
           {active === "appearance" && <AppearancePanel data={settings.appearance} set={(k, v) => setField("appearance", k, v)} theme={theme} toggleTheme={toggle} />}
           {active === "security" && <SecurityPanel data={settings.security} set={(k, v) => setField("security", k, v)} />}
         </div>
@@ -653,36 +689,18 @@ function TermsPanel({ data, set }: PanelProps) {
 }
 
 function AccountsPanel() {
-  const { accounts, addAccount, updateAccount, deleteAccount } = useStore();
-  const [name, setName] = useState("");
-  const [accountType, setAccountType] = useState<AccountType>("payment");
-  const [openingBalance, setOpeningBalance] = useState(0);
-  const [openingDate, setOpeningDate] = useState(new Date().toISOString().slice(0, 10));
-  const [saving, setSaving] = useState(false);
-
-  const create = async () => {
-    if (!name.trim()) return toast.error("Name is required");
-    setSaving(true);
-    try {
-      await addAccount({ name: name.trim(), accountType, openingBalance, openingDate });
-      toast.success("Account created");
-      setName(""); setOpeningBalance(0); setOpeningDate(new Date().toISOString().slice(0, 10));
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not create account");
-    } finally {
-      setSaving(false);
-    }
-  };
-
+  const { accounts, deleteAccount } = useStore();
   return (
     <Panel>
       <PanelHeader icon={Landmark} title="Accounts & Categories" subtitle="Create accounts for payments, expenses, and warehouses. Helps organize and track your money and stock." />
-      <div className="grid gap-3 rounded-lg border bg-card p-4 sm:grid-cols-[140px_1fr_140px_160px_auto]">
-        <SelectField label="Select Type" value={accountType} onChange={(v) => setAccountType(v as AccountType)} options={["payment", "category"]} />
-        <TextField label="Name" value={name} onChange={setName} />
-        <TextField label="Opening Balance" value={String(openingBalance)} onChange={(v) => setOpeningBalance(+v || 0)} type="number" />
-        <TextField label="Opening Date" value={openingDate} onChange={setOpeningDate} type="date" />
-        <Button className="self-end" onClick={create} disabled={saving}><Plus className="mr-1.5 h-4 w-4" />Add</Button>
+      <div className="rounded-lg border bg-muted/25 p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="font-semibold">{accounts.length} account{accounts.length !== 1 ? "s" : ""} set up</div>
+            <div className="text-sm text-muted-foreground">Open Fund Management to add Payment/Category accounts and see live balances.</div>
+          </div>
+          <Button asChild><Link to="/funds"><Landmark className="mr-1.5 h-4 w-4" />Open Fund Management</Link></Button>
+        </div>
       </div>
 
       <div className="overflow-x-auto rounded-lg border">
@@ -716,77 +734,18 @@ function AccountsPanel() {
 }
 
 function FundManagementPanel() {
-  const { accounts, fundTransfers, addFundTransfer } = useStore();
-  const [fromId, setFromId] = useState("");
-  const [toId, setToId] = useState("");
-  const [amount, setAmount] = useState(0);
-  const [remarks, setRemarks] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  const accountName = (id: string) => accounts.find((a) => a.id === id)?.name ?? "—";
-
-  const transfer = async () => {
-    if (!fromId || !toId) return toast.error("Select both accounts");
-    if (amount <= 0) return toast.error("Enter an amount");
-    setSaving(true);
-    try {
-      await addFundTransfer({ fromAccountId: fromId, toAccountId: toId, amount, remarks, date: new Date().toISOString().slice(0, 10) });
-      toast.success("Transfer recorded");
-      setFromId(""); setToId(""); setAmount(0); setRemarks("");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not record transfer");
-    } finally {
-      setSaving(false);
-    }
-  };
-
+  const { accounts, fundTransfers } = useStore();
   return (
     <Panel>
       <PanelHeader icon={ArrowLeftRight} title="Fund Management" subtitle="Transfer money between payment accounts. Keeps proper records of fund movement." />
-      {accounts.length === 0 ? (
-        <div className="rounded-lg border bg-muted/25 p-4 text-sm text-muted-foreground">
-          Create at least two accounts under "Accounts & Categories" first.
-        </div>
-      ) : (
-        <div className="grid gap-3 rounded-lg border bg-card p-4 sm:grid-cols-2">
-          <div className="grid gap-1.5">
-            <Label>From Account</Label>
-            <Select value={fromId} onValueChange={setFromId}>
-              <SelectTrigger><SelectValue placeholder="Select account" /></SelectTrigger>
-              <SelectContent>{accounts.map((a) => <SelectItem key={a.id} value={a.id}>{a.name} ({a.currentBalance.toFixed(2)})</SelectItem>)}</SelectContent>
-            </Select>
+      <div className="rounded-lg border bg-muted/25 p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="font-semibold">{accounts.length} account{accounts.length !== 1 ? "s" : ""} · {fundTransfers.length} transfer{fundTransfers.length !== 1 ? "s" : ""} on record</div>
+            <div className="text-sm text-muted-foreground">Open Fund Management to view balances and move money between accounts.</div>
           </div>
-          <div className="grid gap-1.5">
-            <Label>To Account</Label>
-            <Select value={toId} onValueChange={setToId}>
-              <SelectTrigger><SelectValue placeholder="Select account" /></SelectTrigger>
-              <SelectContent>{accounts.map((a) => <SelectItem key={a.id} value={a.id}>{a.name} ({a.currentBalance.toFixed(2)})</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-          <TextField label="Amount" value={String(amount)} onChange={(v) => setAmount(+v || 0)} type="number" />
-          <TextField label="Remarks" value={remarks} onChange={setRemarks} />
-          <Button className="sm:col-span-2" onClick={transfer} disabled={saving}>{saving ? "Transferring…" : "Transfer"}</Button>
+          <Button asChild><Link to="/funds"><ArrowLeftRight className="mr-1.5 h-4 w-4" />Open Fund Management</Link></Button>
         </div>
-      )}
-
-      <div className="overflow-x-auto rounded-lg border">
-        <table className="w-full text-sm">
-          <thead className="bg-muted/50 text-xs uppercase text-muted-foreground">
-            <tr><th className="px-3 py-2 text-left">Date</th><th className="px-3 py-2 text-left">From</th><th className="px-3 py-2 text-left">To</th><th className="px-3 py-2 text-right">Amount</th><th className="px-3 py-2 text-left">Remarks</th></tr>
-          </thead>
-          <tbody>
-            {fundTransfers.length === 0 && <tr><td colSpan={5} className="px-3 py-6 text-center text-muted-foreground">No transfers yet</td></tr>}
-            {fundTransfers.map((f) => (
-              <tr key={f.id} className="border-t">
-                <td className="px-3 py-2 text-muted-foreground">{f.date}</td>
-                <td className="px-3 py-2">{accountName(f.fromAccountId)}</td>
-                <td className="px-3 py-2">{accountName(f.toAccountId)}</td>
-                <td className="px-3 py-2 text-right font-semibold">{f.amount.toFixed(2)}</td>
-                <td className="px-3 py-2 text-muted-foreground">{f.remarks || "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
       </div>
     </Panel>
   );
@@ -855,6 +814,18 @@ function PrintPanel({ data, set }: PanelProps) {
         <ToggleField label="Paid watermark" checked={data.paidWatermark} onChange={(v) => set("paidWatermark", v)} />
         <ToggleField label="Draft watermark" checked={data.draftWatermark} onChange={(v) => set("draftWatermark", v)} />
       </ToggleGrid>
+      <SettingBlock title="Printer Setting" icon={Printer}>
+        <div className="mb-3 rounded-lg border border-amber/40 bg-amber/10 p-3 text-xs">
+          Note: Thermal printer setting is beta mode. Please configure thermal printer setting using Bluetooth in the app — a browser cannot pair Bluetooth printers directly. This becomes fully usable once the app is packaged as a mobile app (same approach you used before).
+        </div>
+        <Grid>
+          <SelectField label="Choose printer" value={data.printerChoice} onChange={(v) => set("printerChoice", v)} options={["normal", "thermal"]} />
+          <SelectField label="Printer connection" value={data.printerConnection} onChange={(v) => set("printerConnection", v)} options={["bluetooth", "usb"]} />
+          <SelectField label="Print format" value={data.printFormat} onChange={(v) => set("printFormat", v)} options={["image", "text"]} />
+          <SelectField label="Printer size (mm)" value={data.printerSize} onChange={(v) => set("printerSize", v)} options={["58", "80"]} />
+          <TextField label="Maximum characters in line" value={data.maxCharsPerLine} onChange={(v) => set("maxCharsPerLine", v)} type="number" />
+        </Grid>
+      </SettingBlock>
     </Panel>
   );
 }
@@ -962,6 +933,14 @@ function NotificationsPanel({ data, set }: PanelProps) {
         <ToggleField label="Weekly report" checked={data.weeklyReport} onChange={(v) => set("weeklyReport", v)} />
         <ToggleField label="Overdue reminder" checked={data.overdueReminder} onChange={(v) => set("overdueReminder", v)} />
       </ToggleGrid>
+      <SettingBlock title="Outstanding Amount Reminder" icon={Bell}>
+        <ToggleField label="Enable reminder" checked={data.outstandingReminderEnabled} onChange={(v) => set("outstandingReminderEnabled", v)} />
+        <Grid>
+          <TextField label="Remind after (days overdue)" value={data.outstandingReminderDays} onChange={(v) => set("outstandingReminderDays", v)} type="number" />
+          <SelectField label="Message mode" value={data.outstandingReminderMode} onChange={(v) => set("outstandingReminderMode", v)} options={["whatsapp", "sms"]} />
+        </Grid>
+        <TextAreaField label="Reminder message template (use #CompanyName, #InvoiceNumber, #Balance)" value={data.outstandingReminderTemplate} onChange={(v) => set("outstandingReminderTemplate", v)} />
+      </SettingBlock>
     </Panel>
   );
 }
@@ -993,21 +972,52 @@ function GmailPanel({ data, set }: PanelProps) {
 }
 
 function WhatsAppPanel({ data, set }: PanelProps) {
+  const statuses: [string, string, string][] = [
+    ["orderBookedMode", "orderBookedMessage", "Booked"],
+    ["orderProcessingMode", "orderProcessingMessage", "Processing"],
+    ["orderCompletedMode", "orderCompletedMessage", "Completed"],
+    ["orderCancelledMode", "orderCancelledMessage", "Cancelled"],
+  ];
   return (
     <Panel>
-      <PanelHeader icon={MessageCircle} title="WhatsApp" subtitle="Placeholder and templates for the separate WhatsApp API process." />
+      <PanelHeader icon={MessageCircle} title="WhatsApp" subtitle="Connects to your own self-hosted WhatsApp sender (e.g. Baileys/Blito) via webhook — no Meta Business API needed." />
       <Grid>
         <TextField label="WhatsApp display name" value={data.displayName} onChange={(v) => set("displayName", v)} />
         <TextField label="WhatsApp number" value={data.number} onChange={(v) => set("number", v)} />
-        <SelectField label="Provider status" value={data.provider} onChange={(v) => set("provider", v)} options={["not-connected", "business-api", "blito", "manual"]} />
-        <TextAreaField label="Invoice message template" value={data.invoiceMessage} onChange={(v) => set("invoiceMessage", v)} />
-        <TextAreaField label="Reminder message template" value={data.reminderMessage} onChange={(v) => set("reminderMessage", v)} />
+        <SelectField label="Provider" value={data.provider} onChange={(v) => set("provider", v)} options={["not-connected", "blito", "business-api", "manual"]} />
+        <TextField label="Webhook URL (your Blito/Baileys server)" value={data.webhookUrl} onChange={(v) => set("webhookUrl", v)} placeholder="https://your-server.com/send" />
+        <TextField label="Webhook API key" value={data.webhookApiKey} onChange={(v) => set("webhookApiKey", v)} type="password" />
       </Grid>
+      <SettingBlock title="Message templates" icon={MessageCircle}>
+        <TextAreaField label="Invoice message" value={data.invoiceMessage} onChange={(v) => set("invoiceMessage", v)} />
+        <TextAreaField label="Payment reminder message" value={data.reminderMessage} onChange={(v) => set("reminderMessage", v)} />
+      </SettingBlock>
       <ToggleGrid>
         <ToggleField label="Send invoice on WhatsApp" checked={data.sendInvoice} onChange={(v) => set("sendInvoice", v)} />
         <ToggleField label="Send due reminders" checked={data.sendReminder} onChange={(v) => set("sendReminder", v)} />
         <ToggleField label="Thank-you after payment" checked={data.sendPaymentThanks} onChange={(v) => set("sendPaymentThanks", v)} />
       </ToggleGrid>
+
+      <SettingBlock title="Order Management — status message templates" icon={MessageCircle}>
+        <div className="space-y-3">
+          {statuses.map(([modeKey, msgKey, label]) => (
+            <div key={modeKey} className="rounded-lg border bg-card p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="font-semibold">{label}</span>
+                <div className="inline-flex rounded-lg border bg-muted/40 p-1">
+                  {(["sms", "whatsapp"] as const).map((v) => (
+                    <button key={v} type="button" onClick={() => set(modeKey, v)}
+                      className={`rounded-md px-2.5 py-1 text-xs font-semibold capitalize transition ${data[modeKey] === v ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>
+                      {v === "sms" ? "Normal SMS" : "WhatsApp"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <Textarea rows={2} value={data[msgKey] ?? ""} onChange={(e) => set(msgKey, e.target.value)} />
+            </div>
+          ))}
+        </div>
+      </SettingBlock>
     </Panel>
   );
 }
@@ -1035,12 +1045,65 @@ function BackupPanel({ data, set }: PanelProps) {
   );
 }
 
+function ImportLinkPanel() {
+  return (
+    <Panel>
+      <PanelHeader icon={Upload} title="Import" subtitle="Bring in multiple clients and products from a single Excel sheet." />
+      <div className="rounded-lg border bg-muted/25 p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="font-semibold">Bulk import clients or products</div>
+            <div className="text-sm text-muted-foreground">Download a template, fill it in, and upload it back — no manual data entry.</div>
+          </div>
+          <Button asChild><Link to="/import"><Upload className="mr-1.5 h-4 w-4" />Open Import</Link></Button>
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+function HomeScreenPanel({ data, set }: PanelProps) {
+  const widgets: [string, string, string][] = [
+    ["salesWidget", "salesRange", "Sales"],
+    ["purchaseWidget", "purchaseRange", "Purchases"],
+    ["paymentReceivedWidget", "paymentReceivedRange", "Payment Received"],
+    ["paymentPaidWidget", "paymentPaidRange", "Payment Paid"],
+    ["outstandingBalanceWidget", "outstandingBalanceRange", "Outstanding Balance"],
+    ["expenseWidget", "expenseRange", "Expense"],
+    ["profitLossWidget", "profitLossRange", "Profit / Loss"],
+    ["orderStatisticsWidget", "orderStatisticsRange", "Order Statistics"],
+  ];
+  return (
+    <Panel>
+      <PanelHeader icon={LayoutDashboard} title="Home Screen" subtitle="Customize what you see on the home screen. Set widgets to show monthly or yearly data." />
+      <div className="grid gap-2">
+        {widgets.map(([toggleKey, rangeKey, label]) => (
+          <div key={toggleKey} className="flex items-center justify-between gap-3 rounded-lg border bg-card p-3">
+            <div className="flex items-center gap-3">
+              <Switch checked={data[toggleKey]} onCheckedChange={(v) => set(toggleKey, v)} />
+              <span className="font-medium">{label}</span>
+            </div>
+            <div className="inline-flex rounded-lg border bg-muted/40 p-1">
+              {(["monthly", "allTime"] as const).map((v) => (
+                <button key={v} type="button" onClick={() => set(rangeKey, v)}
+                  className={`rounded-md px-2.5 py-1 text-xs font-semibold transition ${data[rangeKey] === v ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>
+                  {v === "monthly" ? "Monthly" : "All Time"}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </Panel>
+  );
+}
+
 function AppearancePanel({ data, set, theme, toggleTheme }: PanelProps & { theme: string; toggleTheme: () => void }) {
   return (
     <Panel>
       <PanelHeader icon={Palette} title="Appearance and app format" subtitle="Language, dashboard style, dates and visual density." />
       <Grid>
-        <SelectField label="Language" value={data.language} onChange={(v) => set("language", v)} options={["en", "ur", "hi", "ar"]} />
+        <SelectField label="Language" value={data.language} onChange={(v) => set("language", v)} options={["en", "ur", "ar", "bg", "fr", "de", "hi", "id", "it", "km", "ku", "ms", "fa", "pt", "ru", "si"]} />
         <SelectField label="Date format" value={data.dateFormat} onChange={(v) => set("dateFormat", v)} options={["dd-mm-yyyy", "mm-dd-yyyy", "yyyy-mm-dd"]} />
         <SelectField label="Number format" value={data.numberFormat} onChange={(v) => set("numberFormat", v)} options={["indian", "international"]} />
         <SelectField label="Screen density" value={data.density} onChange={(v) => set("density", v)} options={["compact", "comfortable", "spacious"]} />

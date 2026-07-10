@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
-import type { Customer, Product, Invoice, Payment, InvoiceItem, Estimate, SaleOrder, PurchaseOrder, Account, FundTransfer } from "./dummy-data";
+import type { Customer, Product, Invoice, Payment, InvoiceItem, Estimate, SaleOrder, PurchaseOrder, Account, FundTransfer, DeliveryNote, SaleReturn, PurchaseReturn, ProductionEntry, Subscription, Commission } from "./dummy-data";
 
 type Store = {
   customers: Customer[];
@@ -14,6 +14,12 @@ type Store = {
   purchaseOrders: PurchaseOrder[];
   accounts: Account[];
   fundTransfers: FundTransfer[];
+  deliveryNotes: DeliveryNote[];
+  saleReturns: SaleReturn[];
+  purchaseReturns: PurchaseReturn[];
+  productionEntries: ProductionEntry[];
+  subscriptions: Subscription[];
+  commissions: Commission[];
   loading: boolean;
   addCustomer: (c: Omit<Customer, "id" | "balance"> & { balance?: number }) => Promise<Customer>;
   updateCustomer: (id: string, patch: Partial<Customer>) => Promise<void>;
@@ -36,6 +42,24 @@ type Store = {
   updateAccount: (id: string, patch: Partial<Account>) => Promise<void>;
   deleteAccount: (id: string) => Promise<void>;
   addFundTransfer: (f: Omit<FundTransfer, "id">) => Promise<FundTransfer>;
+  addDeliveryNote: (d: Omit<DeliveryNote, "id" | "number">) => Promise<DeliveryNote>;
+  updateDeliveryNote: (id: string, patch: Partial<DeliveryNote>) => Promise<void>;
+  deleteDeliveryNote: (id: string) => Promise<void>;
+  addSaleReturn: (s: Omit<SaleReturn, "id" | "number">) => Promise<SaleReturn>;
+  updateSaleReturn: (id: string, patch: Partial<SaleReturn>) => Promise<void>;
+  deleteSaleReturn: (id: string) => Promise<void>;
+  addPurchaseReturn: (p: Omit<PurchaseReturn, "id" | "number">) => Promise<PurchaseReturn>;
+  updatePurchaseReturn: (id: string, patch: Partial<PurchaseReturn>) => Promise<void>;
+  deletePurchaseReturn: (id: string) => Promise<void>;
+  addProductionEntry: (p: Omit<ProductionEntry, "id" | "number">) => Promise<ProductionEntry>;
+  updateProductionEntry: (id: string, patch: Partial<ProductionEntry>) => Promise<void>;
+  deleteProductionEntry: (id: string) => Promise<void>;
+  addSubscription: (s: Omit<Subscription, "id">) => Promise<Subscription>;
+  updateSubscription: (id: string, patch: Partial<Subscription>) => Promise<void>;
+  deleteSubscription: (id: string) => Promise<void>;
+  addCommission: (c: Omit<Commission, "id">) => Promise<Commission>;
+  updateCommission: (id: string, patch: Partial<Commission>) => Promise<void>;
+  deleteCommission: (id: string) => Promise<void>;
   getCustomer: (id: string) => Customer | undefined;
   getInvoice: (id: string) => Invoice | undefined;
   refresh: () => Promise<void>;
@@ -201,6 +225,44 @@ function fundTransferFromRow(row: any): FundTransfer {
   };
 }
 
+function deliveryNoteFromRow(row: any): DeliveryNote {
+  return {
+    id: row.id, number: row.number, customerId: row.customer_id ?? "", date: row.date,
+    items: (row.items ?? []) as InvoiceItem[], notes: row.notes ?? undefined, status: row.status,
+  };
+}
+function saleReturnFromRow(row: any): SaleReturn {
+  return {
+    id: row.id, number: row.number, customerId: row.customer_id ?? "", date: row.date,
+    items: (row.items ?? []) as InvoiceItem[], total: Number(row.total ?? 0), notes: row.notes ?? undefined, status: row.status,
+  };
+}
+function purchaseReturnFromRow(row: any): PurchaseReturn {
+  return {
+    id: row.id, number: row.number, supplierId: row.supplier_id ?? "", date: row.date,
+    items: (row.items ?? []) as InvoiceItem[], total: Number(row.total ?? 0), notes: row.notes ?? undefined, status: row.status,
+  };
+}
+function productionEntryFromRow(row: any): ProductionEntry {
+  return {
+    id: row.id, number: row.number, productName: row.product_name ?? "", date: row.date,
+    items: (row.items ?? []) as InvoiceItem[], quantityProduced: Number(row.quantity_produced ?? 0),
+    notes: row.notes ?? undefined, status: row.status,
+  };
+}
+function subscriptionFromRow(row: any): Subscription {
+  return {
+    id: row.id, customerId: row.customer_id ?? "", planName: row.plan_name ?? "", amount: Number(row.amount ?? 0),
+    billingCycle: row.billing_cycle ?? "monthly", status: row.status, nextBillingDate: row.next_billing_date ?? undefined,
+  };
+}
+function commissionFromRow(row: any): Commission {
+  return {
+    id: row.id, agentName: row.agent_name ?? "", invoiceId: row.invoice_id ?? undefined,
+    commission: Number(row.commission ?? 0), status: row.status, date: row.date,
+  };
+}
+
 export function StoreProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated, ready } = useAuth();
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -212,6 +274,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [fundTransfers, setFundTransfers] = useState<FundTransfer[]>([]);
+  const [deliveryNotes, setDeliveryNotes] = useState<DeliveryNote[]>([]);
+  const [saleReturns, setSaleReturns] = useState<SaleReturn[]>([]);
+  const [purchaseReturns, setPurchaseReturns] = useState<PurchaseReturn[]>([]);
+  const [productionEntries, setProductionEntries] = useState<ProductionEntry[]>([]);
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [commissions, setCommissions] = useState<Commission[]>([]);
   const [loading, setLoading] = useState(true);
 
   const refresh = async () => {
@@ -219,11 +287,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setCustomers([]); setProducts([]); setInvoices([]); setPayments([]);
       setEstimates([]); setSaleOrders([]); setPurchaseOrders([]);
       setAccounts([]); setFundTransfers([]);
+      setDeliveryNotes([]); setSaleReturns([]); setPurchaseReturns([]); setProductionEntries([]);
+      setSubscriptions([]); setCommissions([]);
       setLoading(false);
       return;
     }
     setLoading(true);
-    const [c, p, i, pay, est, so, po, acc, ft] = await Promise.all([
+    const [c, p, i, pay, est, so, po, acc, ft, dn, sr, pr, pe, sub, com] = await Promise.all([
       supabase.from("customers").select("*").order("created_at", { ascending: false }),
       supabase.from("products").select("*").order("created_at", { ascending: false }),
       supabase.from("invoices").select("*").order("created_at", { ascending: false }),
@@ -233,6 +303,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       supabase.from("purchase_orders").select("*").order("created_at", { ascending: false }),
       supabase.from("accounts").select("*").order("created_at", { ascending: false }),
       supabase.from("fund_transfers").select("*").order("created_at", { ascending: false }),
+      supabase.from("delivery_notes").select("*").order("created_at", { ascending: false }),
+      supabase.from("sale_returns").select("*").order("created_at", { ascending: false }),
+      supabase.from("purchase_returns").select("*").order("created_at", { ascending: false }),
+      supabase.from("production_entries").select("*").order("created_at", { ascending: false }),
+      supabase.from("subscriptions").select("*").order("created_at", { ascending: false }),
+      supabase.from("commissions").select("*").order("created_at", { ascending: false }),
     ]);
     if (c.error) toast.error(`Could not load customers: ${c.error.message}`);
     if (p.error) toast.error(`Could not load products: ${p.error.message}`);
@@ -243,6 +319,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (po.error) toast.error(`Could not load purchase orders: ${po.error.message}`);
     if (acc.error) toast.error(`Could not load accounts: ${acc.error.message}`);
     if (ft.error) toast.error(`Could not load fund transfers: ${ft.error.message}`);
+    if (dn.error) toast.error(`Could not load delivery notes: ${dn.error.message}`);
+    if (sr.error) toast.error(`Could not load sale returns: ${sr.error.message}`);
+    if (pr.error) toast.error(`Could not load purchase returns: ${pr.error.message}`);
+    if (pe.error) toast.error(`Could not load production entries: ${pe.error.message}`);
+    if (sub.error) toast.error(`Could not load subscriptions: ${sub.error.message}`);
+    if (com.error) toast.error(`Could not load commissions: ${com.error.message}`);
     setCustomers((c.data ?? []).map(customerFromRow));
     setProducts((p.data ?? []).map(productFromRow));
     setInvoices((i.data ?? []).map(invoiceFromRow));
@@ -252,6 +334,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setPurchaseOrders((po.data ?? []).map(purchaseOrderFromRow));
     setAccounts((acc.data ?? []).map(accountFromRow));
     setFundTransfers((ft.data ?? []).map(fundTransferFromRow));
+    setDeliveryNotes((dn.data ?? []).map(deliveryNoteFromRow));
+    setSaleReturns((sr.data ?? []).map(saleReturnFromRow));
+    setPurchaseReturns((pr.data ?? []).map(purchaseReturnFromRow));
+    setProductionEntries((pe.data ?? []).map(productionEntryFromRow));
+    setSubscriptions((sub.data ?? []).map(subscriptionFromRow));
+    setCommissions((com.data ?? []).map(commissionFromRow));
     setLoading(false);
   };
 
@@ -261,7 +349,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [ready, isAuthenticated]);
 
   const value = useMemo<Store>(() => ({
-    customers, products, invoices, payments, estimates, saleOrders, purchaseOrders, accounts, fundTransfers, loading, refresh,
+    customers, products, invoices, payments, estimates, saleOrders, purchaseOrders, accounts, fundTransfers,
+    deliveryNotes, saleReturns, purchaseReturns, productionEntries, subscriptions, commissions, loading, refresh,
 
     addCustomer: async (c) => {
       const { data: userData } = await supabase.auth.getUser();
@@ -653,9 +742,183 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return nf;
     },
 
+    addDeliveryNote: async (d) => {
+      const { data: userData } = await supabase.auth.getUser();
+      const { data, error } = await supabase.from("delivery_notes").insert({
+        customer_id: d.customerId || null, date: d.date, items: d.items as unknown as import("@/integrations/supabase/types").Json,
+        notes: d.notes || null, status: d.status, created_by: userData.user?.id,
+      }).select().single();
+      if (error || !data) throw new Error(error?.message || "Could not save delivery note");
+      const n = deliveryNoteFromRow(data);
+      setDeliveryNotes((prev) => [n, ...prev]);
+      return n;
+    },
+    updateDeliveryNote: async (id, patch) => {
+      const dbPatch: Record<string, unknown> = {};
+      if (patch.customerId !== undefined) dbPatch.customer_id = patch.customerId || null;
+      if (patch.date !== undefined) dbPatch.date = patch.date;
+      if (patch.items !== undefined) dbPatch.items = patch.items;
+      if (patch.notes !== undefined) dbPatch.notes = patch.notes;
+      if (patch.status !== undefined) dbPatch.status = patch.status;
+      const { data, error } = await supabase.from("delivery_notes").update(dbPatch as any).eq("id", id).select().single();
+      if (error) throw new Error(error.message);
+      if (data) setDeliveryNotes((prev) => prev.map((x) => (x.id === id ? deliveryNoteFromRow(data) : x)));
+    },
+    deleteDeliveryNote: async (id) => {
+      const { error } = await supabase.from("delivery_notes").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      setDeliveryNotes((prev) => prev.filter((x) => x.id !== id));
+    },
+
+    addSaleReturn: async (s) => {
+      const { data: userData } = await supabase.auth.getUser();
+      const { data, error } = await supabase.from("sale_returns").insert({
+        customer_id: s.customerId || null, date: s.date, items: s.items as unknown as import("@/integrations/supabase/types").Json,
+        total: s.total, notes: s.notes || null, status: s.status, created_by: userData.user?.id,
+      }).select().single();
+      if (error || !data) throw new Error(error?.message || "Could not save sale return");
+      const n = saleReturnFromRow(data);
+      setSaleReturns((prev) => [n, ...prev]);
+      return n;
+    },
+    updateSaleReturn: async (id, patch) => {
+      const dbPatch: Record<string, unknown> = {};
+      if (patch.customerId !== undefined) dbPatch.customer_id = patch.customerId || null;
+      if (patch.date !== undefined) dbPatch.date = patch.date;
+      if (patch.items !== undefined) dbPatch.items = patch.items;
+      if (patch.total !== undefined) dbPatch.total = patch.total;
+      if (patch.notes !== undefined) dbPatch.notes = patch.notes;
+      if (patch.status !== undefined) dbPatch.status = patch.status;
+      const { data, error } = await supabase.from("sale_returns").update(dbPatch as any).eq("id", id).select().single();
+      if (error) throw new Error(error.message);
+      if (data) setSaleReturns((prev) => prev.map((x) => (x.id === id ? saleReturnFromRow(data) : x)));
+    },
+    deleteSaleReturn: async (id) => {
+      const { error } = await supabase.from("sale_returns").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      setSaleReturns((prev) => prev.filter((x) => x.id !== id));
+    },
+
+    addPurchaseReturn: async (p) => {
+      const { data: userData } = await supabase.auth.getUser();
+      const { data, error } = await supabase.from("purchase_returns").insert({
+        supplier_id: p.supplierId || null, date: p.date, items: p.items as unknown as import("@/integrations/supabase/types").Json,
+        total: p.total, notes: p.notes || null, status: p.status, created_by: userData.user?.id,
+      }).select().single();
+      if (error || !data) throw new Error(error?.message || "Could not save purchase return");
+      const n = purchaseReturnFromRow(data);
+      setPurchaseReturns((prev) => [n, ...prev]);
+      return n;
+    },
+    updatePurchaseReturn: async (id, patch) => {
+      const dbPatch: Record<string, unknown> = {};
+      if (patch.supplierId !== undefined) dbPatch.supplier_id = patch.supplierId || null;
+      if (patch.date !== undefined) dbPatch.date = patch.date;
+      if (patch.items !== undefined) dbPatch.items = patch.items;
+      if (patch.total !== undefined) dbPatch.total = patch.total;
+      if (patch.notes !== undefined) dbPatch.notes = patch.notes;
+      if (patch.status !== undefined) dbPatch.status = patch.status;
+      const { data, error } = await supabase.from("purchase_returns").update(dbPatch as any).eq("id", id).select().single();
+      if (error) throw new Error(error.message);
+      if (data) setPurchaseReturns((prev) => prev.map((x) => (x.id === id ? purchaseReturnFromRow(data) : x)));
+    },
+    deletePurchaseReturn: async (id) => {
+      const { error } = await supabase.from("purchase_returns").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      setPurchaseReturns((prev) => prev.filter((x) => x.id !== id));
+    },
+
+    addProductionEntry: async (p) => {
+      const { data: userData } = await supabase.auth.getUser();
+      const { data, error } = await supabase.from("production_entries").insert({
+        product_name: p.productName, date: p.date, items: p.items as unknown as import("@/integrations/supabase/types").Json,
+        quantity_produced: p.quantityProduced, notes: p.notes || null, status: p.status, created_by: userData.user?.id,
+      }).select().single();
+      if (error || !data) throw new Error(error?.message || "Could not save production entry");
+      const n = productionEntryFromRow(data);
+      setProductionEntries((prev) => [n, ...prev]);
+      return n;
+    },
+    updateProductionEntry: async (id, patch) => {
+      const dbPatch: Record<string, unknown> = {};
+      if (patch.productName !== undefined) dbPatch.product_name = patch.productName;
+      if (patch.date !== undefined) dbPatch.date = patch.date;
+      if (patch.items !== undefined) dbPatch.items = patch.items;
+      if (patch.quantityProduced !== undefined) dbPatch.quantity_produced = patch.quantityProduced;
+      if (patch.notes !== undefined) dbPatch.notes = patch.notes;
+      if (patch.status !== undefined) dbPatch.status = patch.status;
+      const { data, error } = await supabase.from("production_entries").update(dbPatch as any).eq("id", id).select().single();
+      if (error) throw new Error(error.message);
+      if (data) setProductionEntries((prev) => prev.map((x) => (x.id === id ? productionEntryFromRow(data) : x)));
+    },
+    deleteProductionEntry: async (id) => {
+      const { error } = await supabase.from("production_entries").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      setProductionEntries((prev) => prev.filter((x) => x.id !== id));
+    },
+
+    addSubscription: async (s) => {
+      const { data: userData } = await supabase.auth.getUser();
+      const { data, error } = await supabase.from("subscriptions").insert({
+        customer_id: s.customerId || null, plan_name: s.planName, amount: s.amount,
+        billing_cycle: s.billingCycle, status: s.status, next_billing_date: s.nextBillingDate || null,
+        created_by: userData.user?.id,
+      }).select().single();
+      if (error || !data) throw new Error(error?.message || "Could not save subscription");
+      const n = subscriptionFromRow(data);
+      setSubscriptions((prev) => [n, ...prev]);
+      return n;
+    },
+    updateSubscription: async (id, patch) => {
+      const dbPatch: Record<string, unknown> = {};
+      if (patch.customerId !== undefined) dbPatch.customer_id = patch.customerId || null;
+      if (patch.planName !== undefined) dbPatch.plan_name = patch.planName;
+      if (patch.amount !== undefined) dbPatch.amount = patch.amount;
+      if (patch.billingCycle !== undefined) dbPatch.billing_cycle = patch.billingCycle;
+      if (patch.status !== undefined) dbPatch.status = patch.status;
+      if (patch.nextBillingDate !== undefined) dbPatch.next_billing_date = patch.nextBillingDate || null;
+      const { data, error } = await supabase.from("subscriptions").update(dbPatch as any).eq("id", id).select().single();
+      if (error) throw new Error(error.message);
+      if (data) setSubscriptions((prev) => prev.map((x) => (x.id === id ? subscriptionFromRow(data) : x)));
+    },
+    deleteSubscription: async (id) => {
+      const { error } = await supabase.from("subscriptions").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      setSubscriptions((prev) => prev.filter((x) => x.id !== id));
+    },
+
+    addCommission: async (c) => {
+      const { data: userData } = await supabase.auth.getUser();
+      const { data, error } = await supabase.from("commissions").insert({
+        agent_name: c.agentName, invoice_id: c.invoiceId || null, commission: c.commission,
+        status: c.status, date: c.date, created_by: userData.user?.id,
+      }).select().single();
+      if (error || !data) throw new Error(error?.message || "Could not save commission");
+      const n = commissionFromRow(data);
+      setCommissions((prev) => [n, ...prev]);
+      return n;
+    },
+    updateCommission: async (id, patch) => {
+      const dbPatch: Record<string, unknown> = {};
+      if (patch.agentName !== undefined) dbPatch.agent_name = patch.agentName;
+      if (patch.invoiceId !== undefined) dbPatch.invoice_id = patch.invoiceId || null;
+      if (patch.commission !== undefined) dbPatch.commission = patch.commission;
+      if (patch.status !== undefined) dbPatch.status = patch.status;
+      if (patch.date !== undefined) dbPatch.date = patch.date;
+      const { data, error } = await supabase.from("commissions").update(dbPatch as any).eq("id", id).select().single();
+      if (error) throw new Error(error.message);
+      if (data) setCommissions((prev) => prev.map((x) => (x.id === id ? commissionFromRow(data) : x)));
+    },
+    deleteCommission: async (id) => {
+      const { error } = await supabase.from("commissions").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      setCommissions((prev) => prev.filter((x) => x.id !== id));
+    },
+
     getCustomer: (id) => customers.find((c) => c.id === id),
     getInvoice: (id) => invoices.find((i) => i.id === id || i.number === id),
-  }), [customers, products, invoices, payments, estimates, saleOrders, purchaseOrders, accounts, fundTransfers, loading]);
+  }), [customers, products, invoices, payments, estimates, saleOrders, purchaseOrders, accounts, fundTransfers,
+      deliveryNotes, saleReturns, purchaseReturns, productionEntries, subscriptions, commissions, loading]);
 
   return <StoreCtx.Provider value={value}>{children}</StoreCtx.Provider>;
 }

@@ -23,6 +23,7 @@ import { Route as ProductionEntryRouteImport } from './routes/production-entry'
 import { Route as PaymentsRouteImport } from './routes/payments'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as InventoryRouteImport } from './routes/inventory'
+import { Route as ImportRouteImport } from './routes/import'
 import { Route as FundsRouteImport } from './routes/funds'
 import { Route as ExpensesRouteImport } from './routes/expenses'
 import { Route as EstimatesRouteImport } from './routes/estimates'
@@ -105,6 +106,11 @@ const InventoryRoute = InventoryRouteImport.update({
   path: '/inventory',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ImportRoute = ImportRouteImport.update({
+  id: '/import',
+  path: '/import',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const FundsRoute = FundsRouteImport.update({
   id: '/funds',
   path: '/funds',
@@ -170,6 +176,7 @@ export interface FileRoutesByFullPath {
   '/estimates': typeof EstimatesRoute
   '/expenses': typeof ExpensesRoute
   '/funds': typeof FundsRoute
+  '/import': typeof ImportRoute
   '/inventory': typeof InventoryRoute
   '/login': typeof LoginRoute
   '/payments': typeof PaymentsRoute
@@ -197,6 +204,7 @@ export interface FileRoutesByTo {
   '/estimates': typeof EstimatesRoute
   '/expenses': typeof ExpensesRoute
   '/funds': typeof FundsRoute
+  '/import': typeof ImportRoute
   '/inventory': typeof InventoryRoute
   '/login': typeof LoginRoute
   '/payments': typeof PaymentsRoute
@@ -225,6 +233,7 @@ export interface FileRoutesById {
   '/estimates': typeof EstimatesRoute
   '/expenses': typeof ExpensesRoute
   '/funds': typeof FundsRoute
+  '/import': typeof ImportRoute
   '/inventory': typeof InventoryRoute
   '/login': typeof LoginRoute
   '/payments': typeof PaymentsRoute
@@ -254,6 +263,7 @@ export interface FileRouteTypes {
     | '/estimates'
     | '/expenses'
     | '/funds'
+    | '/import'
     | '/inventory'
     | '/login'
     | '/payments'
@@ -281,6 +291,7 @@ export interface FileRouteTypes {
     | '/estimates'
     | '/expenses'
     | '/funds'
+    | '/import'
     | '/inventory'
     | '/login'
     | '/payments'
@@ -308,6 +319,7 @@ export interface FileRouteTypes {
     | '/estimates'
     | '/expenses'
     | '/funds'
+    | '/import'
     | '/inventory'
     | '/login'
     | '/payments'
@@ -336,6 +348,7 @@ export interface RootRouteChildren {
   EstimatesRoute: typeof EstimatesRoute
   ExpensesRoute: typeof ExpensesRoute
   FundsRoute: typeof FundsRoute
+  ImportRoute: typeof ImportRoute
   InventoryRoute: typeof InventoryRoute
   LoginRoute: typeof LoginRoute
   PaymentsRoute: typeof PaymentsRoute
@@ -455,6 +468,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InventoryRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/import': {
+      id: '/import'
+      path: '/import'
+      fullPath: '/import'
+      preLoaderRoute: typeof ImportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/funds': {
       id: '/funds'
       path: '/funds'
@@ -544,6 +564,7 @@ const rootRouteChildren: RootRouteChildren = {
   EstimatesRoute: EstimatesRoute,
   ExpensesRoute: ExpensesRoute,
   FundsRoute: FundsRoute,
+  ImportRoute: ImportRoute,
   InventoryRoute: InventoryRoute,
   LoginRoute: LoginRoute,
   PaymentsRoute: PaymentsRoute,

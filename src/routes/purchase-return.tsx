@@ -1,29 +1,53 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { PackageX } from "lucide-react";
-import { ModulePlaceholder } from "@/components/ModulePlaceholder";
-import { fmt } from "@/lib/dummy-data";
+import { useStore } from "@/lib/store";
+import { DocumentBoard, type DocRow } from "@/components/DocumentBoard";
+import type { PurchaseReturn } from "@/lib/dummy-data";
 
 export const Route = createFileRoute("/purchase-return")({
   head: () => ({ meta: [
-    { title: "Purchase Returns — Prestige Invoice" },
-    { name: "description", content: "Return goods to suppliers and issue debit notes." },
+    { title: "Purchase Return — Prestige Invoice" },
+    { name: "description", content: "Record goods returned to suppliers and refunds due." },
   ]}),
-  component: () => (
-    <ModulePlaceholder
-      title="Purchase Returns"
-      subtitle="Goods sent back to suppliers with debit notes"
-      addLabel="New Purchase Return"
-      partyLabel="Supplier"
-      icon={<PackageX className="h-4 w-4 text-muted-foreground" />}
-      stats={[
-        { label: "This month", value: fmt(14200) },
-        { label: "Debit notes", value: "2" },
-        { label: "Awaiting credit", value: fmt(6800) },
-      ]}
-      rows={[
-        { id: "pr1", number: "PR-2026-007", party: "Metro Wholesale", date: "2026-07-01", amount: 6800, status: "pending" },
-        { id: "pr2", number: "PR-2026-006", party: "Sunrise Electronics", date: "2026-06-27", amount: 7400, status: "credited" },
-      ]}
-    />
-  ),
+  component: PurchaseReturnPage,
 });
+
+const statusOptions = [
+  { value: "pending", label: "Pending", tone: "border-gold/40 text-gold-foreground" },
+  { value: "refunded", label: "Refunded", tone: "border-accent/40 text-accent" },
+  { value: "cancelled", label: "Cancelled", tone: "border-destructive/40 text-destructive" },
+];
+
+function PurchaseReturnPage() {
+  const { purchaseReturns, customers, addPurchaseReturn, updatePurchaseReturn, deletePurchaseReturn } = useStore();
+  const suppliers = customers.filter((c) => c.partyType !== "client");
+
+  const rows: DocRow[] = purchaseReturns.map((p) => ({
+    id: p.id, number: p.number, partyId: p.supplierId, date: p.date,
+    items: p.items, taxRate: 0, status: p.status, notes: p.notes,
+  }));
+
+  return (
+    <DocumentBoard
+      title="Purchase Returns"
+      subtitle={`${purchaseReturns.length} purchase returns on file`}
+      partyLabel="Supplier"
+      secondDateLabel="Return date"
+      addLabel="New Purchase Return"
+      rows={rows}
+      parties={suppliers.map((c) => ({ id: c.id, name: c.name }))}
+      statusOptions={statusOptions}
+      onCreate={(row) => {
+        const total = row.items.reduce((s, it) => s + it.qty * it.rate, 0);
+        return addPurchaseReturn({ supplierId: row.partyId, date: row.date, items: row.items, total, status: row.status as PurchaseReturn["status"], notes: row.notes });
+      }}
+      onUpdate={(id, patch) => {
+        const total = (patch.items ?? []).reduce((s, it) => s + it.qty * it.rate, 0);
+        return updatePurchaseReturn(id, {
+          supplierId: patch.partyId, date: patch.date, items: patch.items,
+          total: patch.items ? total : undefined, status: patch.status as PurchaseReturn["status"] | undefined, notes: patch.notes,
+        });
+      }}
+      onDelete={(id) => deletePurchaseReturn(id)}
+    />
+  );
+}

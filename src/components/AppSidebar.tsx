@@ -33,6 +33,7 @@ const stockItems = [
   { title: "Purchase Orders", url: "/purchase-orders", icon: ClipboardList },
   { title: "Purchase Returns", url: "/purchase-return", icon: PackageX },
   { title: "Production Entry", url: "/production-entry", icon: Factory },
+  { title: "Import", url: "/import", icon: FileSpreadsheet },
 ];
 
 const financeItems = [
