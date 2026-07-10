@@ -1,10 +1,14 @@
 import { createFileRoute, Link, useParams } from "@tanstack/react-router";
-import { useEffect } from "react";
-import { Printer, ArrowLeft, Sparkles, Download } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Printer, ArrowLeft, Sparkles, Download, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useStore } from "@/lib/store";
 import { calcInvoiceTotals, fmt } from "@/lib/dummy-data";
 import { StatusPill } from "@/components/StatusPill";
+import { supabase } from "@/integrations/supabase/client";
+import { sendAndLogWhatsApp } from "@/lib/whatsapp";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/invoices/$id")({
   head: () => ({ meta: [
@@ -19,6 +23,8 @@ function InvoiceView() {
   const { id } = useParams({ from: "/invoices/$id" });
   const { getInvoice, customers } = useStore();
   const inv = getInvoice(id);
+  const [waPrompt, setWaPrompt] = useState(false);
+  const [waSending, setWaSending] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined" && window.location.search.includes("print=1")) {
@@ -26,19 +32,67 @@ function InvoiceView() {
     }
   }, []);
 
+  const customer = inv ? customers.find((c) => c.id === inv.customerId) : undefined;
+
+  const sendWhatsApp = async () => {
+    if (!inv || !customer?.whatsapp) return;
+    setWaSending(true);
+    try {
+      const { data } = await supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.whatsapp").maybeSingle();
+      const wa = (data?.setting_value as Record<string, string>) ?? {};
+      const message = (wa.invoiceMessage || "Hello {customer}, your invoice {invoice_no} of {amount} is ready.")
+        .replace("{customer}", customer.name)
+        .replace("{invoice_no}", inv.number)
+        .replace("{amount}", fmt(calcInvoiceTotals(inv.items, inv.taxRate).total));
+      const result = await sendAndLogWhatsApp({
+        webhookUrl: wa.webhookUrl || "",
+        webhookApiKey: wa.webhookApiKey,
+        customerId: customer.id,
+        customerName: customer.name,
+        toNumber: customer.whatsapp,
+        message,
+        messageType: "invoice",
+        referenceId: inv.id,
+        referenceNumber: inv.number,
+      });
+      if (result.ok) toast.success(`Sent to ${customer.name} on WhatsApp`);
+      else toast.error(result.error || "Could not send WhatsApp message");
+    } finally {
+      setWaSending(false);
+      setWaPrompt(false);
+    }
+  };
+
   if (!inv) return <div className="p-10 text-center text-muted-foreground">Invoice not found. <Link to="/invoices" className="text-accent underline">Back to invoices</Link></div>;
-  const customer = customers.find((c) => c.id === inv.customerId);
   const totals = calcInvoiceTotals(inv.items, inv.taxRate);
   const balance = totals.total - inv.paid;
 
   return (
     <div className="mx-auto max-w-4xl">
+      <AlertDialog open={waPrompt} onOpenChange={setWaPrompt}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Send this invoice on WhatsApp?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Send {inv.number} to {customer?.name} at {customer?.whatsapp} via WhatsApp now?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Not now</AlertDialogCancel>
+            <AlertDialogAction onClick={sendWhatsApp} disabled={waSending}>{waSending ? "Sending…" : "Send"}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Toolbar (hidden on print) */}
       <div className="no-print mb-4 flex flex-wrap items-center justify-between gap-2">
         <Button asChild variant="ghost" size="sm"><Link to="/invoices"><ArrowLeft className="mr-1.5 h-4 w-4" />Back</Link></Button>
         <div className="flex gap-2">
+          {customer?.whatsapp && (
+            <Button variant="outline" onClick={() => setWaPrompt(true)}><MessageCircle className="mr-1.5 h-4 w-4" />Send WhatsApp</Button>
+          )}
           <Button variant="outline" onClick={() => window.print()}><Download className="mr-1.5 h-4 w-4" />Download PDF</Button>
-          <Button onClick={() => window.print()}><Printer className="mr-1.5 h-4 w-4" />Print</Button>
+          <Button onClick={() => { if (customer?.whatsapp) setWaPrompt(true); window.print(); }}><Printer className="mr-1.5 h-4 w-4" />Print</Button>
         </div>
       </div>
 

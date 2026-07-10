@@ -109,6 +109,21 @@ export type FundTransfer = {
   date: string;
 };
 
+export type WhatsAppLogStatus = "pending" | "sent" | "failed";
+export type WhatsAppLog = {
+  id: string;
+  customerId?: string;
+  customerName?: string;
+  whatsappNumber: string;
+  messageType: "invoice" | "due_reminder" | "order_status" | "other";
+  referenceId?: string;
+  referenceNumber?: string;
+  messageText?: string;
+  status: WhatsAppLogStatus;
+  errorMessage?: string;
+  createdAt: string;
+};
+
 export type EstimateStatus = "open" | "accepted" | "declined" | "expired";
 export type Estimate = {
   id: string;

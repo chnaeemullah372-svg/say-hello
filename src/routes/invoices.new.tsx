@@ -13,6 +13,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useStore } from "@/lib/store";
 import { fmt, type InvoiceItem, type Product } from "@/lib/dummy-data";
+import { normalizeWhatsAppNumber } from "@/lib/phone";
 import { toast } from "sonner";
 
 
@@ -735,7 +736,7 @@ function CreateInvoice() {
             <Button onClick={async () => {
               if (!newCust.name) return toast.error("Name required");
               try {
-                const c = await addCustomer({ ...newCust, partyType: "client" });
+                const c = await addCustomer({ ...newCust, partyType: "client", whatsapp: newCust.whatsapp ? normalizeWhatsAppNumber(newCust.whatsapp) : "" });
                 setCustomerId(c.id);
                 setNewCust(emptyNewCust);
                 setNewCustMore(false);

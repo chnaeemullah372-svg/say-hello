@@ -13,6 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 
 import { useStore } from "@/lib/store";
 import { fmt, type Customer, type PartyType } from "@/lib/dummy-data";
+import { normalizeWhatsAppNumber } from "@/lib/phone";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/customers")({
@@ -76,12 +77,13 @@ function CustomersPage() {
     if (!form.name) return toast.error("Name is required");
     if (saving) return;
     setSaving(true);
+    const payload = { ...form, whatsapp: form.whatsapp ? normalizeWhatsAppNumber(form.whatsapp) : "" };
     try {
       if (editingId) {
-        await updateCustomer(editingId, form);
+        await updateCustomer(editingId, payload);
         toast.success("Saved");
       } else {
-        await addCustomer(form);
+        await addCustomer(payload);
         toast.success(`${form.partyType === "supplier" ? "Supplier" : "Client"} added`);
       }
       setOpen(false);

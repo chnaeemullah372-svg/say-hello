@@ -308,6 +308,51 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_logs: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          customer_id: string | null
+          customer_name: string | null
+          error_message: string | null
+          id: string
+          message_text: string | null
+          message_type: string
+          reference_id: string | null
+          reference_number: string | null
+          status: string
+          whatsapp_number: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string | null
+          customer_name?: string | null
+          error_message?: string | null
+          id?: string
+          message_text?: string | null
+          message_type?: string
+          reference_id?: string | null
+          reference_number?: string | null
+          status?: string
+          whatsapp_number: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string | null
+          customer_name?: string | null
+          error_message?: string | null
+          id?: string
+          message_text?: string | null
+          message_type?: string
+          reference_id?: string | null
+          reference_number?: string | null
+          status?: string
+          whatsapp_number?: string
+        }
+        Relationships: []
+      }
       customers: {
         Row: {
           address: string | null

@@ -16,6 +16,7 @@ APP_NAME="say-hello"
 NODE_MAJOR=20
 APP_PORT=3000
 DEPLOY_USER="$(whoami)"
+DOMAIN="${1:-invoice.hmeryweb.xyz}"
 
 echo "==> Installing base packages (git, nginx, curl)…"
 sudo apt-get update -y
@@ -68,11 +69,11 @@ echo "==> Setting up app directory at ${APP_DIR}…"
 sudo mkdir -p "$APP_DIR"
 sudo chown "$DEPLOY_USER":"$DEPLOY_USER" "$APP_DIR"
 
-echo "==> Configuring Nginx reverse proxy (port 80 -> ${APP_PORT})…"
+echo "==> Configuring Nginx reverse proxy (${DOMAIN} -> ${APP_PORT})…"
 sudo tee /etc/nginx/sites-available/${APP_NAME} > /dev/null <<EOF
 server {
     listen 80;
-    server_name _;
+    server_name ${DOMAIN};
 
     location / {
         proxy_pass http://127.0.0.1:${APP_PORT};
@@ -92,6 +93,11 @@ sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t
 sudo systemctl restart nginx
 sudo systemctl enable nginx
+
+echo "==> Installing HTTPS certificate for ${DOMAIN} (skips gracefully if DNS isn't pointed yet)…"
+sudo apt-get install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d "${DOMAIN}" --non-interactive --agree-tos -m "admin@${DOMAIN}" --redirect || \
+  echo "   (Certbot skipped — make sure ${DOMAIN}'s DNS A record points at this server's IP, then run:  sudo certbot --nginx -d ${DOMAIN})"
 
 echo ""
 echo "=============================================================="

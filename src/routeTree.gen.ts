@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as WhatsappLogsRouteImport } from './routes/whatsapp-logs'
 import { Route as TeamRouteImport } from './routes/team'
 import { Route as SubscriptionsRouteImport } from './routes/subscriptions'
 import { Route as SettingsRouteImport } from './routes/settings'
@@ -36,6 +37,11 @@ import { Route as InvoicesIndexRouteImport } from './routes/invoices.index'
 import { Route as InvoicesNewRouteImport } from './routes/invoices.new'
 import { Route as InvoicesIdRouteImport } from './routes/invoices.$id'
 
+const WhatsappLogsRoute = WhatsappLogsRouteImport.update({
+  id: '/whatsapp-logs',
+  path: '/whatsapp-logs',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TeamRoute = TeamRouteImport.update({
   id: '/team',
   path: '/team',
@@ -191,6 +197,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/subscriptions': typeof SubscriptionsRoute
   '/team': typeof TeamRoute
+  '/whatsapp-logs': typeof WhatsappLogsRoute
   '/invoices/$id': typeof InvoicesIdRoute
   '/invoices/new': typeof InvoicesNewRoute
   '/invoices/': typeof InvoicesIndexRoute
@@ -219,6 +226,7 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/subscriptions': typeof SubscriptionsRoute
   '/team': typeof TeamRoute
+  '/whatsapp-logs': typeof WhatsappLogsRoute
   '/invoices/$id': typeof InvoicesIdRoute
   '/invoices/new': typeof InvoicesNewRoute
   '/invoices': typeof InvoicesIndexRoute
@@ -248,6 +256,7 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/subscriptions': typeof SubscriptionsRoute
   '/team': typeof TeamRoute
+  '/whatsapp-logs': typeof WhatsappLogsRoute
   '/invoices/$id': typeof InvoicesIdRoute
   '/invoices/new': typeof InvoicesNewRoute
   '/invoices/': typeof InvoicesIndexRoute
@@ -278,6 +287,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/subscriptions'
     | '/team'
+    | '/whatsapp-logs'
     | '/invoices/$id'
     | '/invoices/new'
     | '/invoices/'
@@ -306,6 +316,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/subscriptions'
     | '/team'
+    | '/whatsapp-logs'
     | '/invoices/$id'
     | '/invoices/new'
     | '/invoices'
@@ -334,6 +345,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/subscriptions'
     | '/team'
+    | '/whatsapp-logs'
     | '/invoices/$id'
     | '/invoices/new'
     | '/invoices/'
@@ -363,6 +375,7 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   SubscriptionsRoute: typeof SubscriptionsRoute
   TeamRoute: typeof TeamRoute
+  WhatsappLogsRoute: typeof WhatsappLogsRoute
   InvoicesIdRoute: typeof InvoicesIdRoute
   InvoicesNewRoute: typeof InvoicesNewRoute
   InvoicesIndexRoute: typeof InvoicesIndexRoute
@@ -370,6 +383,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/whatsapp-logs': {
+      id: '/whatsapp-logs'
+      path: '/whatsapp-logs'
+      fullPath: '/whatsapp-logs'
+      preLoaderRoute: typeof WhatsappLogsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/team': {
       id: '/team'
       path: '/team'
@@ -579,6 +599,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   SubscriptionsRoute: SubscriptionsRoute,
   TeamRoute: TeamRoute,
+  WhatsappLogsRoute: WhatsappLogsRoute,
   InvoicesIdRoute: InvoicesIdRoute,
   InvoicesNewRoute: InvoicesNewRoute,
   InvoicesIndexRoute: InvoicesIndexRoute,

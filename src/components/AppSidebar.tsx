@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Users, Package, FileText, PlusCircle, FileSpreadsheet,
   Warehouse, Wallet, BarChart3, Settings, Sparkles, Truck, PackageMinus, PackageX,
   ShoppingCart, ClipboardList, Receipt, Landmark, Repeat, Trophy, ShieldCheck,
-  UserCircle2, Factory,
+  UserCircle2, Factory, MessageCircle,
 } from "lucide-react";
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
@@ -42,6 +42,7 @@ const financeItems = [
   { title: "Fund Management", url: "/funds", icon: Landmark },
   { title: "Commissions", url: "/commissions", icon: Trophy },
   { title: "Agents", url: "/agent", icon: UserCircle2 },
+  { title: "WhatsApp Monitoring", url: "/whatsapp-logs", icon: MessageCircle },
 ];
 
 const insightItems = [

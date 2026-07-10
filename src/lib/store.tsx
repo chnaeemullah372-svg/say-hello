@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
-import type { Customer, Product, Invoice, Payment, InvoiceItem, Estimate, SaleOrder, PurchaseOrder, Account, FundTransfer, DeliveryNote, SaleReturn, PurchaseReturn, ProductionEntry, Subscription, Commission } from "./dummy-data";
+import type { Customer, Product, Invoice, Payment, InvoiceItem, Estimate, SaleOrder, PurchaseOrder, Account, FundTransfer, DeliveryNote, SaleReturn, PurchaseReturn, ProductionEntry, Subscription, Commission, WhatsAppLog } from "./dummy-data";
 
 type Store = {
   customers: Customer[];
@@ -20,6 +20,7 @@ type Store = {
   productionEntries: ProductionEntry[];
   subscriptions: Subscription[];
   commissions: Commission[];
+  whatsappLogs: WhatsAppLog[];
   loading: boolean;
   addCustomer: (c: Omit<Customer, "id" | "balance"> & { balance?: number }) => Promise<Customer>;
   updateCustomer: (id: string, patch: Partial<Customer>) => Promise<void>;
@@ -263,6 +264,15 @@ function commissionFromRow(row: any): Commission {
   };
 }
 
+function whatsAppLogFromRow(row: any): WhatsAppLog {
+  return {
+    id: row.id, customerId: row.customer_id ?? undefined, customerName: row.customer_name ?? undefined,
+    whatsappNumber: row.whatsapp_number, messageType: row.message_type, referenceId: row.reference_id ?? undefined,
+    referenceNumber: row.reference_number ?? undefined, messageText: row.message_text ?? undefined,
+    status: row.status, errorMessage: row.error_message ?? undefined, createdAt: row.created_at,
+  };
+}
+
 export function StoreProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated, ready } = useAuth();
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -280,6 +290,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [productionEntries, setProductionEntries] = useState<ProductionEntry[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [commissions, setCommissions] = useState<Commission[]>([]);
+  const [whatsappLogs, setWhatsappLogs] = useState<WhatsAppLog[]>([]);
   const [loading, setLoading] = useState(true);
 
   const refresh = async () => {
@@ -289,11 +300,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setAccounts([]); setFundTransfers([]);
       setDeliveryNotes([]); setSaleReturns([]); setPurchaseReturns([]); setProductionEntries([]);
       setSubscriptions([]); setCommissions([]);
+      setWhatsappLogs([]);
       setLoading(false);
       return;
     }
     setLoading(true);
-    const [c, p, i, pay, est, so, po, acc, ft, dn, sr, pr, pe, sub, com] = await Promise.all([
+    const [c, p, i, pay, est, so, po, acc, ft, dn, sr, pr, pe, sub, com, wl] = await Promise.all([
       supabase.from("customers").select("*").order("created_at", { ascending: false }),
       supabase.from("products").select("*").order("created_at", { ascending: false }),
       supabase.from("invoices").select("*").order("created_at", { ascending: false }),
@@ -309,6 +321,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       supabase.from("production_entries").select("*").order("created_at", { ascending: false }),
       supabase.from("subscriptions").select("*").order("created_at", { ascending: false }),
       supabase.from("commissions").select("*").order("created_at", { ascending: false }),
+      supabase.from("whatsapp_logs").select("*").order("created_at", { ascending: false }).limit(500),
     ]);
     if (c.error) toast.error(`Could not load customers: ${c.error.message}`);
     if (p.error) toast.error(`Could not load products: ${p.error.message}`);
@@ -325,6 +338,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (pe.error) toast.error(`Could not load production entries: ${pe.error.message}`);
     if (sub.error) toast.error(`Could not load subscriptions: ${sub.error.message}`);
     if (com.error) toast.error(`Could not load commissions: ${com.error.message}`);
+    if (wl.error) toast.error(`Could not load WhatsApp logs: ${wl.error.message}`);
     setCustomers((c.data ?? []).map(customerFromRow));
     setProducts((p.data ?? []).map(productFromRow));
     setInvoices((i.data ?? []).map(invoiceFromRow));
@@ -340,6 +354,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setProductionEntries((pe.data ?? []).map(productionEntryFromRow));
     setSubscriptions((sub.data ?? []).map(subscriptionFromRow));
     setCommissions((com.data ?? []).map(commissionFromRow));
+    setWhatsappLogs((wl.data ?? []).map(whatsAppLogFromRow));
     setLoading(false);
   };
 
@@ -350,7 +365,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<Store>(() => ({
     customers, products, invoices, payments, estimates, saleOrders, purchaseOrders, accounts, fundTransfers,
-    deliveryNotes, saleReturns, purchaseReturns, productionEntries, subscriptions, commissions, loading, refresh,
+    deliveryNotes, saleReturns, purchaseReturns, productionEntries, subscriptions, commissions, whatsappLogs, loading, refresh,
 
     addCustomer: async (c) => {
       const { data: userData } = await supabase.auth.getUser();
@@ -918,7 +933,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     getCustomer: (id) => customers.find((c) => c.id === id),
     getInvoice: (id) => invoices.find((i) => i.id === id || i.number === id),
   }), [customers, products, invoices, payments, estimates, saleOrders, purchaseOrders, accounts, fundTransfers,
-      deliveryNotes, saleReturns, purchaseReturns, productionEntries, subscriptions, commissions, loading]);
+      deliveryNotes, saleReturns, purchaseReturns, productionEntries, subscriptions, commissions, whatsappLogs, loading]);
 
   return <StoreCtx.Provider value={value}>{children}</StoreCtx.Provider>;
 }

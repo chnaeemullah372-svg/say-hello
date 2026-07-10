@@ -520,7 +520,7 @@ function SettingsPage() {
           {active === "users" && <UsersPanel data={settings.users} set={(k, v) => setField("users", k, v)} />}
           {active === "notifications" && <NotificationsPanel data={settings.notifications} set={(k, v) => setField("notifications", k, v)} />}
           {active === "gmail" && <GmailPanel data={settings.gmail} set={(k, v) => setField("gmail", k, v)} />}
-          {active === "whatsapp" && <WhatsAppPanel data={settings.whatsapp} set={(k, v) => setField("whatsapp", k, v)} />}
+          {active === "whatsapp" && <WhatsAppPanel data={settings.whatsapp} set={(k, v) => setField("whatsapp", k, v)} isAdmin={user?.role === "admin"} />}
           {active === "backup" && <BackupPanel data={settings.backup} set={(k, v) => setField("backup", k, v)} />}
           {active === "homeScreen" && <HomeScreenPanel data={settings.homeScreen} set={(k, v) => setField("homeScreen", k, v)} />}
           {active === "appearance" && <AppearancePanel data={settings.appearance} set={(k, v) => setField("appearance", k, v)} theme={theme} toggleTheme={toggle} />}
@@ -971,7 +971,7 @@ function GmailPanel({ data, set }: PanelProps) {
   );
 }
 
-function WhatsAppPanel({ data, set }: PanelProps) {
+function WhatsAppPanel({ data, set, isAdmin }: PanelProps & { isAdmin: boolean }) {
   const statuses: [string, string, string][] = [
     ["orderBookedMode", "orderBookedMessage", "Booked"],
     ["orderProcessingMode", "orderProcessingMessage", "Processing"],
@@ -981,13 +981,20 @@ function WhatsAppPanel({ data, set }: PanelProps) {
   return (
     <Panel>
       <PanelHeader icon={MessageCircle} title="WhatsApp" subtitle="Connects to your own self-hosted WhatsApp sender (e.g. Baileys/Blito) via webhook — no Meta Business API needed." />
-      <Grid>
-        <TextField label="WhatsApp display name" value={data.displayName} onChange={(v) => set("displayName", v)} />
-        <TextField label="WhatsApp number" value={data.number} onChange={(v) => set("number", v)} />
-        <SelectField label="Provider" value={data.provider} onChange={(v) => set("provider", v)} options={["not-connected", "blito", "business-api", "manual"]} />
-        <TextField label="Webhook URL (your Blito/Baileys server)" value={data.webhookUrl} onChange={(v) => set("webhookUrl", v)} placeholder="https://your-server.com/send" />
-        <TextField label="Webhook API key" value={data.webhookApiKey} onChange={(v) => set("webhookApiKey", v)} type="password" />
-      </Grid>
+      {!isAdmin && (
+        <div className="rounded-lg border border-amber/40 bg-amber/10 p-3 text-xs">
+          Connection settings (provider, webhook, number) are locked to Admin only. You can still see and use the message templates below.
+        </div>
+      )}
+      <fieldset disabled={!isAdmin} className={!isAdmin ? "opacity-60" : undefined}>
+        <Grid>
+          <TextField label="WhatsApp display name" value={data.displayName} onChange={(v) => set("displayName", v)} />
+          <TextField label="WhatsApp number" value={data.number} onChange={(v) => set("number", v)} />
+          <SelectField label="Provider" value={data.provider} onChange={(v) => set("provider", v)} options={["not-connected", "blito", "business-api", "manual"]} />
+          <TextField label="Webhook URL (your Blito/Baileys server)" value={data.webhookUrl} onChange={(v) => set("webhookUrl", v)} placeholder="https://your-server.com/send" />
+          <TextField label="Webhook API key" value={data.webhookApiKey} onChange={(v) => set("webhookApiKey", v)} type="password" />
+        </Grid>
+      </fieldset>
       <SettingBlock title="Message templates" icon={MessageCircle}>
         <TextAreaField label="Invoice message" value={data.invoiceMessage} onChange={(v) => set("invoiceMessage", v)} />
         <TextAreaField label="Payment reminder message" value={data.reminderMessage} onChange={(v) => set("reminderMessage", v)} />
