@@ -179,6 +179,114 @@ export type Database = {
         }
         Relationships: []
       }
+      estimates: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          customer_id: string | null
+          date: string
+          discount_mode: string
+          discount_value: number
+          id: string
+          items: Json
+          notes: string | null
+          number: string
+          shipping_amount: number
+          status: string
+          tax_rate: number
+          updated_at: string
+          valid_until: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string | null
+          date?: string
+          discount_mode?: string
+          discount_value?: number
+          id?: string
+          items?: Json
+          notes?: string | null
+          number?: string
+          shipping_amount?: number
+          status?: string
+          tax_rate?: number
+          updated_at?: string
+          valid_until?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string | null
+          date?: string
+          discount_mode?: string
+          discount_value?: number
+          id?: string
+          items?: Json
+          notes?: string | null
+          number?: string
+          shipping_amount?: number
+          status?: string
+          tax_rate?: number
+          updated_at?: string
+          valid_until?: string | null
+        }
+        Relationships: []
+      }
+      sale_orders: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          customer_id: string | null
+          date: string
+          delivery_date: string | null
+          discount_mode: string
+          discount_value: number
+          id: string
+          items: Json
+          notes: string | null
+          number: string
+          shipping_amount: number
+          status: string
+          tax_rate: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string | null
+          date?: string
+          delivery_date?: string | null
+          discount_mode?: string
+          discount_value?: number
+          id?: string
+          items?: Json
+          notes?: string | null
+          number?: string
+          shipping_amount?: number
+          status?: string
+          tax_rate?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string | null
+          date?: string
+          delivery_date?: string | null
+          discount_mode?: string
+          discount_value?: number
+          id?: string
+          items?: Json
+          notes?: string | null
+          number?: string
+          shipping_amount?: number
+          status?: string
+          tax_rate?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       expenses: {
         Row: {
           amount: number
@@ -432,6 +540,7 @@ export type Database = {
           items: Json
           number: string
           status: string
+          supplier_id: string | null
           supplier_name: string
           total: number
         }
@@ -443,6 +552,7 @@ export type Database = {
           items?: Json
           number?: string
           status?: string
+          supplier_id?: string | null
           supplier_name: string
           total?: number
         }
@@ -454,6 +564,7 @@ export type Database = {
           items?: Json
           number?: string
           status?: string
+          supplier_id?: string | null
           supplier_name?: string
           total?: number
         }
@@ -468,6 +579,7 @@ export type Database = {
           items: Json
           paid: number
           status: string
+          supplier_id: string | null
           supplier_name: string
           total: number
         }
@@ -479,6 +591,7 @@ export type Database = {
           items?: Json
           paid?: number
           status?: string
+          supplier_id?: string | null
           supplier_name: string
           total?: number
         }
@@ -490,6 +603,7 @@ export type Database = {
           items?: Json
           paid?: number
           status?: string
+          supplier_id?: string | null
           supplier_name?: string
           total?: number
         }

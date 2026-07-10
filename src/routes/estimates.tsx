@@ -1,30 +1,50 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { FileText } from "lucide-react";
-import { ModulePlaceholder } from "@/components/ModulePlaceholder";
-import { fmt } from "@/lib/dummy-data";
+import { useStore } from "@/lib/store";
+import { DocumentBoard, type DocRow } from "@/components/DocumentBoard";
+import type { Estimate } from "@/lib/dummy-data";
 
 export const Route = createFileRoute("/estimates")({
   head: () => ({ meta: [
     { title: "Estimates — Prestige Invoice" },
     { name: "description", content: "Send price quotes and convert them into invoices." },
   ]}),
-  component: () => (
-    <ModulePlaceholder
-      title="Estimates"
-      subtitle="Quotes and proposals you send before an invoice"
-      addLabel="New Estimate"
-      partyLabel="Customer"
-      icon={<FileText className="h-4 w-4 text-muted-foreground" />}
-      stats={[
-        { label: "Open estimates", value: "3" },
-        { label: "Estimated value", value: fmt(184200) },
-        { label: "Converted this month", value: "2" },
-      ]}
-      rows={[
-        { id: "e1", number: "EST-2026-018", party: "Aarav Traders", date: "2026-07-04", amount: 42500, status: "sent" },
-        { id: "e2", number: "EST-2026-017", party: "Bright Electronics", date: "2026-07-02", amount: 88700, status: "viewed" },
-        { id: "e3", number: "EST-2026-016", party: "Elite Furnishings", date: "2026-06-28", amount: 53000, status: "draft" },
-      ]}
-    />
-  ),
+  component: EstimatesPage,
 });
+
+const statusOptions = [
+  { value: "open", label: "Open", tone: "border-sapphire/40 text-sapphire" },
+  { value: "accepted", label: "Accepted", tone: "border-accent/40 text-accent" },
+  { value: "declined", label: "Declined", tone: "border-destructive/40 text-destructive" },
+  { value: "expired", label: "Expired", tone: "border-muted-foreground/30 text-muted-foreground" },
+];
+
+function EstimatesPage() {
+  const { estimates, customers, addEstimate, updateEstimate, deleteEstimate } = useStore();
+
+  const rows: DocRow[] = estimates.map((e) => ({
+    id: e.id, number: e.number, partyId: e.customerId, date: e.date, secondDate: e.validUntil,
+    items: e.items, taxRate: e.taxRate, status: e.status, notes: e.notes,
+  }));
+
+  return (
+    <DocumentBoard
+      title="Estimates"
+      subtitle={`${estimates.length} estimates on file`}
+      partyLabel="Customer"
+      secondDateLabel="Valid until"
+      addLabel="New Estimate"
+      rows={rows}
+      parties={customers.filter((c) => c.partyType !== "supplier").map((c) => ({ id: c.id, name: c.name }))}
+      statusOptions={statusOptions}
+      onCreate={(row) => addEstimate({
+        customerId: row.partyId, date: row.date, validUntil: row.secondDate ?? "",
+        items: row.items, taxRate: row.taxRate, status: row.status as Estimate["status"], notes: row.notes,
+      })}
+      onUpdate={(id, patch) => updateEstimate(id, {
+        customerId: patch.partyId, date: patch.date, validUntil: patch.secondDate,
+        items: patch.items, taxRate: patch.taxRate, status: patch.status as Estimate["status"] | undefined, notes: patch.notes,
+      })}
+      onDelete={(id) => deleteEstimate(id)}
+    />
+  );
+}

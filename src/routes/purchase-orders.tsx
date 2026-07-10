@@ -1,12 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { PageHeader } from "@/components/PageHeader";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Plus, ClipboardList } from "lucide-react";
-import { purchaseOrdersSeed } from "@/lib/modules-data";
-import { fmt } from "@/lib/dummy-data";
-import { toast } from "sonner";
+import { useStore } from "@/lib/store";
+import { DocumentBoard, type DocRow } from "@/components/DocumentBoard";
+import type { PurchaseOrder } from "@/lib/dummy-data";
 
 export const Route = createFileRoute("/purchase-orders")({
   head: () => ({ meta: [
@@ -16,43 +11,49 @@ export const Route = createFileRoute("/purchase-orders")({
   component: POPage,
 });
 
-const tone = {
-  open: "bg-gold/15 text-gold-foreground border-gold/40",
-  received: "bg-accent/15 text-accent border-accent/30",
-  cancelled: "bg-destructive/10 text-destructive border-destructive/30",
-} as const;
+const statusOptions = [
+  { value: "pending", label: "Pending", tone: "border-gold/40 text-gold-foreground" },
+  { value: "received", label: "Received", tone: "border-accent/40 text-accent" },
+  { value: "cancelled", label: "Cancelled", tone: "border-destructive/40 text-destructive" },
+];
 
 function POPage() {
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Purchase Orders"
-        subtitle="Issue POs to suppliers before goods arrive"
-        action={<Button onClick={() => toast.info("Demo only — backend pending")}><Plus className="mr-1.5 h-4 w-4" />New Purchase Order</Button>}
-      />
+  const { purchaseOrders, customers, addPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder } = useStore();
+  const suppliers = customers.filter((c) => c.partyType !== "client");
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {purchaseOrdersSeed.map((po) => (
-          <Card key={po.id} className="transition hover:border-accent/40 hover:shadow-md">
-            <CardContent className="p-5">
-              <div className="flex items-start justify-between">
-                <div className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary"><ClipboardList className="h-5 w-5" /></div>
-                <Badge variant="outline" className={`capitalize ${tone[po.status]}`}>{po.status}</Badge>
-              </div>
-              <div className="mt-4 font-mono text-xs text-muted-foreground">{po.number}</div>
-              <div className="mt-1 font-display text-base font-semibold truncate">{po.supplier}</div>
-              <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                <div>Issued<div className="text-foreground font-medium">{po.date}</div></div>
-                <div>Expected<div className="text-foreground font-medium">{po.expected}</div></div>
-              </div>
-              <div className="mt-4 border-t pt-3 flex items-baseline justify-between">
-                <span className="text-xs text-muted-foreground">Value</span>
-                <span className="font-display text-lg font-bold text-primary">{fmt(po.amount)}</span>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    </div>
+  const rows: DocRow[] = purchaseOrders.map((po) => ({
+    id: po.id, number: po.number, partyId: po.supplierId, date: po.date,
+    items: po.items, taxRate: 0, status: po.status,
+  }));
+
+  return (
+    <DocumentBoard
+      title="Purchase Orders"
+      subtitle={`${purchaseOrders.length} purchase orders on file`}
+      partyLabel="Supplier"
+      secondDateLabel="Expected date"
+      addLabel="New Purchase Order"
+      rows={rows}
+      parties={suppliers.map((c) => ({ id: c.id, name: c.name }))}
+      statusOptions={statusOptions}
+      onCreate={(row) => {
+        const total = row.items.reduce((s, it) => s + it.qty * it.rate, 0) * (1 + row.taxRate / 100);
+        const supplierName = suppliers.find((c) => c.id === row.partyId)?.name ?? "";
+        return addPurchaseOrder({
+          supplierId: row.partyId, supplierName, date: row.date,
+          items: row.items, total, status: row.status as PurchaseOrder["status"],
+        });
+      }}
+      onUpdate={(id, patch) => {
+        const items = patch.items ?? [];
+        const total = items.reduce((s, it) => s + it.qty * it.rate, 0) * (1 + (patch.taxRate ?? 0) / 100);
+        const supplierName = patch.partyId ? suppliers.find((c) => c.id === patch.partyId)?.name : undefined;
+        return updatePurchaseOrder(id, {
+          supplierId: patch.partyId, supplierName, date: patch.date,
+          items: patch.items, total: patch.items ? total : undefined, status: patch.status as PurchaseOrder["status"] | undefined,
+        });
+      }}
+      onDelete={(id) => deletePurchaseOrder(id)}
+    />
   );
 }

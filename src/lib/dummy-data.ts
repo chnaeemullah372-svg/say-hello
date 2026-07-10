@@ -90,6 +90,50 @@ export type Payment = {
   date: string;
 };
 
+export type EstimateStatus = "open" | "accepted" | "declined" | "expired";
+export type Estimate = {
+  id: string;
+  number: string;
+  customerId: string;
+  date: string;
+  validUntil: string;
+  items: InvoiceItem[];
+  taxRate: number;
+  discountMode?: "rate" | "flat";
+  discountValue?: number;
+  shippingAmount?: number;
+  notes?: string;
+  status: EstimateStatus;
+};
+
+export type SaleOrderStatus = "booked" | "processing" | "completed" | "cancelled";
+export type SaleOrder = {
+  id: string;
+  number: string;
+  customerId: string;
+  date: string;
+  deliveryDate: string;
+  items: InvoiceItem[];
+  taxRate: number;
+  discountMode?: "rate" | "flat";
+  discountValue?: number;
+  shippingAmount?: number;
+  notes?: string;
+  status: SaleOrderStatus;
+};
+
+export type PurchaseOrderStatus = "pending" | "received" | "cancelled";
+export type PurchaseOrder = {
+  id: string;
+  number: string;
+  supplierId: string;
+  supplierName: string;
+  date: string;
+  items: InvoiceItem[];
+  total: number;
+  status: PurchaseOrderStatus;
+};
+
 export const customersSeed: Customer[] = [
   { id: "c1", partyType: "client", name: "Aarav Traders", phone: "+91 98765 43210", email: "aarav@traders.in", gstin: "27AAAAA0000A1Z5", address: "Andheri West, Mumbai, MH", balance: 12500 },
   { id: "c2", partyType: "client", name: "Bright Electronics", phone: "+91 98111 22233", email: "sales@bright.in", gstin: "07BBBBB1111B2Z6", address: "Karol Bagh, New Delhi", balance: 0 },

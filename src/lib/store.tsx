@@ -2,13 +2,16 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
-import type { Customer, Product, Invoice, Payment, InvoiceItem } from "./dummy-data";
+import type { Customer, Product, Invoice, Payment, InvoiceItem, Estimate, SaleOrder, PurchaseOrder } from "./dummy-data";
 
 type Store = {
   customers: Customer[];
   products: Product[];
   invoices: Invoice[];
   payments: Payment[];
+  estimates: Estimate[];
+  saleOrders: SaleOrder[];
+  purchaseOrders: PurchaseOrder[];
   loading: boolean;
   addCustomer: (c: Omit<Customer, "id" | "balance"> & { balance?: number }) => Promise<Customer>;
   updateCustomer: (id: string, patch: Partial<Customer>) => Promise<void>;
@@ -18,6 +21,15 @@ type Store = {
   addPayment: (p: Omit<Payment, "id">) => Promise<Payment>;
   updateInvoice: (id: string, patch: Partial<Invoice>) => Promise<void>;
   deleteInvoice: (id: string) => Promise<void>;
+  addEstimate: (e: Omit<Estimate, "id" | "number">) => Promise<Estimate>;
+  updateEstimate: (id: string, patch: Partial<Estimate>) => Promise<void>;
+  deleteEstimate: (id: string) => Promise<void>;
+  addSaleOrder: (s: Omit<SaleOrder, "id" | "number">) => Promise<SaleOrder>;
+  updateSaleOrder: (id: string, patch: Partial<SaleOrder>) => Promise<void>;
+  deleteSaleOrder: (id: string) => Promise<void>;
+  addPurchaseOrder: (p: Omit<PurchaseOrder, "id" | "number">) => Promise<PurchaseOrder>;
+  updatePurchaseOrder: (id: string, patch: Partial<PurchaseOrder>) => Promise<void>;
+  deletePurchaseOrder: (id: string) => Promise<void>;
   getCustomer: (id: string) => Customer | undefined;
   getInvoice: (id: string) => Invoice | undefined;
   refresh: () => Promise<void>;
@@ -114,35 +126,95 @@ function paymentFromRow(row: any): Payment {
   };
 }
 
+function estimateFromRow(row: any): Estimate {
+  return {
+    id: row.id,
+    number: row.number,
+    customerId: row.customer_id ?? "",
+    date: row.date,
+    validUntil: row.valid_until ?? "",
+    items: (row.items ?? []) as InvoiceItem[],
+    taxRate: Number(row.tax_rate ?? 0),
+    discountMode: (row.discount_mode as Estimate["discountMode"]) ?? "rate",
+    discountValue: Number(row.discount_value ?? 0),
+    shippingAmount: Number(row.shipping_amount ?? 0),
+    notes: row.notes ?? undefined,
+    status: row.status as Estimate["status"],
+  };
+}
+
+function saleOrderFromRow(row: any): SaleOrder {
+  return {
+    id: row.id,
+    number: row.number,
+    customerId: row.customer_id ?? "",
+    date: row.date,
+    deliveryDate: row.delivery_date ?? "",
+    items: (row.items ?? []) as InvoiceItem[],
+    taxRate: Number(row.tax_rate ?? 0),
+    discountMode: (row.discount_mode as SaleOrder["discountMode"]) ?? "rate",
+    discountValue: Number(row.discount_value ?? 0),
+    shippingAmount: Number(row.shipping_amount ?? 0),
+    notes: row.notes ?? undefined,
+    status: row.status as SaleOrder["status"],
+  };
+}
+
+function purchaseOrderFromRow(row: any): PurchaseOrder {
+  return {
+    id: row.id,
+    number: row.number,
+    supplierId: row.supplier_id ?? "",
+    supplierName: row.supplier_name ?? "",
+    date: row.date,
+    items: (row.items ?? []) as InvoiceItem[],
+    total: Number(row.total ?? 0),
+    status: row.status as PurchaseOrder["status"],
+  };
+}
+
 export function StoreProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated, ready } = useAuth();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [estimates, setEstimates] = useState<Estimate[]>([]);
+  const [saleOrders, setSaleOrders] = useState<SaleOrder[]>([]);
+  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
   const [loading, setLoading] = useState(true);
 
   const refresh = async () => {
     if (!isAuthenticated) {
       setCustomers([]); setProducts([]); setInvoices([]); setPayments([]);
+      setEstimates([]); setSaleOrders([]); setPurchaseOrders([]);
       setLoading(false);
       return;
     }
     setLoading(true);
-    const [c, p, i, pay] = await Promise.all([
+    const [c, p, i, pay, est, so, po] = await Promise.all([
       supabase.from("customers").select("*").order("created_at", { ascending: false }),
       supabase.from("products").select("*").order("created_at", { ascending: false }),
       supabase.from("invoices").select("*").order("created_at", { ascending: false }),
       supabase.from("payments").select("*").order("created_at", { ascending: false }),
+      supabase.from("estimates").select("*").order("created_at", { ascending: false }),
+      supabase.from("sale_orders").select("*").order("created_at", { ascending: false }),
+      supabase.from("purchase_orders").select("*").order("created_at", { ascending: false }),
     ]);
     if (c.error) toast.error(`Could not load customers: ${c.error.message}`);
     if (p.error) toast.error(`Could not load products: ${p.error.message}`);
     if (i.error) toast.error(`Could not load invoices: ${i.error.message}`);
     if (pay.error) toast.error(`Could not load payments: ${pay.error.message}`);
+    if (est.error) toast.error(`Could not load estimates: ${est.error.message}`);
+    if (so.error) toast.error(`Could not load sale orders: ${so.error.message}`);
+    if (po.error) toast.error(`Could not load purchase orders: ${po.error.message}`);
     setCustomers((c.data ?? []).map(customerFromRow));
     setProducts((p.data ?? []).map(productFromRow));
     setInvoices((i.data ?? []).map(invoiceFromRow));
     setPayments((pay.data ?? []).map(paymentFromRow));
+    setEstimates((est.data ?? []).map(estimateFromRow));
+    setSaleOrders((so.data ?? []).map(saleOrderFromRow));
+    setPurchaseOrders((po.data ?? []).map(purchaseOrderFromRow));
     setLoading(false);
   };
 
@@ -152,7 +224,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [ready, isAuthenticated]);
 
   const value = useMemo<Store>(() => ({
-    customers, products, invoices, payments, loading, refresh,
+    customers, products, invoices, payments, estimates, saleOrders, purchaseOrders, loading, refresh,
 
     addCustomer: async (c) => {
       const { data: userData } = await supabase.auth.getUser();
@@ -353,9 +425,136 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setInvoices((prev) => prev.filter((i) => i.id !== id));
     },
 
+    addEstimate: async (e) => {
+      const { data: userData } = await supabase.auth.getUser();
+      const { data, error } = await supabase.from("estimates").insert({
+        customer_id: e.customerId || null,
+        date: e.date,
+        valid_until: e.validUntil || null,
+        items: e.items as unknown as import("@/integrations/supabase/types").Json,
+        tax_rate: e.taxRate,
+        discount_mode: e.discountMode ?? "rate",
+        discount_value: e.discountValue ?? 0,
+        shipping_amount: e.shippingAmount ?? 0,
+        notes: e.notes || null,
+        status: e.status,
+        created_by: userData.user?.id,
+      }).select().single();
+      if (error || !data) throw new Error(error?.message || "Could not save estimate");
+      const ne = estimateFromRow(data);
+      setEstimates((prev) => [ne, ...prev]);
+      return ne;
+    },
+    updateEstimate: async (id, patch) => {
+      const dbPatch: Record<string, unknown> = {};
+      if (patch.customerId !== undefined) dbPatch.customer_id = patch.customerId || null;
+      if (patch.date !== undefined) dbPatch.date = patch.date;
+      if (patch.validUntil !== undefined) dbPatch.valid_until = patch.validUntil || null;
+      if (patch.items !== undefined) dbPatch.items = patch.items;
+      if (patch.taxRate !== undefined) dbPatch.tax_rate = patch.taxRate;
+      if (patch.discountMode !== undefined) dbPatch.discount_mode = patch.discountMode;
+      if (patch.discountValue !== undefined) dbPatch.discount_value = patch.discountValue;
+      if (patch.shippingAmount !== undefined) dbPatch.shipping_amount = patch.shippingAmount;
+      if (patch.notes !== undefined) dbPatch.notes = patch.notes;
+      if (patch.status !== undefined) dbPatch.status = patch.status;
+      const { data, error } = await supabase.from("estimates").update(dbPatch as any).eq("id", id).select().single();
+      if (error) throw new Error(error.message);
+      if (data) {
+        const updated = estimateFromRow(data);
+        setEstimates((prev) => prev.map((e) => (e.id === id ? updated : e)));
+      }
+    },
+    deleteEstimate: async (id) => {
+      const { error } = await supabase.from("estimates").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      setEstimates((prev) => prev.filter((e) => e.id !== id));
+    },
+
+    addSaleOrder: async (s) => {
+      const { data: userData } = await supabase.auth.getUser();
+      const { data, error } = await supabase.from("sale_orders").insert({
+        customer_id: s.customerId || null,
+        date: s.date,
+        delivery_date: s.deliveryDate || null,
+        items: s.items as unknown as import("@/integrations/supabase/types").Json,
+        tax_rate: s.taxRate,
+        discount_mode: s.discountMode ?? "rate",
+        discount_value: s.discountValue ?? 0,
+        shipping_amount: s.shippingAmount ?? 0,
+        notes: s.notes || null,
+        status: s.status,
+        created_by: userData.user?.id,
+      }).select().single();
+      if (error || !data) throw new Error(error?.message || "Could not save sale order");
+      const ns = saleOrderFromRow(data);
+      setSaleOrders((prev) => [ns, ...prev]);
+      return ns;
+    },
+    updateSaleOrder: async (id, patch) => {
+      const dbPatch: Record<string, unknown> = {};
+      if (patch.customerId !== undefined) dbPatch.customer_id = patch.customerId || null;
+      if (patch.date !== undefined) dbPatch.date = patch.date;
+      if (patch.deliveryDate !== undefined) dbPatch.delivery_date = patch.deliveryDate || null;
+      if (patch.items !== undefined) dbPatch.items = patch.items;
+      if (patch.taxRate !== undefined) dbPatch.tax_rate = patch.taxRate;
+      if (patch.discountMode !== undefined) dbPatch.discount_mode = patch.discountMode;
+      if (patch.discountValue !== undefined) dbPatch.discount_value = patch.discountValue;
+      if (patch.shippingAmount !== undefined) dbPatch.shipping_amount = patch.shippingAmount;
+      if (patch.notes !== undefined) dbPatch.notes = patch.notes;
+      if (patch.status !== undefined) dbPatch.status = patch.status;
+      const { data, error } = await supabase.from("sale_orders").update(dbPatch as any).eq("id", id).select().single();
+      if (error) throw new Error(error.message);
+      if (data) {
+        const updated = saleOrderFromRow(data);
+        setSaleOrders((prev) => prev.map((s) => (s.id === id ? updated : s)));
+      }
+    },
+    deleteSaleOrder: async (id) => {
+      const { error } = await supabase.from("sale_orders").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      setSaleOrders((prev) => prev.filter((s) => s.id !== id));
+    },
+
+    addPurchaseOrder: async (p) => {
+      const { data: userData } = await supabase.auth.getUser();
+      const { data, error } = await supabase.from("purchase_orders").insert({
+        supplier_id: p.supplierId || null,
+        supplier_name: p.supplierName,
+        date: p.date,
+        items: p.items as unknown as import("@/integrations/supabase/types").Json,
+        total: p.total,
+        status: p.status,
+        created_by: userData.user?.id,
+      }).select().single();
+      if (error || !data) throw new Error(error?.message || "Could not save purchase order");
+      const np = purchaseOrderFromRow(data);
+      setPurchaseOrders((prev) => [np, ...prev]);
+      return np;
+    },
+    updatePurchaseOrder: async (id, patch) => {
+      const dbPatch: Record<string, unknown> = {};
+      if (patch.supplierId !== undefined) dbPatch.supplier_id = patch.supplierId || null;
+      if (patch.supplierName !== undefined) dbPatch.supplier_name = patch.supplierName;
+      if (patch.date !== undefined) dbPatch.date = patch.date;
+      if (patch.items !== undefined) dbPatch.items = patch.items;
+      if (patch.total !== undefined) dbPatch.total = patch.total;
+      if (patch.status !== undefined) dbPatch.status = patch.status;
+      const { data, error } = await supabase.from("purchase_orders").update(dbPatch as any).eq("id", id).select().single();
+      if (error) throw new Error(error.message);
+      if (data) {
+        const updated = purchaseOrderFromRow(data);
+        setPurchaseOrders((prev) => prev.map((p) => (p.id === id ? updated : p)));
+      }
+    },
+    deletePurchaseOrder: async (id) => {
+      const { error } = await supabase.from("purchase_orders").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      setPurchaseOrders((prev) => prev.filter((p) => p.id !== id));
+    },
+
     getCustomer: (id) => customers.find((c) => c.id === id),
     getInvoice: (id) => invoices.find((i) => i.id === id || i.number === id),
-  }), [customers, products, invoices, payments, loading]);
+  }), [customers, products, invoices, payments, estimates, saleOrders, purchaseOrders, loading]);
 
   return <StoreCtx.Provider value={value}>{children}</StoreCtx.Provider>;
 }
