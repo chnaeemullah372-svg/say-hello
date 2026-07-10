@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
+  ArrowLeftRight,
   Banknote,
   Bell,
   Boxes,
@@ -9,6 +10,7 @@ import {
   DatabaseBackup,
   FileBarChart,
   FileCog,
+  FileSignature,
   FileText,
   Hash,
   Image,
@@ -47,6 +49,8 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { useStore } from "@/lib/store";
+import type { AccountType } from "@/lib/dummy-data";
 import { useTheme } from "@/lib/theme";
 import { toast } from "sonner";
 
@@ -65,8 +69,9 @@ export const Route = createFileRoute("/settings")({
 });
 
 type SectionKey = keyof SettingsState;
+type ActiveKey = SectionKey | "accounts" | "fundManagement";
 type Category = {
-  key: SectionKey;
+  key: ActiveKey;
   title: string;
   subtitle: string;
   icon: typeof Store;
@@ -77,7 +82,8 @@ type Category = {
 type SettingsState = {
   business: Record<string, string | boolean>;
   invoice: Record<string, string | boolean>;
-  tax: Record<string, string | boolean>;
+  tax: Record<string, any>;
+  terms: Record<string, string | boolean>;
   numbering: Record<string, string | boolean>;
   print: Record<string, string | boolean>;
   items: Record<string, string | boolean>;
@@ -130,8 +136,11 @@ const defaults: SettingsState = {
     currency: "INR",
     symbol: "₹",
     gstEnabled: true,
-    defaultTax: "18",
-    taxMode: "exclusive",
+    discountScope: "perItem",
+    taxScope: "perItem",
+    taxList: [
+      { id: "t1", name: "GST", pct: "18", inclusive: false, enabled: true },
+    ],
     interstateTax: "auto",
     cess: false,
     tds: true,
@@ -142,6 +151,14 @@ const defaults: SettingsState = {
     tds194h: "5",
     tds194q: "0.1",
   },
+  terms: {
+    invoiceTerms: "Goods once sold will not be taken back. Subject to local jurisdiction.",
+    estimateTerms: "This estimate is valid for 15 days from the date of issue.",
+    purchaseTerms: "Payment due within 30 days of invoice date.",
+    purchaseOrderTerms: "3 Once will not be refunded.",
+    saleOrderTerms: "Payment 30 days after invoice date, order will be charged.",
+    deliveryNoteTerms: "Goods once delivered will not be returned unless a manufacturing defect is present.",
+  },
   numbering: {
     invoicePrefix: "INV-",
     invoiceNext: "1042",
@@ -149,14 +166,33 @@ const defaults: SettingsState = {
     estimateNext: "312",
     saleOrderPrefix: "SO-",
     saleOrderNext: "128",
+    purchaseOrderPrefix: "PO-",
+    purchaseOrderNext: "1",
     deliveryPrefix: "DN-",
     deliveryNext: "76",
     purchasePrefix: "PUR-",
     purchaseNext: "612",
+    saleReturnPrefix: "SR-",
+    saleReturnNext: "1",
+    purchaseReturnPrefix: "PR-",
+    purchaseReturnNext: "1",
     paymentPrefix: "RCPT-",
     paymentNext: "540",
     expensePrefix: "EXP-",
     expenseNext: "220",
+    subscriptionPrefix: "SUB-",
+    subscriptionNext: "1",
+    productionPrefix: "PR-",
+    productionNext: "1",
+    businessLicenceName: "GSTIN",
+    country: "Pakistan",
+    currency: "PKR",
+    currencyMajorUnit: "Rupee",
+    currencyMinorUnit: "Paisa",
+    separator: "and",
+    suffix: "only",
+    numberFormat: "1,000,000.00",
+    dateFormat: "dd-mm-yyyy",
     financialYear: "2026-27",
     autoReset: true,
   },
@@ -275,7 +311,10 @@ const categories: Category[] = [
   { key: "business", title: "Business Profile", subtitle: "Logo, GST, address", icon: Store, badge: "Main", tone: "text-primary bg-primary/10 ring-primary/20" },
   { key: "invoice", title: "Invoice Setup", subtitle: "Columns, terms, QR", icon: ReceiptText, badge: "A-Z", tone: "text-sapphire bg-sapphire/10 ring-sapphire/20" },
   { key: "tax", title: "Tax / GST / TDS", subtitle: "Rates and sections", icon: Percent, badge: "TDS", tone: "text-coral bg-coral/10 ring-coral/20" },
-  { key: "numbering", title: "Numbering", subtitle: "Prefixes and counters", icon: Hash, tone: "text-amber bg-amber/10 ring-amber/20" },
+  { key: "terms", title: "Terms & Condition", subtitle: "Per-document terms text", icon: FileSignature, tone: "text-jade bg-jade/10 ring-jade/20" },
+  { key: "accounts", title: "Accounts & Categories", subtitle: "Payment accounts & expense categories", icon: Landmark, tone: "text-orchid bg-orchid/10 ring-orchid/20" },
+  { key: "fundManagement", title: "Fund Management", subtitle: "Transfer money between accounts", icon: ArrowLeftRight, tone: "text-aqua bg-aqua/10 ring-aqua/20" },
+  { key: "numbering", title: "Prefix & Localization", subtitle: "Prefixes, country, currency, formats", icon: Hash, tone: "text-amber bg-amber/10 ring-amber/20" },
   { key: "print", title: "Page & Print", subtitle: "A4, thermal, PDF", icon: Printer, tone: "text-jade bg-jade/10 ring-jade/20" },
   { key: "items", title: "Items & Stock", subtitle: "Products, units, alerts", icon: Boxes, tone: "text-orchid bg-orchid/10 ring-orchid/20" },
   { key: "payment", title: "Payment", subtitle: "Cash, UPI, due", icon: WalletCards, tone: "text-aqua bg-aqua/10 ring-aqua/20" },
@@ -292,7 +331,7 @@ const categories: Category[] = [
 function SettingsPage() {
   const { user } = useAuth();
   const { theme, toggle } = useTheme();
-  const [active, setActive] = useState<SectionKey>("business");
+  const [active, setActive] = useState<ActiveKey>("business");
   const [settings, setSettings] = useState<SettingsState>(defaults);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<SectionKey | null>(null);
@@ -326,7 +365,7 @@ function SettingsPage() {
     return () => { mounted = false; };
   }, []);
 
-  const setField = (section: SectionKey, field: string, value: string | boolean) => {
+  const setField = (section: SectionKey, field: string, value: any) => {
     setSettings((current) => ({ ...current, [section]: { ...current[section], [field]: value } }));
   };
 
@@ -424,15 +463,20 @@ function SettingsPage() {
               <h1 className="font-display text-xl font-bold leading-tight">{activeCategory.title}</h1>
               <p className="text-sm text-muted-foreground">{activeCategory.subtitle}</p>
             </div>
-            <Button onClick={() => saveSection(active)} disabled={saving === active}>
-              {saving === active ? <RefreshCw className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}
-              Save
-            </Button>
+            {active !== "accounts" && active !== "fundManagement" && (
+              <Button onClick={() => saveSection(active as SectionKey)} disabled={saving === active}>
+                {saving === active ? <RefreshCw className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}
+                Save
+              </Button>
+            )}
           </div>
 
           {active === "business" && <BusinessPanel data={settings.business} set={(k, v) => setField("business", k, v)} />}
           {active === "invoice" && <InvoicePanel data={settings.invoice} set={(k, v) => setField("invoice", k, v)} />}
           {active === "tax" && <TaxPanel data={settings.tax} set={(k, v) => setField("tax", k, v)} />}
+          {active === "terms" && <TermsPanel data={settings.terms} set={(k, v) => setField("terms", k, v)} />}
+          {active === "accounts" && <AccountsPanel />}
+          {active === "fundManagement" && <FundManagementPanel />}
           {active === "numbering" && <NumberingPanel data={settings.numbering} set={(k, v) => setField("numbering", k, v)} />}
           {active === "print" && <PrintPanel data={settings.print} set={(k, v) => setField("print", k, v)} />}
           {active === "items" && <ItemsPanel data={settings.items} set={(k, v) => setField("items", k, v)} />}
@@ -502,7 +546,6 @@ function InvoicePanel({ data, set }: PanelProps) {
         </ToggleGrid>
       </SettingBlock>
       <Grid>
-        <TextAreaField label="Default terms & conditions" value={data.terms} onChange={(v) => set("terms", v)} />
         <TextAreaField label="Default invoice notes" value={data.notes} onChange={(v) => set("notes", v)} />
       </Grid>
     </Panel>
@@ -510,16 +553,62 @@ function InvoicePanel({ data, set }: PanelProps) {
 }
 
 function TaxPanel({ data, set }: PanelProps) {
+  const taxList: { id: string; name: string; pct: string; inclusive: boolean; enabled: boolean }[] = data.taxList ?? [];
+
+  const updateTax = (id: string, patch: Partial<(typeof taxList)[number]>) => {
+    set("taxList", taxList.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+  };
+  const addTax = () => {
+    set("taxList", [...taxList, { id: `t${Date.now()}`, name: "New Tax", pct: "0", inclusive: false, enabled: true }]);
+  };
+  const removeTax = (id: string) => set("taxList", taxList.filter((t) => t.id !== id));
+
   return (
     <Panel>
       <PanelHeader icon={Percent} title="Tax, GST, TDS and currency" subtitle="Default calculations for invoice, purchase and payment entries." />
       <Grid>
         <SelectField label="Currency" value={data.currency} onChange={(v) => set("currency", v)} options={["INR", "USD", "EUR", "GBP", "AED", "PKR"]} />
         <TextField label="Currency symbol" value={data.symbol} onChange={(v) => set("symbol", v)} />
-        <TextField label="Default GST %" value={data.defaultTax} onChange={(v) => set("defaultTax", v)} type="number" />
-        <SelectField label="Tax mode" value={data.taxMode} onChange={(v) => set("taxMode", v)} options={["exclusive", "inclusive"]} />
         <SelectField label="Interstate GST" value={data.interstateTax} onChange={(v) => set("interstateTax", v)} options={["auto", "igst", "cgst-sgst"]} />
       </Grid>
+
+      <SettingBlock title="Discount setting" icon={Percent}>
+        <div className="inline-flex rounded-lg border bg-muted/40 p-1">
+          {(["perItem", "overallBill"] as const).map((v) => (
+            <button key={v} type="button" onClick={() => set("discountScope", v)}
+              className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${data.discountScope === v ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>
+              {v === "perItem" ? "Per Item" : "Overall Bill"}
+            </button>
+          ))}
+        </div>
+      </SettingBlock>
+
+      <SettingBlock title="Tax setting" icon={Percent}>
+        <div className="mb-3 inline-flex rounded-lg border bg-muted/40 p-1">
+          {(["perItem", "overallBill"] as const).map((v) => (
+            <button key={v} type="button" onClick={() => set("taxScope", v)}
+              className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${data.taxScope === v ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>
+              {v === "perItem" ? "Per Item" : "Overall Bill"}
+            </button>
+          ))}
+        </div>
+        <div className="space-y-2">
+          {taxList.map((t) => (
+            <div key={t.id} className="grid grid-cols-[1fr_90px_auto_auto_auto] items-center gap-2 rounded-lg border bg-card p-2">
+              <Input value={t.name} onChange={(e) => updateTax(t.id, { name: e.target.value })} placeholder="Tax name" />
+              <Input type="number" value={t.pct} onChange={(e) => updateTax(t.id, { pct: e.target.value })} placeholder="%" />
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Switch checked={t.inclusive} onCheckedChange={(v) => updateTax(t.id, { inclusive: v })} />
+                Inclusive
+              </label>
+              <Switch checked={t.enabled} onCheckedChange={(v) => updateTax(t.id, { enabled: v })} />
+              <Button variant="ghost" size="icon" className="text-destructive" onClick={() => removeTax(t.id)}><Trash2 className="h-4 w-4" /></Button>
+            </div>
+          ))}
+        </div>
+        <Button type="button" variant="outline" size="sm" className="mt-2" onClick={addTax}><Plus className="mr-1.5 h-4 w-4" />Add new tax</Button>
+      </SettingBlock>
+
       <ToggleGrid>
         <ToggleField label="Enable GST" checked={data.gstEnabled} onChange={(v) => set("gstEnabled", v)} />
         <ToggleField label="Enable cess" checked={data.cess} onChange={(v) => set("cess", v)} />
@@ -539,15 +628,182 @@ function TaxPanel({ data, set }: PanelProps) {
   );
 }
 
+function TermsPanel({ data, set }: PanelProps) {
+  const fields: [string, string][] = [
+    ["invoiceTerms", "Invoice Terms & Condition"],
+    ["estimateTerms", "Estimate Terms & Condition"],
+    ["purchaseTerms", "Purchase Terms & Condition"],
+    ["purchaseOrderTerms", "Purchase Order Terms & Condition"],
+    ["saleOrderTerms", "Sale Order Terms & Condition"],
+    ["deliveryNoteTerms", "Delivery Note Terms & Condition"],
+  ];
+  return (
+    <Panel>
+      <PanelHeader icon={FileSignature} title="Terms & Condition" subtitle="Separate terms shown on each document type — invoices, estimates, purchases, etc." />
+      <div className="grid gap-4">
+        {fields.map(([key, label]) => (
+          <div key={key} className="grid gap-1.5 rounded-lg border bg-card p-3">
+            <Label className="text-sm font-semibold">{label}</Label>
+            <Textarea rows={2} value={data[key] ?? ""} onChange={(e) => set(key, e.target.value)} placeholder="Write your terms and conditions…" />
+          </div>
+        ))}
+      </div>
+    </Panel>
+  );
+}
+
+function AccountsPanel() {
+  const { accounts, addAccount, updateAccount, deleteAccount } = useStore();
+  const [name, setName] = useState("");
+  const [accountType, setAccountType] = useState<AccountType>("payment");
+  const [openingBalance, setOpeningBalance] = useState(0);
+  const [openingDate, setOpeningDate] = useState(new Date().toISOString().slice(0, 10));
+  const [saving, setSaving] = useState(false);
+
+  const create = async () => {
+    if (!name.trim()) return toast.error("Name is required");
+    setSaving(true);
+    try {
+      await addAccount({ name: name.trim(), accountType, openingBalance, openingDate });
+      toast.success("Account created");
+      setName(""); setOpeningBalance(0); setOpeningDate(new Date().toISOString().slice(0, 10));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not create account");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Panel>
+      <PanelHeader icon={Landmark} title="Accounts & Categories" subtitle="Create accounts for payments, expenses, and warehouses. Helps organize and track your money and stock." />
+      <div className="grid gap-3 rounded-lg border bg-card p-4 sm:grid-cols-[140px_1fr_140px_160px_auto]">
+        <SelectField label="Select Type" value={accountType} onChange={(v) => setAccountType(v as AccountType)} options={["payment", "category"]} />
+        <TextField label="Name" value={name} onChange={setName} />
+        <TextField label="Opening Balance" value={String(openingBalance)} onChange={(v) => setOpeningBalance(+v || 0)} type="number" />
+        <TextField label="Opening Date" value={openingDate} onChange={setOpeningDate} type="date" />
+        <Button className="self-end" onClick={create} disabled={saving}><Plus className="mr-1.5 h-4 w-4" />Add</Button>
+      </div>
+
+      <div className="overflow-x-auto rounded-lg border">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/50 text-xs uppercase text-muted-foreground">
+            <tr><th className="px-3 py-2 text-left">Name</th><th className="px-3 py-2 text-left">Type</th><th className="px-3 py-2 text-right">Opening</th><th className="px-3 py-2 text-right">Current Balance</th><th className="px-3 py-2 text-left">Date</th><th /></tr>
+          </thead>
+          <tbody>
+            {accounts.length === 0 && <tr><td colSpan={6} className="px-3 py-6 text-center text-muted-foreground">No accounts yet</td></tr>}
+            {accounts.map((a) => (
+              <tr key={a.id} className="border-t">
+                <td className="px-3 py-2 font-medium">{a.name}</td>
+                <td className="px-3 py-2 capitalize text-muted-foreground">{a.accountType}</td>
+                <td className="px-3 py-2 text-right">{a.openingBalance.toFixed(2)}</td>
+                <td className="px-3 py-2 text-right font-semibold">{a.currentBalance.toFixed(2)}</td>
+                <td className="px-3 py-2 text-muted-foreground">{a.openingDate}</td>
+                <td className="px-3 py-2 text-right">
+                  <button
+                    type="button"
+                    onClick={async () => { try { await deleteAccount(a.id); toast.success("Deleted"); } catch (err) { toast.error(err instanceof Error ? err.message : "Could not delete"); } }}
+                    className="text-destructive hover:underline"
+                  >Delete</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Panel>
+  );
+}
+
+function FundManagementPanel() {
+  const { accounts, fundTransfers, addFundTransfer } = useStore();
+  const [fromId, setFromId] = useState("");
+  const [toId, setToId] = useState("");
+  const [amount, setAmount] = useState(0);
+  const [remarks, setRemarks] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const accountName = (id: string) => accounts.find((a) => a.id === id)?.name ?? "—";
+
+  const transfer = async () => {
+    if (!fromId || !toId) return toast.error("Select both accounts");
+    if (amount <= 0) return toast.error("Enter an amount");
+    setSaving(true);
+    try {
+      await addFundTransfer({ fromAccountId: fromId, toAccountId: toId, amount, remarks, date: new Date().toISOString().slice(0, 10) });
+      toast.success("Transfer recorded");
+      setFromId(""); setToId(""); setAmount(0); setRemarks("");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not record transfer");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Panel>
+      <PanelHeader icon={ArrowLeftRight} title="Fund Management" subtitle="Transfer money between payment accounts. Keeps proper records of fund movement." />
+      {accounts.length === 0 ? (
+        <div className="rounded-lg border bg-muted/25 p-4 text-sm text-muted-foreground">
+          Create at least two accounts under "Accounts & Categories" first.
+        </div>
+      ) : (
+        <div className="grid gap-3 rounded-lg border bg-card p-4 sm:grid-cols-2">
+          <div className="grid gap-1.5">
+            <Label>From Account</Label>
+            <Select value={fromId} onValueChange={setFromId}>
+              <SelectTrigger><SelectValue placeholder="Select account" /></SelectTrigger>
+              <SelectContent>{accounts.map((a) => <SelectItem key={a.id} value={a.id}>{a.name} ({a.currentBalance.toFixed(2)})</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-1.5">
+            <Label>To Account</Label>
+            <Select value={toId} onValueChange={setToId}>
+              <SelectTrigger><SelectValue placeholder="Select account" /></SelectTrigger>
+              <SelectContent>{accounts.map((a) => <SelectItem key={a.id} value={a.id}>{a.name} ({a.currentBalance.toFixed(2)})</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <TextField label="Amount" value={String(amount)} onChange={(v) => setAmount(+v || 0)} type="number" />
+          <TextField label="Remarks" value={remarks} onChange={setRemarks} />
+          <Button className="sm:col-span-2" onClick={transfer} disabled={saving}>{saving ? "Transferring…" : "Transfer"}</Button>
+        </div>
+      )}
+
+      <div className="overflow-x-auto rounded-lg border">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/50 text-xs uppercase text-muted-foreground">
+            <tr><th className="px-3 py-2 text-left">Date</th><th className="px-3 py-2 text-left">From</th><th className="px-3 py-2 text-left">To</th><th className="px-3 py-2 text-right">Amount</th><th className="px-3 py-2 text-left">Remarks</th></tr>
+          </thead>
+          <tbody>
+            {fundTransfers.length === 0 && <tr><td colSpan={5} className="px-3 py-6 text-center text-muted-foreground">No transfers yet</td></tr>}
+            {fundTransfers.map((f) => (
+              <tr key={f.id} className="border-t">
+                <td className="px-3 py-2 text-muted-foreground">{f.date}</td>
+                <td className="px-3 py-2">{accountName(f.fromAccountId)}</td>
+                <td className="px-3 py-2">{accountName(f.toAccountId)}</td>
+                <td className="px-3 py-2 text-right font-semibold">{f.amount.toFixed(2)}</td>
+                <td className="px-3 py-2 text-muted-foreground">{f.remarks || "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Panel>
+  );
+}
+
 function NumberingPanel({ data, set }: PanelProps) {
   const docs = [
     ["Invoice", "invoicePrefix", "invoiceNext"], ["Estimate", "estimatePrefix", "estimateNext"],
-    ["Sale Order", "saleOrderPrefix", "saleOrderNext"], ["Delivery Note", "deliveryPrefix", "deliveryNext"],
-    ["Purchase", "purchasePrefix", "purchaseNext"], ["Payment", "paymentPrefix", "paymentNext"], ["Expense", "expensePrefix", "expenseNext"],
+    ["Purchase", "purchasePrefix", "purchaseNext"], ["Purchase Order", "purchaseOrderPrefix", "purchaseOrderNext"],
+    ["Sale Order", "saleOrderPrefix", "saleOrderNext"], ["Receipt", "paymentPrefix", "paymentNext"],
+    ["Expense", "expensePrefix", "expenseNext"], ["Sale Return", "saleReturnPrefix", "saleReturnNext"],
+    ["Purchase Return", "purchaseReturnPrefix", "purchaseReturnNext"], ["Delivery Note", "deliveryPrefix", "deliveryNext"],
+    ["Subscription", "subscriptionPrefix", "subscriptionNext"], ["Production", "productionPrefix", "productionNext"],
   ] as const;
   return (
     <Panel>
-      <PanelHeader icon={Hash} title="Document numbering" subtitle="Prefix, next number and yearly reset for every document." />
+      <PanelHeader icon={Hash} title="Prefix & Localization" subtitle="Prefix, next number and yearly reset for every document, plus country, currency and format." />
       <Grid>
         <TextField label="Financial year label" value={data.financialYear} onChange={(v) => set("financialYear", v)} />
         <ToggleField label="Auto reset numbers every financial year" checked={data.autoReset} onChange={(v) => set("autoReset", v)} />
@@ -561,6 +817,20 @@ function NumberingPanel({ data, set }: PanelProps) {
           </div>
         ))}
       </div>
+
+      <SettingBlock title="Country & currency" icon={Landmark}>
+        <Grid>
+          <TextField label="Country" value={data.country} onChange={(v) => set("country", v)} />
+          <TextField label="Currency" value={data.currency} onChange={(v) => set("currency", v)} />
+          <TextField label="Currency major unit" value={data.currencyMajorUnit} onChange={(v) => set("currencyMajorUnit", v)} placeholder="e.g. Dollar / Euro / Rupee" />
+          <TextField label="Currency minor unit" value={data.currencyMinorUnit} onChange={(v) => set("currencyMinorUnit", v)} placeholder="e.g. Cent / Paisa" />
+          <TextField label="Separator (amount in words)" value={data.separator} onChange={(v) => set("separator", v)} />
+          <TextField label="Suffix (amount in words)" value={data.suffix} onChange={(v) => set("suffix", v)} />
+          <SelectField label="Number format" value={data.numberFormat} onChange={(v) => set("numberFormat", v)} options={["1,000,000.00", "10,00,000.00", "1.000.000,00", "1 000 000.00"]} />
+          <SelectField label="Date format" value={data.dateFormat} onChange={(v) => set("dateFormat", v)} options={["dd-mm-yyyy", "mm-dd-yyyy", "yyyy-mm-dd"]} />
+          <TextField label="Business Licence Name" value={data.businessLicenceName} onChange={(v) => set("businessLicenceName", v)} placeholder="e.g. GSTIN / VAT" />
+        </Grid>
+      </SettingBlock>
     </Panel>
   );
 }
@@ -807,8 +1077,8 @@ function SecurityPanel({ data, set }: PanelProps) {
 }
 
 type PanelProps = {
-  data: Record<string, string | boolean>;
-  set: (field: string, value: string | boolean) => void;
+  data: Record<string, any>;
+  set: (field: string, value: any) => void;
 };
 
 function Panel({ children }: { children: ReactNode }) {
@@ -835,11 +1105,11 @@ function ToggleGrid({ children }: { children: ReactNode }) {
   return <div className="grid gap-3 md:grid-cols-2">{children}</div>;
 }
 
-function TextField({ label, value, onChange, type = "text" }: { label: string; value: string | boolean; onChange: (value: string) => void; type?: string }) {
+function TextField({ label, value, onChange, type = "text", placeholder }: { label: string; value: string | boolean; onChange: (value: string) => void; type?: string; placeholder?: string }) {
   return (
     <div className="grid gap-1.5">
       <Label>{label}</Label>
-      <Input type={type} value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} />
+      <Input type={type} value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
     </div>
   );
 }

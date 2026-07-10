@@ -41,6 +41,75 @@ export type Database = {
         }
         Relationships: []
       }
+      accounts: {
+        Row: {
+          account_type: string
+          created_at: string
+          created_by: string | null
+          current_balance: number
+          id: string
+          name: string
+          opening_balance: number
+          opening_date: string
+          updated_at: string
+        }
+        Insert: {
+          account_type?: string
+          created_at?: string
+          created_by?: string | null
+          current_balance?: number
+          id?: string
+          name: string
+          opening_balance?: number
+          opening_date?: string
+          updated_at?: string
+        }
+        Update: {
+          account_type?: string
+          created_at?: string
+          created_by?: string | null
+          current_balance?: number
+          id?: string
+          name?: string
+          opening_balance?: number
+          opening_date?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      fund_transfers: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          date: string
+          from_account_id: string | null
+          id: string
+          remarks: string | null
+          to_account_id: string | null
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          date?: string
+          from_account_id?: string | null
+          id?: string
+          remarks?: string | null
+          to_account_id?: string | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          date?: string
+          from_account_id?: string | null
+          id?: string
+          remarks?: string | null
+          to_account_id?: string | null
+        }
+        Relationships: []
+      }
       customers: {
         Row: {
           address: string | null

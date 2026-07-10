@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
-import type { Customer, Product, Invoice, Payment, InvoiceItem, Estimate, SaleOrder, PurchaseOrder } from "./dummy-data";
+import type { Customer, Product, Invoice, Payment, InvoiceItem, Estimate, SaleOrder, PurchaseOrder, Account, FundTransfer } from "./dummy-data";
 
 type Store = {
   customers: Customer[];
@@ -12,6 +12,8 @@ type Store = {
   estimates: Estimate[];
   saleOrders: SaleOrder[];
   purchaseOrders: PurchaseOrder[];
+  accounts: Account[];
+  fundTransfers: FundTransfer[];
   loading: boolean;
   addCustomer: (c: Omit<Customer, "id" | "balance"> & { balance?: number }) => Promise<Customer>;
   updateCustomer: (id: string, patch: Partial<Customer>) => Promise<void>;
@@ -30,6 +32,10 @@ type Store = {
   addPurchaseOrder: (p: Omit<PurchaseOrder, "id" | "number">) => Promise<PurchaseOrder>;
   updatePurchaseOrder: (id: string, patch: Partial<PurchaseOrder>) => Promise<void>;
   deletePurchaseOrder: (id: string) => Promise<void>;
+  addAccount: (a: Omit<Account, "id" | "currentBalance">) => Promise<Account>;
+  updateAccount: (id: string, patch: Partial<Account>) => Promise<void>;
+  deleteAccount: (id: string) => Promise<void>;
+  addFundTransfer: (f: Omit<FundTransfer, "id">) => Promise<FundTransfer>;
   getCustomer: (id: string) => Customer | undefined;
   getInvoice: (id: string) => Invoice | undefined;
   refresh: () => Promise<void>;
@@ -173,6 +179,28 @@ function purchaseOrderFromRow(row: any): PurchaseOrder {
   };
 }
 
+function accountFromRow(row: any): Account {
+  return {
+    id: row.id,
+    name: row.name,
+    accountType: (row.account_type as Account["accountType"]) ?? "payment",
+    openingBalance: Number(row.opening_balance ?? 0),
+    openingDate: row.opening_date,
+    currentBalance: Number(row.current_balance ?? 0),
+  };
+}
+
+function fundTransferFromRow(row: any): FundTransfer {
+  return {
+    id: row.id,
+    fromAccountId: row.from_account_id ?? "",
+    toAccountId: row.to_account_id ?? "",
+    amount: Number(row.amount ?? 0),
+    remarks: row.remarks ?? undefined,
+    date: row.date,
+  };
+}
+
 export function StoreProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated, ready } = useAuth();
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -182,17 +210,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [estimates, setEstimates] = useState<Estimate[]>([]);
   const [saleOrders, setSaleOrders] = useState<SaleOrder[]>([]);
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [fundTransfers, setFundTransfers] = useState<FundTransfer[]>([]);
   const [loading, setLoading] = useState(true);
 
   const refresh = async () => {
     if (!isAuthenticated) {
       setCustomers([]); setProducts([]); setInvoices([]); setPayments([]);
       setEstimates([]); setSaleOrders([]); setPurchaseOrders([]);
+      setAccounts([]); setFundTransfers([]);
       setLoading(false);
       return;
     }
     setLoading(true);
-    const [c, p, i, pay, est, so, po] = await Promise.all([
+    const [c, p, i, pay, est, so, po, acc, ft] = await Promise.all([
       supabase.from("customers").select("*").order("created_at", { ascending: false }),
       supabase.from("products").select("*").order("created_at", { ascending: false }),
       supabase.from("invoices").select("*").order("created_at", { ascending: false }),
@@ -200,6 +231,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       supabase.from("estimates").select("*").order("created_at", { ascending: false }),
       supabase.from("sale_orders").select("*").order("created_at", { ascending: false }),
       supabase.from("purchase_orders").select("*").order("created_at", { ascending: false }),
+      supabase.from("accounts").select("*").order("created_at", { ascending: false }),
+      supabase.from("fund_transfers").select("*").order("created_at", { ascending: false }),
     ]);
     if (c.error) toast.error(`Could not load customers: ${c.error.message}`);
     if (p.error) toast.error(`Could not load products: ${p.error.message}`);
@@ -208,6 +241,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (est.error) toast.error(`Could not load estimates: ${est.error.message}`);
     if (so.error) toast.error(`Could not load sale orders: ${so.error.message}`);
     if (po.error) toast.error(`Could not load purchase orders: ${po.error.message}`);
+    if (acc.error) toast.error(`Could not load accounts: ${acc.error.message}`);
+    if (ft.error) toast.error(`Could not load fund transfers: ${ft.error.message}`);
     setCustomers((c.data ?? []).map(customerFromRow));
     setProducts((p.data ?? []).map(productFromRow));
     setInvoices((i.data ?? []).map(invoiceFromRow));
@@ -215,6 +250,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setEstimates((est.data ?? []).map(estimateFromRow));
     setSaleOrders((so.data ?? []).map(saleOrderFromRow));
     setPurchaseOrders((po.data ?? []).map(purchaseOrderFromRow));
+    setAccounts((acc.data ?? []).map(accountFromRow));
+    setFundTransfers((ft.data ?? []).map(fundTransferFromRow));
     setLoading(false);
   };
 
@@ -224,7 +261,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [ready, isAuthenticated]);
 
   const value = useMemo<Store>(() => ({
-    customers, products, invoices, payments, estimates, saleOrders, purchaseOrders, loading, refresh,
+    customers, products, invoices, payments, estimates, saleOrders, purchaseOrders, accounts, fundTransfers, loading, refresh,
 
     addCustomer: async (c) => {
       const { data: userData } = await supabase.auth.getUser();
@@ -552,9 +589,73 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setPurchaseOrders((prev) => prev.filter((p) => p.id !== id));
     },
 
+    addAccount: async (a) => {
+      const { data: userData } = await supabase.auth.getUser();
+      const { data, error } = await supabase.from("accounts").insert({
+        name: a.name,
+        account_type: a.accountType,
+        opening_balance: a.openingBalance,
+        opening_date: a.openingDate,
+        current_balance: a.openingBalance,
+        created_by: userData.user?.id,
+      }).select().single();
+      if (error || !data) throw new Error(error?.message || "Could not save account");
+      const na = accountFromRow(data);
+      setAccounts((prev) => [na, ...prev]);
+      return na;
+    },
+    updateAccount: async (id, patch) => {
+      const dbPatch: Record<string, unknown> = {};
+      if (patch.name !== undefined) dbPatch.name = patch.name;
+      if (patch.accountType !== undefined) dbPatch.account_type = patch.accountType;
+      if (patch.openingBalance !== undefined) dbPatch.opening_balance = patch.openingBalance;
+      if (patch.openingDate !== undefined) dbPatch.opening_date = patch.openingDate;
+      if (patch.currentBalance !== undefined) dbPatch.current_balance = patch.currentBalance;
+      const { data, error } = await supabase.from("accounts").update(dbPatch as any).eq("id", id).select().single();
+      if (error) throw new Error(error.message);
+      if (data) {
+        const updated = accountFromRow(data);
+        setAccounts((prev) => prev.map((a) => (a.id === id ? updated : a)));
+      }
+    },
+    deleteAccount: async (id) => {
+      const { error } = await supabase.from("accounts").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      setAccounts((prev) => prev.filter((a) => a.id !== id));
+    },
+
+    addFundTransfer: async (f) => {
+      if (f.fromAccountId === f.toAccountId) throw new Error("From and To accounts must be different");
+      const { data: userData } = await supabase.auth.getUser();
+      const { data, error } = await supabase.from("fund_transfers").insert({
+        from_account_id: f.fromAccountId || null,
+        to_account_id: f.toAccountId || null,
+        amount: f.amount,
+        remarks: f.remarks || null,
+        date: f.date,
+        created_by: userData.user?.id,
+      }).select().single();
+      if (error || !data) throw new Error(error?.message || "Could not record transfer");
+      const nf = fundTransferFromRow(data);
+      setFundTransfers((prev) => [nf, ...prev]);
+
+      // Move the balance between the two accounts
+      const from = accounts.find((a) => a.id === f.fromAccountId);
+      const to = accounts.find((a) => a.id === f.toAccountId);
+      if (from) {
+        const { data: d1 } = await supabase.from("accounts").update({ current_balance: from.currentBalance - f.amount } as any).eq("id", from.id).select().single();
+        if (d1) setAccounts((prev) => prev.map((a) => (a.id === from.id ? accountFromRow(d1) : a)));
+      }
+      if (to) {
+        const { data: d2 } = await supabase.from("accounts").update({ current_balance: to.currentBalance + f.amount } as any).eq("id", to.id).select().single();
+        if (d2) setAccounts((prev) => prev.map((a) => (a.id === to.id ? accountFromRow(d2) : a)));
+      }
+      return nf;
+    },
+
     getCustomer: (id) => customers.find((c) => c.id === id),
     getInvoice: (id) => invoices.find((i) => i.id === id || i.number === id),
-  }), [customers, products, invoices, payments, estimates, saleOrders, purchaseOrders, loading]);
+  }), [customers, products, invoices, payments, estimates, saleOrders, purchaseOrders, accounts, fundTransfers, loading]);
 
   return <StoreCtx.Provider value={value}>{children}</StoreCtx.Provider>;
 }

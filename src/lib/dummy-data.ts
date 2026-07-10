@@ -90,6 +90,25 @@ export type Payment = {
   date: string;
 };
 
+export type AccountType = "payment" | "category";
+export type Account = {
+  id: string;
+  name: string;
+  accountType: AccountType;
+  openingBalance: number;
+  openingDate: string;
+  currentBalance: number;
+};
+
+export type FundTransfer = {
+  id: string;
+  fromAccountId: string;
+  toAccountId: string;
+  amount: number;
+  remarks?: string;
+  date: string;
+};
+
 export type EstimateStatus = "open" | "accepted" | "declined" | "expired";
 export type Estimate = {
   id: string;
