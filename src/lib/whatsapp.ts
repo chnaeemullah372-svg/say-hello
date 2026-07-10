@@ -1,46 +1,29 @@
 import { supabase } from "@/integrations/supabase/client";
+import { shoibSendText } from "@/lib/shoib";
 
 export type WhatsAppSendInput = {
-  webhookUrl: string;
-  webhookApiKey?: string;
+  apiBase: string;
+  token: string;
   toNumber: string;
   message: string;
-  pdfUrl?: string;
 };
 
 export type WhatsAppSendResult = { ok: boolean; error?: string };
 
 /**
- * Calls the self-hosted WhatsApp sender (Blito/Baileys-style webhook)
- * configured under Settings -> WhatsApp. The exact request shape below
- * ({ to, message, mediaUrl }) is a reasonable default for this style of
- * server, but may need a small tweak to match your specific gateway's API
- * — once you share its endpoint docs this can be finalized.
+ * Sends a text message through the connected Shoib WhatsApp gateway
+ * (see src/lib/shoib.ts — the account is connected once from Settings ->
+ * WhatsApp using a phone-number pairing code).
  */
 export async function sendWhatsAppMessage(input: WhatsAppSendInput): Promise<WhatsAppSendResult> {
-  if (!input.webhookUrl) {
-    return { ok: false, error: "No WhatsApp webhook URL configured in Settings" };
+  if (!input.token) {
+    return { ok: false, error: "WhatsApp isn't connected yet — connect it from Settings -> WhatsApp first" };
   }
   try {
-    const res = await fetch(input.webhookUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(input.webhookApiKey ? { Authorization: `Bearer ${input.webhookApiKey}` } : {}),
-      },
-      body: JSON.stringify({
-        to: input.toNumber,
-        message: input.message,
-        mediaUrl: input.pdfUrl,
-      }),
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      return { ok: false, error: `Webhook returned ${res.status}${text ? `: ${text.slice(0, 200)}` : ""}` };
-    }
+    await shoibSendText(input.apiBase, input.token, input.toNumber.replace(/\D/g, ""), input.message);
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Network error calling webhook" };
+    return { ok: false, error: err instanceof Error ? err.message : "Could not reach the WhatsApp gateway" };
   }
 }
 
@@ -49,13 +32,12 @@ export async function sendWhatsAppMessage(input: WhatsAppSendInput): Promise<Wha
  * shows up on the monitoring page, regardless of whether it succeeds.
  */
 export async function sendAndLogWhatsApp(params: {
-  webhookUrl: string;
-  webhookApiKey?: string;
+  apiBase: string;
+  token: string;
   customerId?: string;
   customerName?: string;
   toNumber: string;
   message: string;
-  pdfUrl?: string;
   messageType: "invoice" | "due_reminder" | "order_status" | "other";
   referenceId?: string;
   referenceNumber?: string;

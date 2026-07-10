@@ -45,8 +45,8 @@ function InvoiceView() {
         .replace("{invoice_no}", inv.number)
         .replace("{amount}", fmt(calcInvoiceTotals(inv.items, inv.taxRate).total));
       const result = await sendAndLogWhatsApp({
-        webhookUrl: wa.webhookUrl || "",
-        webhookApiKey: wa.webhookApiKey,
+        apiBase: wa.shoibApiBase || "https://hatelecom.xyz/api",
+        token: wa.shoibToken || "",
         customerId: customer.id,
         customerName: customer.name,
         toNumber: customer.whatsapp,

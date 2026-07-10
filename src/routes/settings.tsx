@@ -51,6 +51,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { useStore } from "@/lib/store";
+import { shoibLogin, shoibConnectPhone, shoibStatus, type ShoibWAState } from "@/lib/shoib";
 import type { AccountType } from "@/lib/dummy-data";
 import { useTheme } from "@/lib/theme";
 import { toast } from "sonner";
@@ -285,9 +286,12 @@ const defaults: SettingsState = {
   whatsapp: {
     displayName: "Prestige Store",
     number: "",
-    provider: "not-connected",
-    webhookUrl: "",
-    webhookApiKey: "",
+    provider: "shoib",
+    shoibApiBase: "https://hatelecom.xyz/api",
+    shoibUsername: "",
+    shoibPassword: "",
+    shoibToken: "",
+    connectionStatus: "disconnected",
     invoiceMessage:
       "Hello {customer}, your invoice {invoice_no} of {amount} is ready. Please find the copy attached.",
     reminderMessage:
@@ -978,22 +982,79 @@ function WhatsAppPanel({ data, set, isAdmin }: PanelProps & { isAdmin: boolean }
     ["orderCompletedMode", "orderCompletedMessage", "Completed"],
     ["orderCancelledMode", "orderCancelledMessage", "Cancelled"],
   ];
+  const [connecting, setConnecting] = useState(false);
+  const [live, setLive] = useState<ShoibWAState | null>(null);
+  const [connectError, setConnectError] = useState<string | null>(null);
+
+  const connect = async () => {
+    if (!data.shoibUsername || !data.shoibPassword) return toast.error("Enter the Shoib account username & password first");
+    if (!data.number) return toast.error("Enter the WhatsApp number to connect first");
+    setConnecting(true);
+    setConnectError(null);
+    try {
+      const { token } = await shoibLogin(data.shoibApiBase, data.shoibUsername, data.shoibPassword);
+      set("shoibToken", token);
+      await shoibConnectPhone(data.shoibApiBase, token, data.number.replace(/\D/g, ""));
+      const poll = async (attempt = 0) => {
+        const st = await shoibStatus(data.shoibApiBase, token);
+        setLive(st);
+        if (st.status === "connected") {
+          set("connectionStatus", "connected");
+          toast.success("WhatsApp connected! Remember to hit Save to keep this.");
+          setConnecting(false);
+          return;
+        }
+        if (st.lastError) {
+          setConnectError(st.lastError);
+          setConnecting(false);
+          return;
+        }
+        if (attempt < 60) setTimeout(() => poll(attempt + 1), 2000);
+        else { setConnecting(false); setConnectError("Timed out waiting for connection"); }
+      };
+      poll();
+    } catch (err) {
+      setConnectError(err instanceof Error ? err.message : "Could not connect");
+      setConnecting(false);
+    }
+  };
+
   return (
     <Panel>
-      <PanelHeader icon={MessageCircle} title="WhatsApp" subtitle="Connects to your own self-hosted WhatsApp sender (e.g. Baileys/Blito) via webhook — no Meta Business API needed." />
+      <PanelHeader icon={MessageCircle} title="WhatsApp" subtitle="Connects via your own Shoib WhatsApp gateway using a phone-number pairing code — the same method as the Shoib app." />
       {!isAdmin && (
         <div className="rounded-lg border border-amber/40 bg-amber/10 p-3 text-xs">
-          Connection settings (provider, webhook, number) are locked to Admin only. You can still see and use the message templates below.
+          Connection settings and the pairing action are locked to Admin only. You can still see and use the message templates below.
         </div>
       )}
       <fieldset disabled={!isAdmin} className={!isAdmin ? "opacity-60" : undefined}>
         <Grid>
           <TextField label="WhatsApp display name" value={data.displayName} onChange={(v) => set("displayName", v)} />
-          <TextField label="WhatsApp number" value={data.number} onChange={(v) => set("number", v)} />
-          <SelectField label="Provider" value={data.provider} onChange={(v) => set("provider", v)} options={["not-connected", "blito", "business-api", "manual"]} />
-          <TextField label="Webhook URL (your Blito/Baileys server)" value={data.webhookUrl} onChange={(v) => set("webhookUrl", v)} placeholder="https://your-server.com/send" />
-          <TextField label="Webhook API key" value={data.webhookApiKey} onChange={(v) => set("webhookApiKey", v)} type="password" />
+          <TextField label="WhatsApp number to connect" value={data.number} onChange={(v) => set("number", v)} placeholder="923001234567" />
+          <TextField label="Shoib API base URL" value={data.shoibApiBase} onChange={(v) => set("shoibApiBase", v)} />
+          <TextField label="Shoib account username" value={data.shoibUsername} onChange={(v) => set("shoibUsername", v)} />
+          <TextField label="Shoib account password" value={data.shoibPassword} onChange={(v) => set("shoibPassword", v)} type="password" />
         </Grid>
+
+        <div className="mt-3 rounded-lg border bg-card p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <span className="font-semibold">Connection</span>
+            <Badge variant="outline" className={data.connectionStatus === "connected" ? "border-accent/40 text-accent" : "border-muted-foreground/30 text-muted-foreground"}>
+              {data.connectionStatus === "connected" ? "Connected" : "Not connected"}
+            </Badge>
+          </div>
+          <Button type="button" onClick={connect} disabled={connecting}>
+            {connecting ? "Getting pairing code…" : "Get Pairing Code"}
+          </Button>
+          {live?.pairingCode && (
+            <div className="mt-4 rounded-lg bg-primary p-4 text-center text-primary-foreground">
+              <div className="text-xs font-semibold uppercase tracking-wider opacity-80">Your pairing code</div>
+              <div className="mt-1 font-display text-3xl font-bold tracking-[0.3em]">{live.pairingCode}</div>
+              <div className="mt-2 text-xs opacity-80">On the phone with this number: WhatsApp → Linked Devices → Link with phone number → enter this code.</div>
+            </div>
+          )}
+          {connectError && <div className="mt-3 text-sm text-destructive">{connectError}</div>}
+        </div>
       </fieldset>
       <SettingBlock title="Message templates" icon={MessageCircle}>
         <TextAreaField label="Invoice message" value={data.invoiceMessage} onChange={(v) => set("invoiceMessage", v)} />
