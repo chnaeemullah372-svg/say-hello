@@ -17,6 +17,21 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const isLogin = pathname.startsWith("/login");
 
+  // Fix: numeric fields (Rate, Qty, Discount, Tax, Shipping, Payment amount…)
+  // used to show a literal "0" that staff had to backspace before typing the
+  // real number, on every single line item. Auto-selecting the value on
+  // focus means the first keystroke just overwrites it, app-wide.
+  useEffect(() => {
+    const handler = (e: FocusEvent) => {
+      const t = e.target;
+      if (t instanceof HTMLInputElement && t.type === "number") {
+        t.select();
+      }
+    };
+    document.addEventListener("focusin", handler);
+    return () => document.removeEventListener("focusin", handler);
+  }, []);
+
   // Redirect to /login when not authenticated
   useEffect(() => {
     if (!ready) return;
