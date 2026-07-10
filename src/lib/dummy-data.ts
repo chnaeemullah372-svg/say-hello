@@ -1,28 +1,60 @@
+export type PartyType = "client" | "supplier" | "both";
+
 export type Customer = {
   id: string;
+  partyType: PartyType;
   name: string;
+  contactPerson?: string;
   phone: string;
+  phone2?: string;
   whatsapp?: string;
   email?: string;
+  website?: string;
+  region?: string;
   gstin?: string;
+  businessId?: string;
+  panNo?: string;
   address?: string;
+  pinCode?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  shippingSameAsBilling?: boolean;
+  shippingPinCode?: string;
+  shippingCity?: string;
+  shippingState?: string;
+  shippingCountry?: string;
   referralName?: string;
   referralPhone?: string;
   referralEmail?: string;
   referralAddress?: string;
-  balance: number;
+  balance: number; // outstanding they owe us (client side)
+  payableBalance?: number; // outstanding we owe them (supplier side)
 };
 
 
+export type ItemType = "product" | "service" | "composite";
+
 export type Product = {
   id: string;
+  itemType: ItemType;
   name: string;
   sku: string;
+  description?: string;
+  barcode?: string;
   category: string;
-  price: number;
+  price: number; // sale rate
+  mrp?: number;
+  wholesaleRate?: number;
+  purchaseRate?: number;
   stock: number;
   lowStockAt: number;
   unit: string;
+  taxPct?: number;
+  multiUnit?: boolean;
+  openingStockDate?: string;
+  imageUrl?: string;
+  warehouse?: string;
 };
 
 export type InvoiceItem = {
@@ -59,23 +91,23 @@ export type Payment = {
 };
 
 export const customersSeed: Customer[] = [
-  { id: "c1", name: "Aarav Traders", phone: "+91 98765 43210", email: "aarav@traders.in", gstin: "27AAAAA0000A1Z5", address: "Andheri West, Mumbai, MH", balance: 12500 },
-  { id: "c2", name: "Bright Electronics", phone: "+91 98111 22233", email: "sales@bright.in", gstin: "07BBBBB1111B2Z6", address: "Karol Bagh, New Delhi", balance: 0 },
-  { id: "c3", name: "Chennai Silks", phone: "+91 90000 33445", email: "billing@chennai-silks.in", address: "T Nagar, Chennai, TN", balance: 4800 },
-  { id: "c4", name: "Deepak & Sons", phone: "+91 99887 66554", email: "deepak@sons.co.in", gstin: "24CCCCC2222C3Z7", address: "Navrangpura, Ahmedabad, GJ", balance: 22300 },
-  { id: "c5", name: "Elite Furnishings", phone: "+91 97654 32100", email: "hello@elite.in", address: "Koramangala, Bengaluru, KA", balance: 0 },
-  { id: "c6", name: "Fresh Mart Grocers", phone: "+91 88990 11223", email: "orders@freshmart.in", address: "Sector 18, Noida, UP", balance: 1800 },
+  { id: "c1", partyType: "client", name: "Aarav Traders", phone: "+91 98765 43210", email: "aarav@traders.in", gstin: "27AAAAA0000A1Z5", address: "Andheri West, Mumbai, MH", balance: 12500 },
+  { id: "c2", partyType: "client", name: "Bright Electronics", phone: "+91 98111 22233", email: "sales@bright.in", gstin: "07BBBBB1111B2Z6", address: "Karol Bagh, New Delhi", balance: 0 },
+  { id: "c3", partyType: "client", name: "Chennai Silks", phone: "+91 90000 33445", email: "billing@chennai-silks.in", address: "T Nagar, Chennai, TN", balance: 4800 },
+  { id: "c4", partyType: "client", name: "Deepak & Sons", phone: "+91 99887 66554", email: "deepak@sons.co.in", gstin: "24CCCCC2222C3Z7", address: "Navrangpura, Ahmedabad, GJ", balance: 22300 },
+  { id: "c5", partyType: "client", name: "Elite Furnishings", phone: "+91 97654 32100", email: "hello@elite.in", address: "Koramangala, Bengaluru, KA", balance: 0 },
+  { id: "c6", partyType: "client", name: "Fresh Mart Grocers", phone: "+91 88990 11223", email: "orders@freshmart.in", address: "Sector 18, Noida, UP", balance: 1800 },
 ];
 
 export const productsSeed: Product[] = [
-  { id: "p1", name: "Premium Cotton Shirt", sku: "SH-001", category: "Apparel", price: 1299, stock: 48, lowStockAt: 10, unit: "pc" },
-  { id: "p2", name: "Wireless Earbuds Pro", sku: "EL-104", category: "Electronics", price: 3499, stock: 6, lowStockAt: 10, unit: "pc" },
-  { id: "p3", name: "Basmati Rice 5kg", sku: "GR-050", category: "Grocery", price: 749, stock: 120, lowStockAt: 25, unit: "bag" },
-  { id: "p4", name: "Steel Water Bottle", sku: "HM-022", category: "Homeware", price: 499, stock: 3, lowStockAt: 10, unit: "pc" },
-  { id: "p5", name: "Office Chair Deluxe", sku: "FN-311", category: "Furniture", price: 8999, stock: 14, lowStockAt: 5, unit: "pc" },
-  { id: "p6", name: "LED Desk Lamp", sku: "EL-207", category: "Electronics", price: 1899, stock: 22, lowStockAt: 8, unit: "pc" },
-  { id: "p7", name: "Leather Wallet", sku: "AC-088", category: "Accessories", price: 1499, stock: 35, lowStockAt: 10, unit: "pc" },
-  { id: "p8", name: "Organic Green Tea 250g", sku: "GR-090", category: "Grocery", price: 349, stock: 60, lowStockAt: 15, unit: "box" },
+  { id: "p1", itemType: "product", name: "Premium Cotton Shirt", sku: "SH-001", category: "Apparel", price: 1299, stock: 48, lowStockAt: 10, unit: "pc" },
+  { id: "p2", itemType: "product", name: "Wireless Earbuds Pro", sku: "EL-104", category: "Electronics", price: 3499, stock: 6, lowStockAt: 10, unit: "pc" },
+  { id: "p3", itemType: "product", name: "Basmati Rice 5kg", sku: "GR-050", category: "Grocery", price: 749, stock: 120, lowStockAt: 25, unit: "bag" },
+  { id: "p4", itemType: "product", name: "Steel Water Bottle", sku: "HM-022", category: "Homeware", price: 499, stock: 3, lowStockAt: 10, unit: "pc" },
+  { id: "p5", itemType: "product", name: "Office Chair Deluxe", sku: "FN-311", category: "Furniture", price: 8999, stock: 14, lowStockAt: 5, unit: "pc" },
+  { id: "p6", itemType: "product", name: "LED Desk Lamp", sku: "EL-207", category: "Electronics", price: 1899, stock: 22, lowStockAt: 8, unit: "pc" },
+  { id: "p7", itemType: "product", name: "Leather Wallet", sku: "AC-088", category: "Accessories", price: 1499, stock: 35, lowStockAt: 10, unit: "pc" },
+  { id: "p8", itemType: "product", name: "Organic Green Tea 250g", sku: "GR-090", category: "Grocery", price: 349, stock: 60, lowStockAt: 15, unit: "box" },
 ];
 
 export const invoicesSeed: Invoice[] = [

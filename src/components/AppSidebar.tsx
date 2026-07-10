@@ -22,12 +22,12 @@ const salesItems = [
   { title: "Sale Orders", url: "/sale-order", icon: ClipboardList },
   { title: "Delivery Notes", url: "/delivery-note", icon: Truck },
   { title: "Sale Returns", url: "/sale-return", icon: PackageMinus },
-  { title: "Customers", url: "/customers", icon: Users },
+  { title: "Client / Supplier", url: "/customers", icon: Users },
   { title: "Subscriptions", url: "/subscriptions", icon: Repeat },
 ];
 
 const stockItems = [
-  { title: "Products", url: "/products", icon: Package },
+  { title: "Product / Service", url: "/products", icon: Package },
   { title: "Inventory", url: "/inventory", icon: Warehouse },
   { title: "Purchases", url: "/purchases", icon: ShoppingCart },
   { title: "Purchase Orders", url: "/purchase-orders", icon: ClipboardList },

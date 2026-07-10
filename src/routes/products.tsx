@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
-import { Barcode, Calendar, Package, Plus, Search, SlidersHorizontal } from "lucide-react";
+import { Barcode, Calendar, Package, Pencil, Plus, Search, SlidersHorizontal, Wrench, Boxes } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,64 +12,113 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useStore } from "@/lib/store";
-import { fmt } from "@/lib/dummy-data";
+import { fmt, type ItemType, type Product } from "@/lib/dummy-data";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/products")({
   head: () => ({ meta: [
-    { title: "Products — Prestige Invoice" },
-    { name: "description", content: "Manage your catalog of products and services with pricing and stock." },
+    { title: "Product / Service — Prestige Invoice" },
+    { name: "description", content: "Manage your catalog of products, services and composite items with full pricing and stock." },
   ]}),
   component: ProductsPage,
 });
 
+const emptyForm = {
+  itemType: "product" as ItemType,
+  name: "", sku: "", description: "", barcode: "", category: "General", unit: "Pcs",
+  mrp: 0, saleRate: 0, wholesaleRate: 0, purchaseRate: 0,
+  stock: 0, lowStockAt: 5, taxPct: 0,
+  openingDate: new Date().toISOString().slice(0, 10),
+  multiUnit: false, warehouse: "Main Store",
+};
+
 function ProductsPage() {
-  const { products, addProduct } = useStore();
+  const { products, addProduct, updateProduct } = useStore();
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({
-    name: "",
-    sku: "",
-    description: "",
-    barcode: "",
-    category: "General",
-    unit: "Pcs",
-    mrp: 0,
-    saleRate: 0,
-    wholesaleRate: 0,
-    purchaseRate: 0,
-    stock: 0,
-    lowStockAt: 5,
-    taxPct: 0,
-    openingDate: new Date().toISOString().slice(0, 10),
-    multiUnit: false,
-    warehouse: "Main Store",
-  });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState(emptyForm);
 
   const filtered = products.filter((p) => [p.name, p.sku, p.category].join(" ").toLowerCase().includes(q.toLowerCase()));
+
+  const startAdd = () => { setEditingId(null); setForm(emptyForm); setOpen(true); };
+  const startEdit = (p: Product) => {
+    setEditingId(p.id);
+    setForm({
+      itemType: p.itemType, name: p.name, sku: p.sku, description: p.description ?? "", barcode: p.barcode ?? "",
+      category: p.category || "General", unit: p.unit || "Pcs",
+      mrp: p.mrp ?? 0, saleRate: p.price, wholesaleRate: p.wholesaleRate ?? 0, purchaseRate: p.purchaseRate ?? 0,
+      stock: p.stock, lowStockAt: p.lowStockAt, taxPct: p.taxPct ?? 0,
+      openingDate: p.openingStockDate ?? new Date().toISOString().slice(0, 10),
+      multiUnit: p.multiUnit ?? false, warehouse: p.warehouse ?? "Main Store",
+    });
+    setOpen(true);
+  };
+
+  const save = async () => {
+    if (!form.name) return toast.error("Name is required");
+    if (saving) return;
+    setSaving(true);
+    const payload = {
+      itemType: form.itemType, name: form.name, sku: form.sku || `SKU-${Date.now().toString().slice(-4)}`,
+      description: form.description, barcode: form.barcode, category: form.category,
+      price: form.saleRate || form.mrp, mrp: form.mrp, wholesaleRate: form.wholesaleRate, purchaseRate: form.purchaseRate,
+      stock: form.itemType === "service" ? 0 : form.stock, lowStockAt: form.lowStockAt, unit: form.unit,
+      taxPct: form.taxPct, multiUnit: form.multiUnit, openingStockDate: form.openingDate, warehouse: form.warehouse,
+    };
+    try {
+      if (editingId) {
+        await updateProduct(editingId, payload);
+        toast.success("Saved");
+      } else {
+        await addProduct(payload);
+        toast.success(`${form.itemType === "service" ? "Service" : form.itemType === "composite" ? "Composite item" : "Product"} added`);
+      }
+      setForm(emptyForm);
+      setOpen(false);
+      setEditingId(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not save product");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Products & Items"
+        title="Product / Service"
         subtitle={`${products.length} items in catalog`}
         action={
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild><Button><Plus className="mr-1.5 h-4 w-4" />Add Product</Button></DialogTrigger>
+          <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setEditingId(null); }}>
+            <DialogTrigger asChild><Button onClick={startAdd}><Plus className="mr-1.5 h-4 w-4" />Add Item</Button></DialogTrigger>
             <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
-              <DialogHeader><DialogTitle>Product / Service</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle>{editingId ? "Edit item" : "Product / Service"}</DialogTitle></DialogHeader>
               <div className="grid gap-4">
+                <div className="grid grid-cols-3 gap-1.5 rounded-lg border bg-muted/40 p-1">
+                  {(["product", "service", "composite"] as ItemType[]).map((t) => (
+                    <button
+                      key={t} type="button"
+                      onClick={() => setForm({ ...form, itemType: t })}
+                      className={`rounded-md py-1.5 text-xs font-semibold capitalize transition ${form.itemType === t ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-background"}`}
+                    >{t}</button>
+                  ))}
+                </div>
+
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Field label="Name"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoFocus /></Field>
                   <Field label="Product Code"><Input value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} placeholder="SKU / Item code" /></Field>
                 </div>
                 <Field label="Description"><Textarea rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
-                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_160px]">
-                  <Field label="Barcode"><Input value={form.barcode} onChange={(e) => setForm({ ...form, barcode: e.target.value })} placeholder="Scan or type barcode" /></Field>
-                  <Button type="button" variant="outline" className="mt-6" onClick={() => setForm({ ...form, barcode: `BC${Date.now().toString().slice(-8)}` })}>
-                    <Barcode className="mr-1.5 h-4 w-4" />Generate
-                  </Button>
-                </div>
+                {form.itemType !== "service" && (
+                  <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_160px]">
+                    <Field label="Barcode"><Input value={form.barcode} onChange={(e) => setForm({ ...form, barcode: e.target.value })} placeholder="Scan or type barcode" /></Field>
+                    <Button type="button" variant="outline" className="mt-6" onClick={() => setForm({ ...form, barcode: `BC${Date.now().toString().slice(-8)}` })}>
+                      <Barcode className="mr-1.5 h-4 w-4" />Generate
+                    </Button>
+                  </div>
+                )}
                 <div className="grid gap-3 sm:grid-cols-4">
                   <Field label="MRP"><Input type="number" value={form.mrp} onChange={(e) => setForm({ ...form, mrp: +e.target.value })} /></Field>
                   <Field label="Sale Rate"><Input type="number" value={form.saleRate} onChange={(e) => setForm({ ...form, saleRate: +e.target.value })} /></Field>
@@ -89,29 +138,21 @@ function ProductsPage() {
                   <Field label="Tax %"><Input type="number" value={form.taxPct} onChange={(e) => setForm({ ...form, taxPct: +e.target.value })} /></Field>
                   <Field label="Warehouse"><Input value={form.warehouse} onChange={(e) => setForm({ ...form, warehouse: e.target.value })} /></Field>
                 </div>
-                <div className="grid gap-3 rounded-xl border bg-muted/25 p-3 sm:grid-cols-3">
-                  <Field label="Opening Stock"><Input type="number" value={form.stock} onChange={(e) => setForm({ ...form, stock: +e.target.value })} /></Field>
-                  <Field label="Low Stock Alert"><Input type="number" value={form.lowStockAt} onChange={(e) => setForm({ ...form, lowStockAt: +e.target.value })} /></Field>
-                  <Field label="Opening Stock Date"><Input type="date" value={form.openingDate} onChange={(e) => setForm({ ...form, openingDate: e.target.value })} /></Field>
-                  <div className="flex items-center justify-between rounded-lg bg-card px-3 py-2 sm:col-span-3">
-                    <span className="flex items-center gap-2 text-sm font-medium"><SlidersHorizontal className="h-4 w-4 text-primary" />Enable Multi Unit</span>
-                    <Switch checked={form.multiUnit} onCheckedChange={(v) => setForm({ ...form, multiUnit: v })} />
+                {form.itemType !== "service" && (
+                  <div className="grid gap-3 rounded-xl border bg-muted/25 p-3 sm:grid-cols-3">
+                    <Field label="Opening Stock"><Input type="number" value={form.stock} onChange={(e) => setForm({ ...form, stock: +e.target.value })} /></Field>
+                    <Field label="Low Stock Alert"><Input type="number" value={form.lowStockAt} onChange={(e) => setForm({ ...form, lowStockAt: +e.target.value })} /></Field>
+                    <Field label="Opening Stock Date"><Input type="date" value={form.openingDate} onChange={(e) => setForm({ ...form, openingDate: e.target.value })} /></Field>
+                    <div className="flex items-center justify-between rounded-lg bg-card px-3 py-2 sm:col-span-3">
+                      <span className="flex items-center gap-2 text-sm font-medium"><SlidersHorizontal className="h-4 w-4 text-primary" />Enable Multi Unit</span>
+                      <Switch checked={form.multiUnit} onCheckedChange={(v) => setForm({ ...form, multiUnit: v })} />
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
               <DialogFooter>
                 <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-                <Button onClick={async () => {
-                  if (!form.name) { toast.error("Name is required"); return; }
-                  try {
-                    await addProduct({ name: form.name, sku: form.sku || `SKU-${Date.now().toString().slice(-4)}`, category: form.category, price: form.saleRate || form.mrp, stock: form.stock, lowStockAt: form.lowStockAt, unit: form.unit });
-                    toast.success("Product added");
-                    setForm({ name: "", sku: "", description: "", barcode: "", category: "General", unit: "Pcs", mrp: 0, saleRate: 0, wholesaleRate: 0, purchaseRate: 0, stock: 0, lowStockAt: 5, taxPct: 0, openingDate: new Date().toISOString().slice(0, 10), multiUnit: false, warehouse: "Main Store" });
-                    setOpen(false);
-                  } catch (err) {
-                    toast.error(err instanceof Error ? err.message : "Could not save product");
-                  }
-                }}>Save product</Button>
+                <Button onClick={save} disabled={saving}>{saving ? "Saving…" : "Save"}</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -125,17 +166,21 @@ function ProductsPage() {
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {filtered.map((p) => {
-          const low = p.stock <= p.lowStockAt;
+          const low = p.itemType !== "service" && p.stock <= p.lowStockAt;
+          const Icon = p.itemType === "service" ? Wrench : p.itemType === "composite" ? Boxes : Package;
           return (
             <Card key={p.id} className="transition hover:border-accent/50 hover:shadow-md">
               <CardContent className="p-5">
                 <div className="flex items-start justify-between gap-2">
                   <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-                    <Package className="h-5 w-5" />
+                    <Icon className="h-5 w-5" />
                   </div>
-                  {low
-                    ? <Badge variant="outline" className="border-destructive/40 text-destructive">Low</Badge>
-                    : <Badge variant="outline" className="border-accent/30 text-accent">In stock</Badge>}
+                  <div className="flex flex-col items-end gap-1">
+                    <Badge variant="outline" className="px-1.5 py-0 text-[9px] capitalize">{p.itemType}</Badge>
+                    {p.itemType !== "service" && (low
+                      ? <Badge variant="outline" className="border-destructive/40 text-destructive">Low</Badge>
+                      : <Badge variant="outline" className="border-accent/30 text-accent">In stock</Badge>)}
+                  </div>
                 </div>
                 <div className="mt-3 truncate font-semibold">{p.name}</div>
                 <div className="text-xs text-muted-foreground">{p.category} · {p.sku}</div>
@@ -144,13 +189,20 @@ function ProductsPage() {
                     <div className="font-display text-xl font-bold text-primary">{fmt(p.price)}</div>
                     <div className="text-[11px] text-muted-foreground">per {p.unit}</div>
                   </div>
-                  <div className="text-right">
-                    <div className="text-sm font-semibold">{p.stock}</div>
-                    <div className="text-[11px] text-muted-foreground">in stock</div>
-                  </div>
+                  {p.itemType !== "service" && (
+                    <div className="text-right">
+                      <div className="text-sm font-semibold">{p.stock}</div>
+                      <div className="text-[11px] text-muted-foreground">in stock</div>
+                    </div>
+                  )}
                 </div>
-                <div className="mt-3 flex items-center gap-1.5 border-t pt-3 text-[11px] text-muted-foreground">
-                  <Calendar className="h-3.5 w-3.5" /> Opening stock tracked · Alert at {p.lowStockAt}
+                <div className="mt-3 flex items-center justify-between border-t pt-3 text-[11px] text-muted-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <Calendar className="h-3.5 w-3.5" /> {p.itemType === "service" ? "Service item" : `Alert at ${p.lowStockAt}`}
+                  </span>
+                  <button type="button" onClick={() => startEdit(p)} className="flex items-center gap-1 text-primary hover:underline">
+                    <Pencil className="h-3 w-3" />Edit
+                  </button>
                 </div>
               </CardContent>
             </Card>

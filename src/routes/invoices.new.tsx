@@ -679,7 +679,7 @@ function CreateInvoice() {
             <CommandList className="max-h-[50vh]">
               <CommandEmpty>No clients found.</CommandEmpty>
               <CommandGroup>
-                {customers.map((c) => (
+                {customers.filter((c) => c.partyType !== "supplier").map((c) => (
                   <CommandItem key={c.id} value={c.name} onSelect={() => { setCustomerId(c.id); setCustOpen(false); }}>
                     <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-bold text-primary">
                       {c.name.split(" ").map(w => w[0]).slice(0,2).join("")}
@@ -735,7 +735,7 @@ function CreateInvoice() {
             <Button onClick={async () => {
               if (!newCust.name) return toast.error("Name required");
               try {
-                const c = await addCustomer(newCust);
+                const c = await addCustomer({ ...newCust, partyType: "client" });
                 setCustomerId(c.id);
                 setNewCust(emptyNewCust);
                 setNewCustMore(false);
@@ -842,6 +842,7 @@ function ItemDialog({
       } else {
         try {
           const created = await onRegisterProduct({
+            itemType: "product",
             name: trimmed,
             sku: code || trimmed.replace(/\s+/g, "-").slice(0, 12).toUpperCase(),
             category: "Custom",
