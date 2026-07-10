@@ -31,9 +31,15 @@ type DraftLine = InvoiceItem & { unit?: string; code?: string; warehouse?: strin
 
 function CreateInvoice() {
   const nav = useNavigate();
-  const { customers, products, addCustomer, addProduct, addInvoice, invoices } = useStore();
+  const { customers, products, addCustomer, addProduct, addInvoice, updateInvoice, invoices } = useStore();
 
-  const nextNumber = `INV${Math.max(3, invoices.length + 1)}`;
+  const editId = useMemo(() => {
+    if (typeof window === "undefined") return null;
+    return new URLSearchParams(window.location.search).get("edit");
+  }, []);
+  const editingInvoice = useMemo(() => (editId ? invoices.find((i) => i.id === editId) : undefined), [editId, invoices]);
+  const [loadedEditId, setLoadedEditId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const [customerId, setCustomerId] = useState<string>("");
   const [shippingAddress, setShippingAddress] = useState("");
@@ -59,7 +65,7 @@ function CreateInvoice() {
   // Meta
   const [period, setPeriod] = useState("0");
   const [reference, setReference] = useState("");
-  const [invoiceDate] = useState(new Date());
+  const [invoiceDate, setInvoiceDate] = useState(new Date());
   const [dueDate, setDueDate] = useState<string>("");
   const [notes, setNotes] = useState("");
   const [notesOpen, setNotesOpen] = useState(false);
@@ -76,6 +82,24 @@ function CreateInvoice() {
   const emptyNewCust = { name: "", phone: "", whatsapp: "", email: "", address: "", referralName: "", referralPhone: "", referralEmail: "", referralAddress: "" };
   const [newCust, setNewCust] = useState(emptyNewCust);
   const [newCustMore, setNewCustMore] = useState(false);
+
+  // Load the existing invoice into the form when editing (fixes: Edit button
+  // used to open a blank form and silently create a duplicate invoice).
+  useEffect(() => {
+    if (editingInvoice && loadedEditId !== editingInvoice.id) {
+      setCustomerId(editingInvoice.customerId);
+      setItems(editingInvoice.items.map((it) => ({ ...it })));
+      setDiscountMode(editingInvoice.discountMode ?? "rate");
+      setDiscountValue(editingInvoice.discountValue ?? 0);
+      setTaxPct(editingInvoice.taxRate);
+      setShippingAmount(editingInvoice.shippingAmount ?? 0);
+      setPaymentAmount(editingInvoice.paid);
+      setInvoiceDate(new Date(editingInvoice.date));
+      setDueDate(editingInvoice.dueDate || "");
+      setNotes(editingInvoice.notes || "");
+      setLoadedEditId(editingInvoice.id);
+    }
+  }, [editingInvoice, loadedEditId]);
 
   const customer = customers.find((c) => c.id === customerId);
 
@@ -104,19 +128,33 @@ function CreateInvoice() {
 
   const removeLine = (i: number) => setItems((p) => p.filter((_, idx) => idx !== i));
 
-  const save = (opts: { print?: boolean; preview?: boolean } = {}) => {
+  const save = async (opts: { print?: boolean; preview?: boolean } = {}) => {
     if (!customerId) return toast.error("Please select a client (Bill To)");
     if (!items.length) return toast.error("Add at least one item");
+    if (saving) return;
+    setSaving(true);
     const status: "paid" | "partial" | "unpaid" = paymentAmount >= total ? "paid" : paymentAmount > 0 ? "partial" : "unpaid";
-    const inv = addInvoice({
-      number: nextNumber, customerId,
+    const payload = {
+      customerId,
       date: invoiceDate.toISOString().slice(0, 10),
       dueDate: dueDate || invoiceDate.toISOString().slice(0, 10),
       items: items.map(({ productId, name, qty, rate, discount }) => ({ productId, name, qty, rate, discount })),
-      taxRate: taxPct, paid: paymentAmount, notes, status,
-    });
-    toast.success(`Invoice ${inv.number} saved`);
-    setTimeout(() => nav({ to: "/invoices/$id", params: { id: inv.id }, search: opts.print ? { print: 1 } as any : undefined }), 150);
+      taxRate: taxPct, discountMode, discountValue, shippingAmount, paid: paymentAmount, notes, status,
+    };
+    try {
+      if (editingInvoice) {
+        await updateInvoice(editingInvoice.id, payload);
+        toast.success(`Invoice ${editingInvoice.number} updated`);
+        setTimeout(() => nav({ to: "/invoices/$id", params: { id: editingInvoice.id }, search: opts.print ? { print: 1 } as any : undefined }), 150);
+      } else {
+        const inv = await addInvoice(payload);
+        toast.success(`Invoice ${inv.number} saved`);
+        setTimeout(() => nav({ to: "/invoices/$id", params: { id: inv.id }, search: opts.print ? { print: 1 } as any : undefined }), 150);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not save invoice");
+      setSaving(false);
+    }
   };
 
   return (
@@ -130,7 +168,9 @@ function CreateInvoice() {
         >
           <ArrowLeft className="h-5 w-5" />
         </button>
-        <div className="flex-1 text-center font-display text-base font-bold tracking-widest">INVOICE</div>
+        <div className="flex-1 text-center font-display text-base font-bold tracking-widest">
+          {editingInvoice ? "EDIT INVOICE" : "INVOICE"}
+        </div>
         <button
           onClick={() => document.getElementById("tax-discount-section")?.scrollIntoView({ behavior: "smooth", block: "start" })}
           className="rounded-lg border border-white/25 bg-white/5 px-3 py-1.5 text-xs font-semibold hover:bg-white/10"
@@ -151,7 +191,9 @@ function CreateInvoice() {
         {/* Invoice # + date */}
         <div className="flex items-start justify-between gap-3 border-b bg-card px-4 py-4">
           <div>
-            <div className="font-display text-2xl font-black tracking-tight">{nextNumber}</div>
+            <div className="font-display text-2xl font-black tracking-tight">
+              {editingInvoice ? editingInvoice.number : "Auto-generated"}
+            </div>
           </div>
           <div className="text-right">
             <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Invoice Date</div>
@@ -609,7 +651,7 @@ function CreateInvoice() {
       <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 backdrop-blur lg:left-64">
         <div className="mx-auto grid max-w-2xl grid-cols-4">
           {[
-            { icon: Save, label: "Save", onClick: () => save() },
+            { icon: Save, label: saving ? "Saving…" : "Save", onClick: () => save() },
             { icon: Send, label: "Send", onClick: () => toast.info("Send: backend pending") },
             { icon: Printer, label: "Print", onClick: () => save({ print: true }) },
             { icon: Eye, label: "Preview", onClick: () => save({ preview: true }) },
@@ -617,8 +659,9 @@ function CreateInvoice() {
             <button
               key={a.label}
               type="button"
+              disabled={saving}
               onClick={a.onClick}
-              className="flex flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium text-muted-foreground transition hover:text-primary"
+              className="flex flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium text-muted-foreground transition hover:text-primary disabled:opacity-50"
             >
               <a.icon className="h-5 w-5" />
               {a.label}
@@ -689,14 +732,18 @@ function CreateInvoice() {
 
           <DialogFooter>
             <Button variant="ghost" onClick={() => setAddCustOpen(false)}>Cancel</Button>
-            <Button onClick={() => {
+            <Button onClick={async () => {
               if (!newCust.name) return toast.error("Name required");
-              const c = addCustomer(newCust);
-              setCustomerId(c.id);
-              setNewCust(emptyNewCust);
-              setNewCustMore(false);
-              setAddCustOpen(false);
-              toast.success("Client added & selected");
+              try {
+                const c = await addCustomer(newCust);
+                setCustomerId(c.id);
+                setNewCust(emptyNewCust);
+                setNewCustMore(false);
+                setAddCustOpen(false);
+                toast.success("Client added & selected");
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : "Could not save client");
+              }
             }}>Add & select</Button>
           </DialogFooter>
         </DialogContent>
@@ -731,7 +778,7 @@ function ItemDialog({
   editing: boolean;
   initial?: DraftLine;
   onSave: (line: DraftLine) => void;
-  onRegisterProduct: (p: Omit<Product, "id">) => Product;
+  onRegisterProduct: (p: Omit<Product, "id">) => Promise<Product>;
 }) {
   const [wholesale, setWholesale] = useState(initial?.wholesale ?? false);
   const [name, setName] = useState(initial?.name ?? "");
@@ -744,6 +791,7 @@ function ItemDialog({
   const [description, setDescription] = useState(initial?.description ?? "");
   const [search, setSearch] = useState(false);
   const [addedCount, setAddedCount] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
   const nameRef = useRef<HTMLInputElement | null>(null);
 
   const picked = products.find((p) => p.id === productId);
@@ -778,10 +826,12 @@ function ItemDialog({
     setSearch(false);
   };
 
-  const submit = () => {
+  const submit = async () => {
     const trimmed = name.trim();
     if (!trimmed) return toast.error("Please enter a product / service name");
     if (qty <= 0) return toast.error("Quantity must be greater than zero");
+    if (submitting) return;
+    setSubmitting(true);
 
     // Auto-register brand-new products so they show up in future suggestions
     let pid = productId;
@@ -790,21 +840,28 @@ function ItemDialog({
       if (existing) {
         pid = existing.id;
       } else {
-        const created = onRegisterProduct({
-          name: trimmed,
-          sku: code || trimmed.replace(/\s+/g, "-").slice(0, 12).toUpperCase(),
-          category: "Custom",
-          price: rate,
-          stock: 0,
-          lowStockAt: 5,
-          unit: unit || "pc",
-        });
-        pid = created.id;
-        toast.success(`Saved “${trimmed}” to products`);
+        try {
+          const created = await onRegisterProduct({
+            name: trimmed,
+            sku: code || trimmed.replace(/\s+/g, "-").slice(0, 12).toUpperCase(),
+            category: "Custom",
+            price: rate,
+            stock: 0,
+            lowStockAt: 5,
+            unit: unit || "pc",
+          });
+          pid = created.id;
+          toast.success(`Saved "${trimmed}" to products`);
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : "Could not save new product");
+          setSubmitting(false);
+          return;
+        }
       }
     }
 
     onSave({ productId: pid, name: trimmed, qty, rate, discount: 0, code, unit, warehouse, description, wholesale });
+    setSubmitting(false);
 
     if (editing) return; // parent closes for edit mode
 

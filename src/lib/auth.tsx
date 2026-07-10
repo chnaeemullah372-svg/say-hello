@@ -53,8 +53,16 @@ async function ensureProfileAndRole(): Promise<AuthUser | null> {
   let role = existingRole?.role as AppRole | undefined;
 
   if (!role) {
-    const { error } = await supabase.from("user_roles").insert({ user_id: user.id, role: "admin" });
-    if (!error) role = "admin";
+    // Security fix: previously every new sign-up was auto-granted "admin",
+    // meaning anyone who created an account got full admin access. Now only
+    // the very first user in the whole system (bootstrapping the owner
+    // account) becomes admin automatically; everyone after that starts as
+    // "staff" and must be promoted by an existing admin from the Team page.
+    const { count } = await supabase.from("user_roles").select("id", { count: "exact", head: true });
+    const isFirstUser = (count ?? 0) === 0;
+    const roleToAssign: AppRole = isFirstUser ? "admin" : "staff";
+    const { error } = await supabase.from("user_roles").insert({ user_id: user.id, role: roleToAssign });
+    if (!error) role = roleToAssign;
   }
 
   return { id: user.id, name: profile?.full_name || displayName, email: user.email, role: roleLabel(role || "staff") };

@@ -72,13 +72,17 @@ function CustomersPage() {
               </div>
               <DialogFooter>
                 <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-                <Button onClick={() => {
+                <Button onClick={async () => {
                   if (!form.name) { toast.error("Customer name is required"); return; }
-                  addCustomer(form);
-                  toast.success("Customer added");
-                  setForm(emptyForm);
-                  setShowMore(false);
-                  setOpen(false);
+                  try {
+                    await addCustomer(form);
+                    toast.success("Customer added");
+                    setForm(emptyForm);
+                    setShowMore(false);
+                    setOpen(false);
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : "Could not save customer");
+                  }
                 }}>Save customer</Button>
               </DialogFooter>
             </DialogContent>

@@ -23,7 +23,7 @@ export const Route = createFileRoute("/payments")({
 });
 
 function PaymentsPage() {
-  const { payments, addPayment, invoices, customers } = useStore();
+  const { payments, addPayment, invoices, customers, updateInvoice } = useStore();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [type, setType] = useState("client");
@@ -108,11 +108,21 @@ function PaymentsPage() {
                 <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
                 <Button variant="outline" onClick={() => toast.info("Receipt preview ready")}><Eye className="mr-1.5 h-4 w-4" />Preview</Button>
                 <Button variant="outline" onClick={() => window.print()}><Printer className="mr-1.5 h-4 w-4" />Print</Button>
-                <Button onClick={() => {
+                <Button onClick={async () => {
                   if (!form.invoiceNumber || form.amount <= 0) return toast.error("Invoice and amount required");
-                  addPayment(form);
-                  toast.success("Payment recorded");
-                  setOpen(false);
+                  try {
+                    await addPayment(form);
+                    if (selectedInvoice) {
+                      const newPaid = selectedInvoice.paid + form.amount;
+                      const totals = calcInvoiceTotals(selectedInvoice.items, selectedInvoice.taxRate);
+                      const newStatus = newPaid >= totals.total ? "paid" : newPaid > 0 ? "partial" : "unpaid";
+                      await updateInvoice(selectedInvoice.id, { paid: newPaid, status: newStatus });
+                    }
+                    toast.success("Payment recorded");
+                    setOpen(false);
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : "Could not record payment");
+                  }
                 }}>Save payment</Button>
               </DialogFooter>
             </DialogContent>

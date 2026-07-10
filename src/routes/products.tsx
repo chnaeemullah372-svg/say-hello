@@ -101,12 +101,16 @@ function ProductsPage() {
               </div>
               <DialogFooter>
                 <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-                <Button onClick={() => {
+                <Button onClick={async () => {
                   if (!form.name) { toast.error("Name is required"); return; }
-                  addProduct({ name: form.name, sku: form.sku || `SKU-${Date.now().toString().slice(-4)}`, category: form.category, price: form.saleRate || form.mrp, stock: form.stock, lowStockAt: form.lowStockAt, unit: form.unit });
-                  toast.success("Product added");
-                  setForm({ name: "", sku: "", description: "", barcode: "", category: "General", unit: "Pcs", mrp: 0, saleRate: 0, wholesaleRate: 0, purchaseRate: 0, stock: 0, lowStockAt: 5, taxPct: 0, openingDate: new Date().toISOString().slice(0, 10), multiUnit: false, warehouse: "Main Store" });
-                  setOpen(false);
+                  try {
+                    await addProduct({ name: form.name, sku: form.sku || `SKU-${Date.now().toString().slice(-4)}`, category: form.category, price: form.saleRate || form.mrp, stock: form.stock, lowStockAt: form.lowStockAt, unit: form.unit });
+                    toast.success("Product added");
+                    setForm({ name: "", sku: "", description: "", barcode: "", category: "General", unit: "Pcs", mrp: 0, saleRate: 0, wholesaleRate: 0, purchaseRate: 0, stock: 0, lowStockAt: 5, taxPct: 0, openingDate: new Date().toISOString().slice(0, 10), multiUnit: false, warehouse: "Main Store" });
+                    setOpen(false);
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : "Could not save product");
+                  }
                 }}>Save product</Button>
               </DialogFooter>
             </DialogContent>

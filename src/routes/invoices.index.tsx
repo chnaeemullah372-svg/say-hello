@@ -307,10 +307,14 @@ function InvoiceList() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => {
+              onClick={async () => {
                 if (toDelete) {
-                  deleteInvoice(toDelete);
-                  toast.success("Invoice deleted");
+                  try {
+                    await deleteInvoice(toDelete);
+                    toast.success("Invoice deleted");
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : "Could not delete invoice");
+                  }
                 }
                 setToDelete(null);
               }}

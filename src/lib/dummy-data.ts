@@ -41,6 +41,9 @@ export type Invoice = {
   dueDate: string;
   items: InvoiceItem[];
   taxRate: number; // %
+  discountMode?: "rate" | "flat";
+  discountValue?: number;
+  shippingAmount?: number;
   paid: number;
   notes?: string;
   status: "paid" | "partial" | "unpaid";
