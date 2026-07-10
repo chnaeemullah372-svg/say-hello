@@ -41,39 +41,6 @@ export type Database = {
         }
         Relationships: []
       }
-      commissions: {
-        Row: {
-          agent_name: string
-          commission: number
-          created_at: string
-          created_by: string | null
-          date: string
-          id: string
-          invoice_id: string | null
-          status: string
-        }
-        Insert: {
-          agent_name: string
-          commission?: number
-          created_at?: string
-          created_by?: string | null
-          date?: string
-          id?: string
-          invoice_id?: string | null
-          status?: string
-        }
-        Update: {
-          agent_name?: string
-          commission?: number
-          created_at?: string
-          created_by?: string | null
-          date?: string
-          id?: string
-          invoice_id?: string | null
-          status?: string
-        }
-        Relationships: []
-      }
       customers: {
         Row: {
           address: string | null
@@ -420,9 +387,9 @@ export type Database = {
           customer_name: string | null
           date: string
           id: string
-          invoice_id: string | null
           invoice_number: string | null
           method: string
+          updated_at: string
         }
         Insert: {
           amount?: number
@@ -431,9 +398,9 @@ export type Database = {
           customer_name?: string | null
           date?: string
           id?: string
-          invoice_id?: string | null
           invoice_number?: string | null
           method?: string
+          updated_at?: string
         }
         Update: {
           amount?: number
@@ -442,19 +409,11 @@ export type Database = {
           customer_name?: string | null
           date?: string
           id?: string
-          invoice_id?: string | null
           invoice_number?: string | null
           method?: string
+          updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "payments_invoice_id_fkey"
-            columns: ["invoice_id"]
-            isOneToOne: false
-            referencedRelation: "invoices"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       products: {
         Row: {
@@ -470,7 +429,7 @@ export type Database = {
           mrp: number
           multi_unit: boolean
           name: string
-          opening_stock_date: string
+          opening_stock_date: string | null
           price: number
           purchase_rate: number
           sku: string | null
@@ -494,7 +453,7 @@ export type Database = {
           mrp?: number
           multi_unit?: boolean
           name: string
-          opening_stock_date?: string
+          opening_stock_date?: string | null
           price?: number
           purchase_rate?: number
           sku?: string | null
@@ -518,7 +477,7 @@ export type Database = {
           mrp?: number
           multi_unit?: boolean
           name?: string
-          opening_stock_date?: string
+          opening_stock_date?: string | null
           price?: number
           purchase_rate?: number
           sku?: string | null
