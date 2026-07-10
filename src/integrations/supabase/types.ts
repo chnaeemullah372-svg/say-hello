@@ -41,6 +41,287 @@ export type Database = {
         }
         Relationships: []
       }
+      customers: {
+        Row: {
+          address: string | null
+          balance: number
+          business_id: string | null
+          city: string | null
+          contact_person: string | null
+          country: string | null
+          created_at: string
+          created_by: string | null
+          email: string | null
+          gstin: string | null
+          id: string
+          name: string
+          pan_no: string | null
+          party_type: string
+          payable_balance: number
+          phone: string | null
+          phone2: string | null
+          pin_code: string | null
+          referral_address: string | null
+          referral_email: string | null
+          referral_name: string | null
+          referral_phone: string | null
+          region: string | null
+          shipping_city: string | null
+          shipping_country: string | null
+          shipping_pin_code: string | null
+          shipping_same_as_billing: boolean
+          shipping_state: string | null
+          state: string | null
+          updated_at: string
+          website: string | null
+          whatsapp: string | null
+        }
+        Insert: {
+          address?: string | null
+          balance?: number
+          business_id?: string | null
+          city?: string | null
+          contact_person?: string | null
+          country?: string | null
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          gstin?: string | null
+          id?: string
+          name: string
+          pan_no?: string | null
+          party_type?: string
+          payable_balance?: number
+          phone?: string | null
+          phone2?: string | null
+          pin_code?: string | null
+          referral_address?: string | null
+          referral_email?: string | null
+          referral_name?: string | null
+          referral_phone?: string | null
+          region?: string | null
+          shipping_city?: string | null
+          shipping_country?: string | null
+          shipping_pin_code?: string | null
+          shipping_same_as_billing?: boolean
+          shipping_state?: string | null
+          state?: string | null
+          updated_at?: string
+          website?: string | null
+          whatsapp?: string | null
+        }
+        Update: {
+          address?: string | null
+          balance?: number
+          business_id?: string | null
+          city?: string | null
+          contact_person?: string | null
+          country?: string | null
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          gstin?: string | null
+          id?: string
+          name?: string
+          pan_no?: string | null
+          party_type?: string
+          payable_balance?: number
+          phone?: string | null
+          phone2?: string | null
+          pin_code?: string | null
+          referral_address?: string | null
+          referral_email?: string | null
+          referral_name?: string | null
+          referral_phone?: string | null
+          region?: string | null
+          shipping_city?: string | null
+          shipping_country?: string | null
+          shipping_pin_code?: string | null
+          shipping_same_as_billing?: boolean
+          shipping_state?: string | null
+          state?: string | null
+          updated_at?: string
+          website?: string | null
+          whatsapp?: string | null
+        }
+        Relationships: []
+      }
+      invoices: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          customer_id: string | null
+          date: string
+          discount_mode: string
+          discount_value: number
+          due_date: string | null
+          id: string
+          items: Json
+          notes: string | null
+          number: string
+          paid: number
+          shipping_amount: number
+          status: string
+          tax_rate: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string | null
+          date?: string
+          discount_mode?: string
+          discount_value?: number
+          due_date?: string | null
+          id?: string
+          items?: Json
+          notes?: string | null
+          number?: string
+          paid?: number
+          shipping_amount?: number
+          status?: string
+          tax_rate?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string | null
+          date?: string
+          discount_mode?: string
+          discount_value?: number
+          due_date?: string | null
+          id?: string
+          items?: Json
+          notes?: string | null
+          number?: string
+          paid?: number
+          shipping_amount?: number
+          status?: string
+          tax_rate?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoices_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payments: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          customer_name: string | null
+          date: string
+          id: string
+          invoice_number: string | null
+          method: string
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          customer_name?: string | null
+          date?: string
+          id?: string
+          invoice_number?: string | null
+          method?: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          customer_name?: string | null
+          date?: string
+          id?: string
+          invoice_number?: string | null
+          method?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      products: {
+        Row: {
+          barcode: string | null
+          category: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          image_url: string | null
+          item_type: string
+          low_stock_at: number
+          mrp: number
+          multi_unit: boolean
+          name: string
+          opening_stock_date: string | null
+          price: number
+          purchase_rate: number
+          sku: string | null
+          stock: number
+          tax_pct: number
+          unit: string
+          updated_at: string
+          warehouse: string | null
+          wholesale_rate: number
+        }
+        Insert: {
+          barcode?: string | null
+          category?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          item_type?: string
+          low_stock_at?: number
+          mrp?: number
+          multi_unit?: boolean
+          name: string
+          opening_stock_date?: string | null
+          price?: number
+          purchase_rate?: number
+          sku?: string | null
+          stock?: number
+          tax_pct?: number
+          unit?: string
+          updated_at?: string
+          warehouse?: string | null
+          wholesale_rate?: number
+        }
+        Update: {
+          barcode?: string | null
+          category?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          item_type?: string
+          low_stock_at?: number
+          mrp?: number
+          multi_unit?: boolean
+          name?: string
+          opening_stock_date?: string | null
+          price?: number
+          purchase_rate?: number
+          sku?: string | null
+          stock?: number
+          tax_pct?: number
+          unit?: string
+          updated_at?: string
+          warehouse?: string | null
+          wholesale_rate?: number
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
