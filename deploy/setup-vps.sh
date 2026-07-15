@@ -16,7 +16,7 @@ APP_NAME="say-hello"
 NODE_MAJOR=20
 APP_PORT=3000
 DEPLOY_USER="$(whoami)"
-DOMAIN="${1:-invoice.hmeryweb.xyz}"
+DOMAIN="${1:-invoice.hmeriweb.xyz}"
 
 echo "==> Installing base packages (git, nginx, curl)…"
 sudo apt-get update -y
