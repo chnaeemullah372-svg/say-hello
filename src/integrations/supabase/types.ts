@@ -113,126 +113,10 @@ export type Database = {
         }
         Relationships: []
       }
-      whatsapp_logs: {
-        Row: {
-          created_at: string
-          created_by: string | null
-          customer_id: string | null
-          customer_name: string | null
-          error_message: string | null
-          id: string
-          message_text: string | null
-          message_type: string
-          reference_id: string | null
-          reference_number: string | null
-          status: string
-          whatsapp_number: string
-        }
-        Insert: {
-          created_at?: string
-          created_by?: string | null
-          customer_id?: string | null
-          customer_name?: string | null
-          error_message?: string | null
-          id?: string
-          message_text?: string | null
-          message_type?: string
-          reference_id?: string | null
-          reference_number?: string | null
-          status?: string
-          whatsapp_number: string
-        }
-        Update: {
-          created_at?: string
-          created_by?: string | null
-          customer_id?: string | null
-          customer_name?: string | null
-          error_message?: string | null
-          id?: string
-          message_text?: string | null
-          message_type?: string
-          reference_id?: string | null
-          reference_number?: string | null
-          status?: string
-          whatsapp_number?: string
-        }
-        Relationships: []
-      }
-      expenses: {
-        Row: {
-          amount: number
-          category: string
-          created_at: string
-          created_by: string | null
-          date: string
-          description: string | null
-          id: string
-        }
-        Insert: {
-          amount?: number
-          category: string
-          created_at?: string
-          created_by?: string | null
-          date?: string
-          description?: string | null
-          id?: string
-        }
-        Update: {
-          amount?: number
-          category?: string
-          created_at?: string
-          created_by?: string | null
-          date?: string
-          description?: string | null
-          id?: string
-        }
-        Relationships: []
-      }
-      purchases: {
-        Row: {
-          created_at: string
-          created_by: string | null
-          date: string
-          id: string
-          items: Json
-          paid: number
-          status: string
-          supplier_id: string | null
-          supplier_name: string
-          total: number
-        }
-        Insert: {
-          created_at?: string
-          created_by?: string | null
-          date?: string
-          id?: string
-          items?: Json
-          paid?: number
-          status?: string
-          supplier_id?: string | null
-          supplier_name: string
-          total?: number
-        }
-        Update: {
-          created_at?: string
-          created_by?: string | null
-          date?: string
-          id?: string
-          items?: Json
-          paid?: number
-          status?: string
-          supplier_id?: string | null
-          supplier_name?: string
-          total?: number
-        }
-        Relationships: []
-      }
       customers: {
         Row: {
           address: string | null
           balance: number
-          bank_account_no: string | null
-          bank_name: string | null
           business_id: string | null
           city: string | null
           contact_person: string | null
@@ -245,13 +129,7 @@ export type Database = {
           name: string
           pan_no: string | null
           party_type: string
-          ifsc_code: string | null
-          max_credit_limit: number | null
-          opening_balance: number
-          opening_date: string
           payable_balance: number
-          payable_to: string | null
-          payment_terms: string | null
           phone: string | null
           phone2: string | null
           pin_code: string | null
@@ -267,15 +145,12 @@ export type Database = {
           shipping_state: string | null
           state: string | null
           updated_at: string
-          upi_id: string | null
           website: string | null
           whatsapp: string | null
         }
         Insert: {
           address?: string | null
           balance?: number
-          bank_account_no?: string | null
-          bank_name?: string | null
           business_id?: string | null
           city?: string | null
           contact_person?: string | null
@@ -288,13 +163,7 @@ export type Database = {
           name: string
           pan_no?: string | null
           party_type?: string
-          ifsc_code?: string | null
-          max_credit_limit?: number | null
-          opening_balance?: number
-          opening_date?: string
           payable_balance?: number
-          payable_to?: string | null
-          payment_terms?: string | null
           phone?: string | null
           phone2?: string | null
           pin_code?: string | null
@@ -310,15 +179,12 @@ export type Database = {
           shipping_state?: string | null
           state?: string | null
           updated_at?: string
-          upi_id?: string | null
           website?: string | null
           whatsapp?: string | null
         }
         Update: {
           address?: string | null
           balance?: number
-          bank_account_no?: string | null
-          bank_name?: string | null
           business_id?: string | null
           city?: string | null
           contact_person?: string | null
@@ -331,13 +197,7 @@ export type Database = {
           name?: string
           pan_no?: string | null
           party_type?: string
-          ifsc_code?: string | null
-          max_credit_limit?: number | null
-          opening_balance?: number
-          opening_date?: string
           payable_balance?: number
-          payable_to?: string | null
-          payment_terms?: string | null
           phone?: string | null
           phone2?: string | null
           pin_code?: string | null
@@ -353,7 +213,6 @@ export type Database = {
           shipping_state?: string | null
           state?: string | null
           updated_at?: string
-          upi_id?: string | null
           website?: string | null
           whatsapp?: string | null
         }
@@ -490,9 +349,6 @@ export type Database = {
       }
       invoices: {
         Row: {
-          attachments: Json
-          commission_agent: string | null
-          commission_pct: number
           created_at: string
           created_by: string | null
           customer_id: string | null
@@ -505,17 +361,12 @@ export type Database = {
           notes: string | null
           number: string
           paid: number
-          shipping_address: string | null
           shipping_amount: number
           status: string
           tax_rate: number
-          terms: string | null
           updated_at: string
         }
         Insert: {
-          attachments?: Json
-          commission_agent?: string | null
-          commission_pct?: number
           created_at?: string
           created_by?: string | null
           customer_id?: string | null
@@ -528,17 +379,12 @@ export type Database = {
           notes?: string | null
           number?: string
           paid?: number
-          shipping_address?: string | null
           shipping_amount?: number
           status?: string
           tax_rate?: number
-          terms?: string | null
           updated_at?: string
         }
         Update: {
-          attachments?: Json
-          commission_agent?: string | null
-          commission_pct?: number
           created_at?: string
           created_by?: string | null
           customer_id?: string | null
@@ -551,11 +397,9 @@ export type Database = {
           notes?: string | null
           number?: string
           paid?: number
-          shipping_address?: string | null
           shipping_amount?: number
           status?: string
           tax_rate?: number
-          terms?: string | null
           updated_at?: string
         }
         Relationships: [
