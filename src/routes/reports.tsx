@@ -31,7 +31,7 @@ const reportSections = [
 function ReportsPage() {
   const { invoices } = useStore();
   const [selectedReport, setSelectedReport] = useState<string | null>(null);
-  const totals = invoices.map(i => ({ ...i, ...calcInvoiceTotals(i.items, i.taxRate) }));
+  const totals = invoices.map(i => ({ ...i, ...calcInvoiceTotals(i.items, i.taxRate, i.discountMode, i.discountValue) }));
   const paid = totals.reduce((s, i) => s + i.paid, 0);
   const outstanding = totals.reduce((s, i) => s + (i.total - i.paid), 0);
   const receivables = [

@@ -51,7 +51,7 @@ function InvoiceList() {
   const enriched = useMemo(
     () => invoices.map((i) => ({
       ...i,
-      ...calcInvoiceTotals(i.items, i.taxRate),
+      ...calcInvoiceTotals(i.items, i.taxRate, i.discountMode, i.discountValue),
       customer: customers.find((c) => c.id === i.customerId),
     })),
     [invoices, customers],

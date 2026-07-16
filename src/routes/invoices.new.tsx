@@ -45,6 +45,8 @@ function CreateInvoice() {
 
   const [customerId, setCustomerId] = useState<string>("");
   const [shippingAddress, setShippingAddress] = useState("");
+  const [shipAddrOpen, setShipAddrOpen] = useState(false);
+  const [shipAddrDraft, setShipAddrDraft] = useState("");
   const [items, setItems] = useState<DraftLine[]>([]);
   const [mode, setMode] = useState<ItemMode>("product");
 
@@ -95,6 +97,7 @@ function CreateInvoice() {
       setDiscountValue(editingInvoice.discountValue ?? 0);
       setTaxPct(editingInvoice.taxRate);
       setShippingAmount(editingInvoice.shippingAmount ?? 0);
+      setShippingAddress(editingInvoice.shippingAddress ?? "");
       setPaymentAmount(editingInvoice.paid);
       setInvoiceDate(new Date(editingInvoice.date));
       setDueDate(editingInvoice.dueDate || "");
@@ -184,7 +187,7 @@ function CreateInvoice() {
       date: invoiceDate.toISOString().slice(0, 10),
       dueDate: dueDate || invoiceDate.toISOString().slice(0, 10),
       items: items.map(({ productId, name, qty, rate, discount }) => ({ productId, name, qty, rate, discount })),
-      taxRate: taxPct, discountMode, discountValue, shippingAmount, paid: paymentAmount, notes, status,
+      taxRate: taxPct, discountMode, discountValue, shippingAmount, shippingAddress, paid: paymentAmount, notes, status,
       terms, attachments: uploadedAttachments, commissionPct, commissionAgent,
     };
     try {
@@ -381,17 +384,17 @@ function CreateInvoice() {
                   onClick={() => setCustOpen(true)}
                   className="rounded-md bg-destructive/15 px-2.5 py-1 text-[11px] font-semibold text-destructive"
                 >
-                  Edit client
+                  Change client
                 </button>
               </div>
               <div className="flex items-center justify-between border-t border-background/70 px-4 py-2.5 text-sm">
-                <span className="text-muted-foreground">Shipping Address</span>
+                <div className="min-w-0">
+                  <div className="text-muted-foreground">Shipping Address</div>
+                  {shippingAddress && <div className="truncate text-[11px] text-foreground">{shippingAddress}</div>}
+                </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    const v = prompt("Shipping address", shippingAddress || customer.address);
-                    if (v !== null) setShippingAddress(v);
-                  }}
+                  onClick={() => { setShipAddrDraft(shippingAddress || customer.address || ""); setShipAddrOpen(true); }}
                   className="rounded-md bg-accent/25 px-2.5 py-1 text-[11px] font-semibold text-accent-foreground"
                 >
                   Edit Address
@@ -769,6 +772,17 @@ function CreateInvoice() {
       </div>
 
       {/* Client picker */}
+      <Dialog open={shipAddrOpen} onOpenChange={setShipAddrOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader><DialogTitle>Shipping Address</DialogTitle></DialogHeader>
+          <Textarea rows={4} value={shipAddrDraft} onChange={(e) => setShipAddrDraft(e.target.value)} placeholder="Where should this order be delivered?" />
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShipAddrOpen(false)}>Cancel</Button>
+            <Button onClick={() => { setShippingAddress(shipAddrDraft); setShipAddrOpen(false); }}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={custOpen} onOpenChange={setCustOpen}>
         <DialogContent className="max-w-md p-0">
           <DialogHeader className="border-b p-4"><DialogTitle>Select Client</DialogTitle></DialogHeader>

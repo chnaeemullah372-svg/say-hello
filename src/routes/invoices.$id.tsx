@@ -31,6 +31,7 @@ function InvoiceView() {
   const [labels, setLabels] = useState<Record<string, string>>({});
   const [tpl, setTpl] = useState<Record<string, boolean>>({});
   const [customFields, setCustomFields] = useState<{ id: string; fieldName: string; placement: string }[]>([]);
+  const [printSettings, setPrintSettings] = useState<Record<string, any>>({});
 
   useEffect(() => {
     if (typeof window !== "undefined" && window.location.search.includes("print=1")) {
@@ -42,15 +43,27 @@ function InvoiceView() {
       supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.renameFields").maybeSingle(),
       supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.templateSettings").maybeSingle(),
       supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.customFields").maybeSingle(),
-    ]).then(([b, bk, rf, ts, cf]) => {
+      supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.print").maybeSingle(),
+    ]).then(([b, bk, rf, ts, cf, pr]) => {
       if (b.data?.setting_value) setBusiness(b.data.setting_value as Record<string, any>);
       if (bk.data?.setting_value) setBank(bk.data.setting_value as Record<string, any>);
       if (rf.data?.setting_value) setLabels(rf.data.setting_value as Record<string, string>);
       if (ts.data?.setting_value) setTpl(ts.data.setting_value as Record<string, boolean>);
       const fields = (cf.data?.setting_value as { fields?: any[] } | null)?.fields;
       if (fields) setCustomFields(fields);
+      if (pr.data?.setting_value) setPrintSettings(pr.data.setting_value as Record<string, any>);
     });
   }, []);
+
+  // The paper size / orientation / margins picked in Settings -> Page &
+  // Print never actually reached the printed output before — there was no
+  // @page rule at all, so the browser just used its own default (often
+  // Letter, not the A4/A5/thermal size configured in the app).
+  const PAGE_SIZE: Record<string, string> = {
+    a4: "A4", a5: "A5", letter: "letter", legal: "legal",
+    "thermal-80mm": "80mm 297mm", "thermal-58mm": "58mm 297mm",
+  };
+  const pageCss = `@page { size: ${PAGE_SIZE[printSettings.paper] ?? "A4"} ${printSettings.orientation === "landscape" ? "landscape" : "portrait"}; margin: ${printSettings.marginTop ?? 12}mm ${printSettings.marginRight ?? 10}mm ${printSettings.marginBottom ?? 12}mm ${printSettings.marginLeft ?? 10}mm; }`;
 
   // Falls back to the plain English label if nothing's been renamed in
   // Settings -> Rename Field Name.
@@ -67,7 +80,7 @@ function InvoiceView() {
       const message = (wa.invoiceMessage || "Hello {customer}, your invoice {invoice_no} of {amount} is ready.")
         .replace("{customer}", customer.name)
         .replace("{invoice_no}", inv.number)
-        .replace("{amount}", fmt(calcInvoiceTotals(inv.items, inv.taxRate).total));
+        .replace("{amount}", fmt(calcInvoiceTotals(inv.items, inv.taxRate, inv.discountMode, inv.discountValue).total));
       const result = await sendAndLogWhatsApp({
         apiBase: wa.shoibApiBase || "https://hatelecom.xyz/api",
         token: wa.shoibToken || "",
@@ -88,11 +101,12 @@ function InvoiceView() {
   };
 
   if (!inv) return <div className="p-10 text-center text-muted-foreground">Invoice not found. <Link to="/invoices" className="text-accent underline">Back to invoices</Link></div>;
-  const totals = calcInvoiceTotals(inv.items, inv.taxRate);
+  const totals = calcInvoiceTotals(inv.items, inv.taxRate, inv.discountMode, inv.discountValue);
   const balance = totals.total - inv.paid;
 
   return (
     <div className="mx-auto max-w-4xl">
+      <style>{pageCss}</style>
       <AlertDialog open={waPrompt} onOpenChange={setWaPrompt}>
         <AlertDialogContent>
           <AlertDialogHeader>

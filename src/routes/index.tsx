@@ -50,7 +50,7 @@ function Dashboard() {
   const { invoices, payments } = useStore();
   const { user } = useAuth();
 
-  const totals = invoices.map((i) => ({ ...i, ...calcInvoiceTotals(i.items, i.taxRate) }));
+  const totals = invoices.map((i) => ({ ...i, ...calcInvoiceTotals(i.items, i.taxRate, i.discountMode, i.discountValue) }));
   const sales = totals.reduce((s, i) => s + i.total, 0);
   const received = payments.reduce((s, p) => s + p.amount, 0);
   const outstanding = totals.reduce((s, i) => s + (i.total - i.paid), 0);

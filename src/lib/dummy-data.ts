@@ -87,6 +87,7 @@ export type Invoice = {
   discountMode?: "rate" | "flat";
   discountValue?: number;
   shippingAmount?: number;
+  shippingAddress?: string;
   paid: number;
   notes?: string;
   terms?: string;
@@ -330,10 +331,23 @@ export const topProducts = [
   { name: "Desk Lamp", value: 18000 },
 ];
 
-export function calcInvoiceTotals(items: InvoiceItem[], taxRate: number) {
+export function calcInvoiceTotals(
+  items: InvoiceItem[],
+  taxRate: number,
+  discountMode: "rate" | "flat" = "rate",
+  discountValue = 0,
+) {
   const subtotal = items.reduce((s, it) => s + it.qty * it.rate, 0);
-  const discount = items.reduce((s, it) => s + (it.qty * it.rate * it.discount) / 100, 0);
-  const taxable = subtotal - discount;
+  const lineDiscount = items.reduce((s, it) => s + (it.qty * it.rate * it.discount) / 100, 0);
+  const afterLineDiscount = subtotal - lineDiscount;
+  // The invoice-level Discount-Rate/Flat field (set on the creation screen)
+  // used to only affect the number shown while creating the invoice — once
+  // saved, every other screen (the invoice view/print, Statement, Reports,
+  // dashboards) recalculated from items alone and silently dropped it,
+  // overstating the total by the discount amount everywhere else.
+  const globalDiscount = discountMode === "rate" ? (afterLineDiscount * discountValue) / 100 : discountValue;
+  const discount = lineDiscount + globalDiscount;
+  const taxable = Math.max(0, afterLineDiscount - globalDiscount);
   const tax = (taxable * taxRate) / 100;
   const total = taxable + tax;
   return { subtotal, discount, tax, total };

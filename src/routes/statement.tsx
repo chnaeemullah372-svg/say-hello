@@ -39,7 +39,7 @@ function StatementPage() {
     const allRows: Row[] = [
       ...custInvoices.map((i) => ({
         date: i.date, kind: "invoice" as const, label: `Invoice ${i.number}`,
-        debit: calcInvoiceTotals(i.items, i.taxRate).total, credit: 0,
+        debit: calcInvoiceTotals(i.items, i.taxRate, i.discountMode, i.discountValue).total, credit: 0,
       })),
       ...custPayments.map((p) => ({
         date: p.date, kind: "payment" as const, label: `Payment received (${p.method}) — ${p.invoiceNumber}`,

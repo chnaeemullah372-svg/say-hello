@@ -44,7 +44,7 @@ function PaymentsPage() {
   const total = payments.reduce((s, p) => s + p.amount, 0);
   const selectedInvoice = invoices.find((i) => i.number === form.invoiceNumber);
   const unpaidBills = invoices
-    .map((i) => ({ invoice: i, totals: calcInvoiceTotals(i.items, i.taxRate), customer: customers.find((c) => c.id === i.customerId) }))
+    .map((i) => ({ invoice: i, totals: calcInvoiceTotals(i.items, i.taxRate, i.discountMode, i.discountValue), customer: customers.find((c) => c.id === i.customerId) }))
     .filter((x) => x.totals.total - x.invoice.paid > 0);
   const filtered = useMemo(() => payments.filter((p) => [p.invoiceNumber, p.customerName, p.method, p.date].join(" ").toLowerCase().includes(query.toLowerCase())), [payments, query]);
 
@@ -71,7 +71,7 @@ function PaymentsPage() {
                   <Select value={form.invoiceNumber} onValueChange={(v) => {
                     const inv = invoices.find(i => i.number === v);
                     const cust = customers.find(c => c.id === inv?.customerId);
-                    const totals = inv ? calcInvoiceTotals(inv.items, inv.taxRate) : null;
+                    const totals = inv ? calcInvoiceTotals(inv.items, inv.taxRate, inv.discountMode, inv.discountValue) : null;
                     setForm(f => ({ ...f, invoiceNumber: v, customerName: cust?.name ?? "", amount: totals && inv ? Math.max(0, totals.total - inv.paid) : f.amount }));
                   }}>
                     <SelectTrigger><SelectValue placeholder="Select invoice / party" /></SelectTrigger>
@@ -108,7 +108,7 @@ function PaymentsPage() {
                 {selectedInvoice && (
                   <div className="rounded-xl border bg-muted/25 p-3 text-sm">
                     <div className="mb-2 font-semibold">Unpaid Bills</div>
-                    <div className="flex items-center justify-between"><span>{selectedInvoice.number}</span><span className="font-display font-bold text-primary">{fmt(Math.max(0, calcInvoiceTotals(selectedInvoice.items, selectedInvoice.taxRate).total - selectedInvoice.paid))}</span></div>
+                    <div className="flex items-center justify-between"><span>{selectedInvoice.number}</span><span className="font-display font-bold text-primary">{fmt(Math.max(0, calcInvoiceTotals(selectedInvoice.items, selectedInvoice.taxRate, selectedInvoice.discountMode, selectedInvoice.discountValue).total - selectedInvoice.paid))}</span></div>
                   </div>
                 )}
               </div>
@@ -122,7 +122,7 @@ function PaymentsPage() {
                     await addPayment(form);
                     if (selectedInvoice) {
                       const newPaid = selectedInvoice.paid + form.amount;
-                      const totals = calcInvoiceTotals(selectedInvoice.items, selectedInvoice.taxRate);
+                      const totals = calcInvoiceTotals(selectedInvoice.items, selectedInvoice.taxRate, selectedInvoice.discountMode, selectedInvoice.discountValue);
                       const newStatus = newPaid >= totals.total ? "paid" : newPaid > 0 ? "partial" : "unpaid";
                       await updateInvoice(selectedInvoice.id, { paid: newPaid, status: newStatus });
                     }

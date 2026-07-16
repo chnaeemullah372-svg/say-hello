@@ -149,6 +149,7 @@ function invoiceFromRow(row: any): Invoice {
     discountMode: (row.discount_mode as Invoice["discountMode"]) ?? "rate",
     discountValue: Number(row.discount_value ?? 0),
     shippingAmount: Number(row.shipping_amount ?? 0),
+    shippingAddress: row.shipping_address ?? undefined,
     paid: Number(row.paid ?? 0),
     notes: row.notes ?? undefined,
     terms: row.terms ?? undefined,
@@ -544,6 +545,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         discount_mode: i.discountMode ?? "rate",
         discount_value: i.discountValue ?? 0,
         shipping_amount: i.shippingAmount ?? 0,
+        shipping_address: i.shippingAddress || null,
         paid: i.paid,
         notes: i.notes || null,
         terms: i.terms || null,
@@ -585,6 +587,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (patch.discountMode !== undefined) dbPatch.discount_mode = patch.discountMode;
       if (patch.discountValue !== undefined) dbPatch.discount_value = patch.discountValue;
       if (patch.shippingAmount !== undefined) dbPatch.shipping_amount = patch.shippingAmount;
+      if (patch.shippingAddress !== undefined) dbPatch.shipping_address = patch.shippingAddress || null;
       if (patch.paid !== undefined) dbPatch.paid = patch.paid;
       if (patch.notes !== undefined) dbPatch.notes = patch.notes;
       if (patch.terms !== undefined) dbPatch.terms = patch.terms;

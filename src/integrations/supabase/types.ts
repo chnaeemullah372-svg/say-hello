@@ -436,6 +436,7 @@ export type Database = {
           notes: string | null
           number: string
           paid: number
+          shipping_address: string | null
           shipping_amount: number
           status: string
           tax_rate: number
@@ -458,6 +459,7 @@ export type Database = {
           notes?: string | null
           number?: string
           paid?: number
+          shipping_address?: string | null
           shipping_amount?: number
           status?: string
           tax_rate?: number
@@ -480,6 +482,7 @@ export type Database = {
           notes?: string | null
           number?: string
           paid?: number
+          shipping_address?: string | null
           shipping_amount?: number
           status?: string
           tax_rate?: number
