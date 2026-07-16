@@ -47,6 +47,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -100,6 +102,19 @@ type SettingsState = {
   homeScreen: Record<string, string | boolean>;
   appearance: Record<string, string | boolean>;
   security: Record<string, string | boolean>;
+  renameFields: Record<string, string>;
+  templateSettings: Record<string, boolean>;
+  customFields: { fields: CustomFieldDef[] };
+};
+
+type CustomFieldDef = {
+  id: string;
+  sequenceNo: number;
+  fieldName: string;
+  fieldType: "text" | "number" | "date" | "dropdown";
+  alignment: "vertical" | "horizontal";
+  placement: "top" | "bottom" | "total" | "end";
+  inCalculation: boolean;
 };
 
 const defaults: SettingsState = {
@@ -342,6 +357,33 @@ const defaults: SettingsState = {
     blockInactiveUser: true,
     auditLog: true,
   },
+  renameFields: {
+    billTo: "Bill To", shipTo: "Ship To", dueDate: "Due Date", reference: "Reference",
+    baseAmount: "Base Amount", total: "Total", discount: "Discount", shippingAmount: "Shipping Amount",
+    paid: "Paid", balance: "Balance", oldBalance: "Old Balance", amountInWords: "Amount in words",
+    signature: "Signature", thankYou: "Thank you! Happy Business!", termsCondition: "Terms & Condition",
+    taxableAmount: "Taxable Amount", vehicleNo: "Vehicle No", transportMode: "Transport Mode",
+    payableTo: "Payable To", accountNo: "Account No", otherDetails: "Other Details",
+    no: "No.", product: "Product", productCode: "Product Code", quantity: "Quantity", rate: "Rate",
+    amount: "Amount", tax: "Tax",
+    invoice: "Invoice", estimate: "Estimate", purchase: "Purchase", order: "Order",
+    purchaseOrder: "Purchase Order", receipt: "Receipt", deliveryNote: "Delivery Note", saleReturn: "Sale Return",
+    invoiceNo: "Invoice No.", purchaseNo: "Purchase No.", estimateNo: "Estimate No.",
+    purchaseOrderNo: "Purchase Order No.", saleOrderNo: "Sale Order No.", saleReturnNo: "Sale Return No.",
+    receiptNo: "Receipt No", deliveryNoteNo: "Delivery Note No.",
+  },
+  templateSettings: {
+    showBankInEstimate: true, showAmountInWords: true, showBalanceInWords: true,
+    showNotesInLedger: true, enableAdjustmentInLedger: true, showCompanyNameBelowSignature: true,
+    showOldBalance: true, showAllPaymentDetails: true, showNotesInPdf: true,
+    showTermsInFullRow: true, autoSaveOnSharePrint: true, enablePaidStamp: true,
+    showTimeInDocuments: true, disableProductIfZeroStock: true, showAgentNameInInvoice: true,
+    enableWarehouseManagement: true, showHeaderAllPages: false, showAttachmentsInPdf: false,
+    showImageColumn: false, hideQuantityColumn: false, hideSrNoColumn: true,
+    hideHsnColumn: false, hideRateColumn: false, hideDiscountColumn: false,
+    hideTaxColumn: false, showSubtotal: false,
+  },
+  customFields: { fields: [] },
 };
 
 const categories: Category[] = [
@@ -351,15 +393,18 @@ const categories: Category[] = [
   { key: "terms", title: "Terms & Condition", subtitle: "Per-document terms text", icon: FileSignature, tone: "text-jade bg-jade/10 ring-jade/20" },
   { key: "accounts", title: "Accounts & Categories", subtitle: "Payment accounts & expense categories", icon: Landmark, tone: "text-orchid bg-orchid/10 ring-orchid/20" },
   { key: "fundManagement", title: "Fund Management", subtitle: "Transfer money between accounts", icon: ArrowLeftRight, tone: "text-aqua bg-aqua/10 ring-aqua/20" },
+  { key: "whatsapp", title: "WhatsApp", subtitle: "Connect your account, message templates", icon: MessageCircle, tone: "text-jade bg-jade/10 ring-jade/20" },
   { key: "numbering", title: "Prefix & Localization", subtitle: "Prefixes, country, currency, formats", icon: Hash, tone: "text-amber bg-amber/10 ring-amber/20" },
   { key: "print", title: "Page & Print", subtitle: "A4, thermal, PDF", icon: Printer, tone: "text-jade bg-jade/10 ring-jade/20" },
+  { key: "renameFields", title: "Rename Field Name", subtitle: "Change field labels on invoices/documents", icon: PenLine, tone: "text-sapphire bg-sapphire/10 ring-sapphire/20" },
+  { key: "customFields", title: "Add Custom Fields", subtitle: "Add extra fields to documents", icon: Plus, tone: "text-jade bg-jade/10 ring-jade/20" },
+  { key: "templateSettings", title: "Template Settings", subtitle: "Show or hide fields and totals", icon: FileText, tone: "text-coral bg-coral/10 ring-coral/20" },
   { key: "items", title: "Items & Stock", subtitle: "Products, units, alerts", icon: Boxes, tone: "text-orchid bg-orchid/10 ring-orchid/20" },
   { key: "payment", title: "Payment", subtitle: "Cash, UPI, due", icon: WalletCards, tone: "text-aqua bg-aqua/10 ring-aqua/20" },
   { key: "bank", title: "Bank / UPI", subtitle: "Invoice bank details", icon: Landmark, tone: "text-primary bg-primary/10 ring-primary/20" },
   { key: "users", title: "Admin & Users", subtitle: "Roles and access", icon: ShieldCheck, badge: "Admin", tone: "text-coral bg-coral/10 ring-coral/20" },
   { key: "notifications", title: "Alerts", subtitle: "Reminders and reports", icon: Bell, tone: "text-amber bg-amber/10 ring-amber/20" },
   { key: "gmail", title: "Gmail / Email", subtitle: "SMTP templates", icon: Mail, badge: "Secret", tone: "text-sapphire bg-sapphire/10 ring-sapphire/20" },
-  { key: "whatsapp", title: "WhatsApp", subtitle: "Future API setup", icon: MessageCircle, tone: "text-jade bg-jade/10 ring-jade/20" },
   { key: "backup", title: "Backup / Export", subtitle: "CSV, Excel, restore", icon: DatabaseBackup, tone: "text-orchid bg-orchid/10 ring-orchid/20" },
   { key: "homeScreen", title: "Home Screen", subtitle: "Dashboard widgets, monthly or all-time", icon: LayoutDashboard, tone: "text-sapphire bg-sapphire/10 ring-sapphire/20" },
   { key: "import", title: "Import", subtitle: "Bulk-add clients and products from Excel", icon: Upload, tone: "text-jade bg-jade/10 ring-jade/20" },
@@ -395,7 +440,7 @@ function SettingsPage() {
       for (const row of data ?? []) {
         const key = row.setting_key.replace("settings.", "") as SectionKey;
         if (key in next && row.setting_value && typeof row.setting_value === "object" && !Array.isArray(row.setting_value)) {
-          next[key] = { ...next[key], ...(row.setting_value as Record<string, string | boolean>) };
+          (next as any)[key] = { ...(next as any)[key], ...(row.setting_value as Record<string, unknown>) };
         }
       }
       setSettings(next);
@@ -520,6 +565,9 @@ function SettingsPage() {
           {active === "import" && <ImportLinkPanel />}
           {active === "numbering" && <NumberingPanel data={settings.numbering} set={(k, v) => setField("numbering", k, v)} />}
           {active === "print" && <PrintPanel data={settings.print} set={(k, v) => setField("print", k, v)} />}
+          {active === "renameFields" && <RenameFieldsPanel data={settings.renameFields} set={(k, v) => setField("renameFields", k, v)} />}
+          {active === "customFields" && <CustomFieldsPanel data={settings.customFields} set={(v) => setField("customFields", "fields", v)} />}
+          {active === "templateSettings" && <TemplateSettingsPanel data={settings.templateSettings} set={(k, v) => setField("templateSettings", k, v)} />}
           {active === "items" && <ItemsPanel data={settings.items} set={(k, v) => setField("items", k, v)} />}
           {active === "payment" && <PaymentPanel data={settings.payment} set={(k, v) => setField("payment", k, v)} />}
           {active === "bank" && <BankPanel data={settings.bank} set={(k, v) => setField("bank", k, v)} />}
@@ -836,17 +884,188 @@ function PrintPanel({ data, set }: PanelProps) {
         <ToggleField label="Draft watermark" checked={data.draftWatermark} onChange={(v) => set("draftWatermark", v)} />
       </ToggleGrid>
       <SettingBlock title="Printer Setting" icon={Printer}>
-        <div className="mb-3 rounded-lg border border-amber/40 bg-amber/10 p-3 text-xs">
-          Note: Thermal printer setting is beta mode. Please configure thermal printer setting using Bluetooth in the app — a browser cannot pair Bluetooth printers directly. This becomes fully usable once the app is packaged as a mobile app (same approach you used before).
+        {data.printerChoice === "thermal" && (
+          <div className="mb-3 rounded-lg border border-amber/40 bg-amber/10 p-3 text-xs">
+            *** Note: Thermal Printer is in beta mode. Please configure thermal printer setting before using it. Printer Size is the printing width of 58mm/80mm. Maximum character in one line can be 40/45/56/64 — these vary by printer brand; see your printer's manual. Also: a browser can't pair Bluetooth directly — this becomes usable once packaged as a mobile app.
+          </div>
+        )}
+        <div className="mb-3">
+          <Label className="mb-1.5 block text-xs uppercase tracking-wider text-muted-foreground">Choose Printer</Label>
+          <div className="grid grid-cols-2 gap-2">
+            {(["normal", "thermal"] as const).map((v) => (
+              <button key={v} type="button" onClick={() => set("printerChoice", v)}
+                className={`rounded-lg border px-3 py-2 text-sm font-medium capitalize transition ${data.printerChoice === v ? "border-primary bg-primary/10 text-primary" : "text-muted-foreground"}`}>
+                {v} Printer
+              </button>
+            ))}
+          </div>
         </div>
-        <Grid>
-          <SelectField label="Choose printer" value={data.printerChoice} onChange={(v) => set("printerChoice", v)} options={["normal", "thermal"]} />
-          <SelectField label="Printer connection" value={data.printerConnection} onChange={(v) => set("printerConnection", v)} options={["bluetooth", "usb"]} />
-          <SelectField label="Print format" value={data.printFormat} onChange={(v) => set("printFormat", v)} options={["image", "text"]} />
-          <SelectField label="Printer size (mm)" value={data.printerSize} onChange={(v) => set("printerSize", v)} options={["58", "80"]} />
-          <TextField label="Maximum characters in line" value={data.maxCharsPerLine} onChange={(v) => set("maxCharsPerLine", v)} type="number" />
-        </Grid>
+        {data.printerChoice === "thermal" ? (
+          <Grid>
+            <SelectField label="Printer connection" value={data.printerConnection} onChange={(v) => set("printerConnection", v)} options={["bluetooth", "usb"]} />
+            <SelectField label="Print format" value={data.printFormat} onChange={(v) => set("printFormat", v)} options={["image", "text"]} />
+            <SelectField label="Printer size (mm)" value={data.printerSize} onChange={(v) => set("printerSize", v)} options={["58", "80"]} />
+            <TextField label="Maximum character in single line" value={data.maxCharsPerLine} onChange={(v) => set("maxCharsPerLine", v)} type="number" />
+          </Grid>
+        ) : (
+          <SelectField label="Print Size" value={data.paper.toUpperCase()} onChange={(v) => set("paper", v.toLowerCase())} options={["A4", "A5", "LETTER", "LEGAL"]} />
+        )}
       </SettingBlock>
+    </Panel>
+  );
+}
+
+function RenameFieldsPanel({ data, set }: { data: Record<string, string>; set: (k: string, v: string) => void }) {
+  const groups: [string, [string, string][]][] = [
+    ["Heading section", [
+      ["invoice", "Invoice"], ["estimate", "Estimate"], ["purchase", "Purchase"], ["order", "Order"],
+      ["purchaseOrder", "Purchase Order"], ["receipt", "Receipt"], ["deliveryNote", "Delivery Note"], ["saleReturn", "Sale Return"],
+      ["invoiceNo", "Invoice No."], ["purchaseNo", "Purchase No."], ["estimateNo", "Estimate No."],
+      ["purchaseOrderNo", "Purchase Order No."], ["saleOrderNo", "Sale Order No."], ["saleReturnNo", "Sale Return No."],
+      ["receiptNo", "Receipt No"], ["deliveryNoteNo", "Delivery Note No."],
+    ]],
+    ["Product table", [
+      ["no", "No."], ["product", "Product"], ["productCode", "Product Code"],
+      ["quantity", "Quantity"], ["rate", "Rate"], ["amount", "Amount"], ["tax", "Tax"],
+    ]],
+    ["Client / Supplier section", [
+      ["billTo", "Bill To"], ["shipTo", "Ship To"], ["dueDate", "Due Date"], ["reference", "Reference"],
+    ]],
+    ["General", [
+      ["baseAmount", "Base Amount"], ["total", "Total"], ["discount", "Discount"], ["shippingAmount", "Shipping Amount"],
+      ["paid", "Paid"], ["balance", "Balance"], ["oldBalance", "Old Balance"], ["amountInWords", "Amount in words"],
+      ["signature", "Signature"], ["thankYou", "Thank you"], ["termsCondition", "Terms & Condition"],
+      ["taxableAmount", "Taxable Amount"], ["vehicleNo", "Vehicle No"], ["transportMode", "Transport Mode"],
+    ]],
+    ["Banking section", [
+      ["payableTo", "Payable To"], ["accountNo", "Account No"], ["otherDetails", "Other Details"],
+    ]],
+  ];
+  return (
+    <Panel>
+      <PanelHeader icon={PenLine} title="Rename Field Name" subtitle="Change field labels on invoices/documents. Use names that suit your business." />
+      {groups.map(([group, fields]) => (
+        <SettingBlock key={group} title={group} icon={PenLine}>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {fields.map(([key, placeholder]) => (
+              <div key={key} className="grid grid-cols-[110px_1fr] items-center gap-2">
+                <Label className="text-xs text-muted-foreground">{placeholder}</Label>
+                <Input value={data[key] ?? ""} placeholder={placeholder} onChange={(e) => set(key, e.target.value)} />
+              </div>
+            ))}
+          </div>
+        </SettingBlock>
+      ))}
+    </Panel>
+  );
+}
+
+function CustomFieldsPanel({ data, set }: { data: { fields: CustomFieldDef[] }; set: (fields: CustomFieldDef[]) => void }) {
+  const fields = data.fields ?? [];
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<CustomFieldDef>({
+    id: "", sequenceNo: fields.length, fieldName: "", fieldType: "text", alignment: "vertical", placement: "top", inCalculation: false,
+  });
+
+  const startAdd = () => {
+    setDraft({ id: `f${Date.now()}`, sequenceNo: fields.length, fieldName: "", fieldType: "text", alignment: "vertical", placement: "top", inCalculation: false });
+    setOpen(true);
+  };
+  const save = () => {
+    if (!draft.fieldName.trim()) return toast.error("Field Name is required");
+    set([...fields, draft]);
+    setOpen(false);
+  };
+  const remove = (id: string) => set(fields.filter((f) => f.id !== id));
+
+  return (
+    <Panel>
+      <PanelHeader icon={Plus} title="Add Custom Fields" subtitle="Add extra fields to documents. Store more details if needed." />
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger asChild><Button onClick={startAdd}><Plus className="mr-1.5 h-4 w-4" />Add field</Button></DialogTrigger>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader><DialogTitle>Custom Field</DialogTitle></DialogHeader>
+          <div className="grid gap-3">
+            <TextField label="Sequence No" value={String(draft.sequenceNo)} onChange={(v) => setDraft({ ...draft, sequenceNo: +v || 0 })} type="number" />
+            <TextField label="Field Name" value={draft.fieldName} onChange={(v) => setDraft({ ...draft, fieldName: v })} />
+            <SelectField label="Field Type" value={draft.fieldType} onChange={(v) => setDraft({ ...draft, fieldType: v as CustomFieldDef["fieldType"] })} options={["text", "number", "date", "dropdown"]} />
+            <SelectField label="Alignment" value={draft.alignment} onChange={(v) => setDraft({ ...draft, alignment: v as CustomFieldDef["alignment"] })} options={["vertical", "horizontal"]} />
+            <SelectField label="Field Placement (PDF)" value={draft.placement} onChange={(v) => setDraft({ ...draft, placement: v as CustomFieldDef["placement"] })} options={["top", "bottom", "total", "end"]} />
+            <div className="flex items-center gap-2">
+              <Checkbox id="in-calc" checked={draft.inCalculation} onCheckedChange={(v) => setDraft({ ...draft, inCalculation: !!v })} />
+              <Label htmlFor="in-calc" className="text-sm font-normal">Add field in calculation</Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button onClick={save}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {fields.length === 0 ? (
+        <div className="grid place-items-center gap-2 rounded-xl border border-dashed py-12 text-center text-muted-foreground">
+          <Plus className="h-7 w-7" />
+          <div className="font-medium">No Fields to show</div>
+          <div className="text-xs">Tap "Add field" to create new fields.</div>
+        </div>
+      ) : (
+        <div className="grid gap-2">
+          {fields.map((f) => (
+            <div key={f.id} className="flex items-center justify-between rounded-lg border bg-card p-3 text-sm">
+              <div>
+                <div className="font-medium">{f.fieldName}</div>
+                <div className="text-xs text-muted-foreground capitalize">{f.fieldType} · {f.alignment} · {f.placement.replace(/^\w/, (c) => c.toUpperCase())} of Product Table</div>
+              </div>
+              <button type="button" onClick={() => remove(f.id)} className="text-destructive"><Trash2 className="h-4 w-4" /></button>
+            </div>
+          ))}
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+function TemplateSettingsPanel({ data, set }: { data: Record<string, boolean>; set: (k: string, v: boolean) => void }) {
+  const rows: [string, string][] = [
+    ["showBankInEstimate", "Show bank / payment information in estimate"],
+    ["showAmountInWords", "Show amount in words"],
+    ["showBalanceInWords", "Show balance amount in words"],
+    ["showNotesInLedger", "Show notes in ledger"],
+    ["enableAdjustmentInLedger", "Enable Adjustment in ledger"],
+    ["showCompanyNameBelowSignature", "Show company name below signature"],
+    ["showOldBalance", "Show Old Balance"],
+    ["showAllPaymentDetails", "Show All Payment Details"],
+    ["showNotesInPdf", "Show Notes in pdf"],
+    ["showTermsInFullRow", "Show terms and conditions in full row"],
+    ["autoSaveOnSharePrint", "Auto save on share / print"],
+    ["enablePaidStamp", "Enable paid stamp in invoice"],
+    ["showTimeInDocuments", "Show time in documents"],
+    ["disableProductIfZeroStock", "Disable the product if the inventory is zero"],
+    ["showAgentNameInInvoice", "Show Agent Name in Invoice"],
+    ["enableWarehouseManagement", "Enable Warehouse Management"],
+    ["showHeaderAllPages", "Show header in all pages"],
+    ["showAttachmentsInPdf", "Show Attachments in pdf"],
+    ["showImageColumn", "Show Image Column"],
+    ["hideQuantityColumn", "Hide Quantity Column"],
+    ["hideSrNoColumn", "Hide Sr.No Column"],
+    ["hideHsnColumn", "Hide HSN Code Column"],
+    ["hideRateColumn", "Hide Rate Column"],
+    ["hideDiscountColumn", "Hide Discount Column"],
+    ["hideTaxColumn", "Hide Tax Column"],
+    ["showSubtotal", "Show Subtotal"],
+  ];
+  return (
+    <Panel>
+      <PanelHeader icon={FileText} title="Template Settings" subtitle="Control what appears on invoices/documents. Show or hide fields and totals." />
+      <div className="divide-y rounded-lg border">
+        {rows.map(([key, label]) => (
+          <div key={key} className="flex items-center justify-between px-3 py-2.5">
+            <span className="text-sm">{label}</span>
+            <Switch checked={!!data[key]} onCheckedChange={(v) => set(key, v)} />
+          </div>
+        ))}
+      </div>
     </Panel>
   );
 }

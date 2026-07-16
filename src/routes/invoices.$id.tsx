@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useStore } from "@/lib/store";
 import { calcInvoiceTotals, fmt } from "@/lib/dummy-data";
+import { numberToWords } from "@/lib/numberToWords";
 import { StatusPill } from "@/components/StatusPill";
 import { supabase } from "@/integrations/supabase/client";
 import { sendAndLogWhatsApp } from "@/lib/whatsapp";
@@ -27,6 +28,9 @@ function InvoiceView() {
   const [waSending, setWaSending] = useState(false);
   const [business, setBusiness] = useState<Record<string, any>>({});
   const [bank, setBank] = useState<Record<string, any>>({});
+  const [labels, setLabels] = useState<Record<string, string>>({});
+  const [tpl, setTpl] = useState<Record<string, boolean>>({});
+  const [customFields, setCustomFields] = useState<{ id: string; fieldName: string; placement: string }[]>([]);
 
   useEffect(() => {
     if (typeof window !== "undefined" && window.location.search.includes("print=1")) {
@@ -35,11 +39,22 @@ function InvoiceView() {
     Promise.all([
       supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.business").maybeSingle(),
       supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.bank").maybeSingle(),
-    ]).then(([b, bk]) => {
+      supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.renameFields").maybeSingle(),
+      supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.templateSettings").maybeSingle(),
+      supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.customFields").maybeSingle(),
+    ]).then(([b, bk, rf, ts, cf]) => {
       if (b.data?.setting_value) setBusiness(b.data.setting_value as Record<string, any>);
       if (bk.data?.setting_value) setBank(bk.data.setting_value as Record<string, any>);
+      if (rf.data?.setting_value) setLabels(rf.data.setting_value as Record<string, string>);
+      if (ts.data?.setting_value) setTpl(ts.data.setting_value as Record<string, boolean>);
+      const fields = (cf.data?.setting_value as { fields?: any[] } | null)?.fields;
+      if (fields) setCustomFields(fields);
     });
   }, []);
+
+  // Falls back to the plain English label if nothing's been renamed in
+  // Settings -> Rename Field Name.
+  const L = (key: string, fallback: string) => labels[key] || fallback;
 
   const customer = inv ? customers.find((c) => c.id === inv.customerId) : undefined;
 
@@ -106,7 +121,7 @@ function InvoiceView() {
       </div>
 
       {/* Print area */}
-      <article className="print-area rounded-2xl border bg-card p-6 shadow-sm sm:p-10">
+      <article className="print-area relative rounded-2xl border bg-card p-6 shadow-sm sm:p-10">
         <header className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 border-b pb-6">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -131,7 +146,7 @@ function InvoiceView() {
 
         <section className="grid gap-6 py-6 sm:grid-cols-3">
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Bill to</div>
+            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{L("billTo", "Bill to")}</div>
             <div className="mt-1 font-semibold">{customer?.name}</div>
             <div className="text-xs text-muted-foreground">{customer?.address}</div>
             <div className="text-xs text-muted-foreground">{customer?.phone}</div>
@@ -140,7 +155,7 @@ function InvoiceView() {
           <div>
             <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Invoice date</div>
             <div className="mt-1 font-medium">{inv.date}</div>
-            <div className="mt-3 text-[10px] uppercase tracking-widest text-muted-foreground">Due date</div>
+            <div className="mt-3 text-[10px] uppercase tracking-widest text-muted-foreground">{L("dueDate", "Due date")}</div>
             <div className="mt-1 font-medium">{inv.dueDate}</div>
           </div>
           <div className="rounded-xl bg-primary/5 p-4">
@@ -150,15 +165,31 @@ function InvoiceView() {
           </div>
         </section>
 
+        {tpl.enablePaidStamp && inv.status === "paid" && (
+          <div className="no-print pointer-events-none absolute right-10 top-32 -rotate-12 rounded border-4 border-accent px-4 py-1 text-2xl font-black uppercase tracking-widest text-accent opacity-70">
+            Paid
+          </div>
+        )}
+
+        {customFields.filter((f) => f.placement === "top").length > 0 && (
+          <div className="mb-3 grid gap-2 rounded-lg border bg-muted/20 p-3 sm:grid-cols-3">
+            {customFields.filter((f) => f.placement === "top").map((f) => (
+              <div key={f.id} className="text-xs"><span className="text-muted-foreground">{f.fieldName}:</span> —</div>
+            ))}
+          </div>
+        )}
+
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="border-y bg-muted/30 text-[10px] uppercase tracking-wider text-muted-foreground">
               <tr>
+                {!tpl.hideSrNoColumn && <th className="py-3 pl-2 text-left">{L("no", "No.")}</th>}
                 <th className="py-3 pl-2 text-left">Description</th>
-                <th className="py-3 text-right">Qty</th>
-                <th className="py-3 text-right">Rate</th>
-                <th className="py-3 text-right">Disc</th>
-                <th className="py-3 pr-2 text-right">Amount</th>
+                {!tpl.hideQuantityColumn && <th className="py-3 text-right">{L("quantity", "Qty")}</th>}
+                {!tpl.hideRateColumn && <th className="py-3 text-right">{L("rate", "Rate")}</th>}
+                {!tpl.hideDiscountColumn && <th className="py-3 text-right">{L("discount", "Disc")}</th>}
+                {!tpl.hideTaxColumn && <th className="py-3 text-right">Tax</th>}
+                <th className="py-3 pr-2 text-right">{L("amount", "Amount")}</th>
               </tr>
             </thead>
             <tbody>
@@ -166,10 +197,12 @@ function InvoiceView() {
                 const amt = it.qty * it.rate * (1 - it.discount / 100);
                 return (
                   <tr key={i} className="border-b last:border-0">
+                    {!tpl.hideSrNoColumn && <td className="py-3 pl-2 text-muted-foreground">{i + 1}</td>}
                     <td className="py-3 pl-2">{it.name}</td>
-                    <td className="py-3 text-right">{it.qty}</td>
-                    <td className="py-3 text-right">{fmt(it.rate)}</td>
-                    <td className="py-3 text-right">{it.discount}%</td>
+                    {!tpl.hideQuantityColumn && <td className="py-3 text-right">{it.qty}</td>}
+                    {!tpl.hideRateColumn && <td className="py-3 text-right">{fmt(it.rate)}</td>}
+                    {!tpl.hideDiscountColumn && <td className="py-3 text-right">{it.discount}%</td>}
+                    {!tpl.hideTaxColumn && <td className="py-3 text-right">{inv.taxRate}%</td>}
                     <td className="py-3 pr-2 text-right font-medium">{fmt(amt)}</td>
                   </tr>
                 );
@@ -178,33 +211,55 @@ function InvoiceView() {
           </table>
         </div>
 
+        {customFields.filter((f) => f.placement === "bottom").length > 0 && (
+          <div className="mt-3 grid gap-2 rounded-lg border bg-muted/20 p-3 sm:grid-cols-3">
+            {customFields.filter((f) => f.placement === "bottom").map((f) => (
+              <div key={f.id} className="text-xs"><span className="text-muted-foreground">{f.fieldName}:</span> —</div>
+            ))}
+          </div>
+        )}
+
         <section className="mt-6 flex justify-end">
           <dl className="w-full max-w-xs space-y-2 text-sm">
-            <Row label="Subtotal" value={fmt(totals.subtotal)} />
-            <Row label="Discount" value={`- ${fmt(totals.discount)}`} />
+            {tpl.showSubtotal !== false && <Row label="Subtotal" value={fmt(totals.subtotal)} />}
+            <Row label={L("discount", "Discount")} value={`- ${fmt(totals.discount)}`} />
             <Row label={`Tax (${inv.taxRate}%)`} value={fmt(totals.tax)} />
             <div className="my-2 border-t border-dashed gold-hairline" />
             <div className="flex items-baseline justify-between">
-              <dt className="font-display font-semibold">Total</dt>
+              <dt className="font-display font-semibold">{L("total", "Total")}</dt>
               <dd className="font-display text-xl font-bold text-primary">{fmt(totals.total)}</dd>
             </div>
-            <Row label="Paid" value={fmt(inv.paid)} />
+            <Row label={L("paid", "Paid")} value={fmt(inv.paid)} />
+            {tpl.showOldBalance && <Row label={L("oldBalance", "Old Balance")} value={fmt(0)} />}
             <div className="flex items-baseline justify-between rounded-lg bg-gold/10 px-3 py-2 text-gold-foreground">
-              <dt className="text-xs font-semibold uppercase tracking-wider">Balance due</dt>
+              <dt className="text-xs font-semibold uppercase tracking-wider">{L("balance", "Balance")} due</dt>
               <dd className="font-display text-lg font-bold">{fmt(Math.max(0, balance))}</dd>
             </div>
+            {tpl.showAmountInWords && (
+              <div className="pt-1 text-[11px] italic text-muted-foreground">{L("amountInWords", "Amount in words")}: {numberToWords(Math.round(totals.total))} only</div>
+            )}
           </dl>
         </section>
 
+        {customFields.filter((f) => f.placement === "total").length > 0 && (
+          <div className="mt-3 grid gap-2 rounded-lg border bg-muted/20 p-3 sm:grid-cols-3">
+            {customFields.filter((f) => f.placement === "total").map((f) => (
+              <div key={f.id} className="text-xs"><span className="text-muted-foreground">{f.fieldName}:</span> —</div>
+            ))}
+          </div>
+        )}
+
         <footer className="mt-8 grid gap-6 border-t pt-6 sm:grid-cols-2">
           <div className="space-y-4">
-            <div>
-              <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Notes</div>
-              <div className="mt-1 text-sm">{inv.notes || "Thank you for your business."}</div>
-            </div>
-            {inv.terms && (
+            {tpl.showNotesInPdf !== false && (
               <div>
-                <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Terms &amp; Condition</div>
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Notes</div>
+                <div className="mt-1 text-sm">{inv.notes || "Thank you for your business."}</div>
+              </div>
+            )}
+            {inv.terms && (
+              <div className={tpl.showTermsInFullRow ? "sm:col-span-2" : ""}>
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{L("termsCondition", "Terms & Condition")}</div>
                 <div className="mt-1 whitespace-pre-line text-xs text-muted-foreground">{inv.terms}</div>
               </div>
             )}
@@ -213,25 +268,41 @@ function InvoiceView() {
                 <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Bank details</div>
                 <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">
                   {bank.bankName && <div>Bank: {bank.bankName}{bank.branch ? ` (${bank.branch})` : ""}</div>}
-                  {bank.accountName && <div>Account name: {bank.accountName}</div>}
-                  {bank.accountNumber && <div>Account no: {bank.accountNumber}</div>}
+                  {bank.accountName && <div>{L("payableTo", "Account name")}: {bank.accountName}</div>}
+                  {bank.accountNumber && <div>{L("accountNo", "Account no")}: {bank.accountNumber}</div>}
                   {bank.ifsc && <div>IFSC: {bank.ifsc}</div>}
                   {bank.upi && <div>UPI: {bank.upi}</div>}
                 </div>
               </div>
             )}
-            {inv.attachments && inv.attachments.length > 0 && (
-              <div className="no-print">
+            {tpl.showAttachmentsInPdf && inv.attachments && inv.attachments.length > 0 && (
+              <div>
                 <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Attachments</div>
+                <div className="mt-1 text-xs text-accent">{inv.attachments.map((a) => a.name).join(", ")}</div>
+              </div>
+            )}
+            {!tpl.showAttachmentsInPdf && inv.attachments && inv.attachments.length > 0 && (
+              <div className="no-print">
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Attachments (not shown in PDF — enable in Settings -&gt; Template Settings)</div>
                 <div className="mt-1 text-xs text-accent">{inv.attachments.map((a) => a.name).join(", ")}</div>
               </div>
             )}
           </div>
           <div className="text-right">
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Authorized signature</div>
-            <div className="mt-6 inline-block border-t px-8 pt-1 text-xs text-muted-foreground">{business.businessName || "Authorized signatory"}</div>
+            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{L("signature", "Authorized signature")}</div>
+            {tpl.showCompanyNameBelowSignature !== false && (
+              <div className="mt-6 inline-block border-t px-8 pt-1 text-xs text-muted-foreground">{business.businessName || "Authorized signatory"}</div>
+            )}
           </div>
         </footer>
+
+        {customFields.filter((f) => f.placement === "end").length > 0 && (
+          <div className="mt-4 grid gap-2 border-t pt-4 sm:grid-cols-3">
+            {customFields.filter((f) => f.placement === "end").map((f) => (
+              <div key={f.id} className="text-xs"><span className="text-muted-foreground">{f.fieldName}:</span> —</div>
+            ))}
+          </div>
+        )}
       </article>
     </div>
   );
