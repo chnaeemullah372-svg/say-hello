@@ -44,6 +44,21 @@ Every push to `main` (from Claude or you) triggers
 `.github/workflows/deploy.yml`, which SSHs in, pulls, rebuilds, and
 restarts the app automatically — usually live within a minute.
 
+## Daily WhatsApp due-date reminders
+
+Once WhatsApp is connected (Settings -> WhatsApp -> Get Pairing Code) and
+Outstanding Amount Reminder is turned on (Settings -> Alerts), run
+`scripts/send-due-reminders.mjs` once a day to message customers whose
+invoices are overdue. Add `SUPABASE_SERVICE_ROLE_KEY` to `.env` on the
+VPS (from Supabase -> Project Settings -> API -> service_role — this key
+bypasses RLS, so it must never end up in the frontend bundle), then add
+a cron entry:
+```bash
+crontab -e
+# add this line to run it every day at 10am server time:
+0 10 * * * cd /var/www/say-hello && /usr/bin/node scripts/send-due-reminders.mjs >> /var/log/due-reminders.log 2>&1
+```
+
 ## Adding a domain + HTTPS later
 
 Once you point a domain's A record at the server IP, run:

@@ -14,6 +14,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useStore } from "@/lib/store";
 import { fmt, type Customer, type PartyType } from "@/lib/dummy-data";
 import { normalizeWhatsAppNumber } from "@/lib/phone";
+import { supabase } from "@/integrations/supabase/client";
+import { sendAndLogWhatsApp } from "@/lib/whatsapp";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/customers")({
@@ -44,6 +46,32 @@ function CustomersPage() {
   const [form, setForm] = useState(emptyForm);
   const [showMore, setShowMore] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [waOpen, setWaOpen] = useState(false);
+  const [waTarget, setWaTarget] = useState<Customer | null>(null);
+  const [waMessage, setWaMessage] = useState("");
+  const [waSending, setWaSending] = useState(false);
+
+  const sendWa = async () => {
+    if (!waTarget?.whatsapp) return;
+    setWaSending(true);
+    try {
+      const { data } = await supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.whatsapp").maybeSingle();
+      const wa = (data?.setting_value as Record<string, string>) ?? {};
+      const result = await sendAndLogWhatsApp({
+        apiBase: wa.shoibApiBase || "https://hatelecom.xyz/api",
+        token: wa.shoibToken || "",
+        customerId: waTarget.id,
+        customerName: waTarget.name,
+        toNumber: waTarget.whatsapp,
+        message: waMessage,
+        messageType: "other",
+      });
+      if (result.ok) { toast.success("Sent"); setWaOpen(false); }
+      else toast.error(result.error || "Could not send");
+    } finally {
+      setWaSending(false);
+    }
+  };
 
   const visible = useMemo(
     () => customers.filter((c) => (tab === "both" ? true : c.partyType === tab || c.partyType === "both")),
@@ -252,10 +280,33 @@ function CustomersPage() {
                   ? <Badge className="bg-gold/20 text-gold-foreground border-gold/40" variant="outline">{fmt(c.partyType === "supplier" ? (c.payableBalance ?? 0) : c.balance)}</Badge>
                   : <Badge variant="outline" className="border-accent/30 text-accent">Settled</Badge>}
               </div>
+              {c.whatsapp && (
+                <button
+                  type="button"
+                  onClick={() => { setWaTarget(c); setWaMessage(`Hello ${c.name}, `); setWaOpen(true); }}
+                  className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md border border-accent/30 py-1.5 text-xs font-semibold text-accent transition hover:bg-accent/10"
+                >
+                  <MessageCircle className="h-3.5 w-3.5" />Send WhatsApp
+                </button>
+              )}
             </CardContent>
           </Card>
         ))}
       </div>
+
+      <Dialog open={waOpen} onOpenChange={setWaOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader><DialogTitle>Send WhatsApp to {waTarget?.name}</DialogTitle></DialogHeader>
+          <div className="grid gap-3">
+            <div className="text-xs text-muted-foreground">To: {waTarget?.whatsapp}</div>
+            <Textarea rows={4} value={waMessage} onChange={(e) => setWaMessage(e.target.value)} />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setWaOpen(false)}>Cancel</Button>
+            <Button onClick={sendWa} disabled={waSending}>{waSending ? "Sending…" : "Send"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
