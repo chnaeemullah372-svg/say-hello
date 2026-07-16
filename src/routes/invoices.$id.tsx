@@ -25,11 +25,20 @@ function InvoiceView() {
   const inv = getInvoice(id);
   const [waPrompt, setWaPrompt] = useState(false);
   const [waSending, setWaSending] = useState(false);
+  const [business, setBusiness] = useState<Record<string, any>>({});
+  const [bank, setBank] = useState<Record<string, any>>({});
 
   useEffect(() => {
     if (typeof window !== "undefined" && window.location.search.includes("print=1")) {
       setTimeout(() => window.print(), 400);
     }
+    Promise.all([
+      supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.business").maybeSingle(),
+      supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.bank").maybeSingle(),
+    ]).then(([b, bk]) => {
+      if (b.data?.setting_value) setBusiness(b.data.setting_value as Record<string, any>);
+      if (bk.data?.setting_value) setBank(bk.data.setting_value as Record<string, any>);
+    });
   }, []);
 
   const customer = inv ? customers.find((c) => c.id === inv.customerId) : undefined;
@@ -105,12 +114,12 @@ function InvoiceView() {
                 <Sparkles className="h-5 w-5" />
               </div>
               <div>
-                <div className="font-display text-xl font-bold">Prestige Store</div>
-                <div className="text-[11px] uppercase tracking-widest text-muted-foreground">Invoice Suite Demo</div>
+                <div className="font-display text-xl font-bold">{business.businessName || business.legalName || "Your Business"}</div>
+                {business.gstin && <div className="text-[11px] uppercase tracking-widest text-muted-foreground">GSTIN {business.gstin}</div>}
               </div>
             </div>
             <div className="mt-3 text-xs text-muted-foreground">
-              221B Baker Street, Mumbai · +91 90000 00000 · billing@prestige.store
+              {[business.address, business.mobile, business.email].filter(Boolean).join(" · ") || "Set your business address in Settings -> Company & Banking Information"}
             </div>
           </div>
           <div className="text-right shrink-0">
@@ -188,13 +197,39 @@ function InvoiceView() {
         </section>
 
         <footer className="mt-8 grid gap-6 border-t pt-6 sm:grid-cols-2">
-          <div>
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Notes</div>
-            <div className="mt-1 text-sm">{inv.notes || "Thank you for your business."}</div>
+          <div className="space-y-4">
+            <div>
+              <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Notes</div>
+              <div className="mt-1 text-sm">{inv.notes || "Thank you for your business."}</div>
+            </div>
+            {inv.terms && (
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Terms &amp; Condition</div>
+                <div className="mt-1 whitespace-pre-line text-xs text-muted-foreground">{inv.terms}</div>
+              </div>
+            )}
+            {bank.showOnInvoice && (bank.accountNumber || bank.upi) && (
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Bank details</div>
+                <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+                  {bank.bankName && <div>Bank: {bank.bankName}{bank.branch ? ` (${bank.branch})` : ""}</div>}
+                  {bank.accountName && <div>Account name: {bank.accountName}</div>}
+                  {bank.accountNumber && <div>Account no: {bank.accountNumber}</div>}
+                  {bank.ifsc && <div>IFSC: {bank.ifsc}</div>}
+                  {bank.upi && <div>UPI: {bank.upi}</div>}
+                </div>
+              </div>
+            )}
+            {inv.attachments && inv.attachments.length > 0 && (
+              <div className="no-print">
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Attachments</div>
+                <div className="mt-1 text-xs text-accent">{inv.attachments.map((a) => a.name).join(", ")}</div>
+              </div>
+            )}
           </div>
           <div className="text-right">
             <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Authorized signature</div>
-            <div className="mt-6 inline-block border-t px-8 pt-1 text-xs text-muted-foreground">Prestige Store</div>
+            <div className="mt-6 inline-block border-t px-8 pt-1 text-xs text-muted-foreground">{business.businessName || "Authorized signatory"}</div>
           </div>
         </footer>
       </article>
