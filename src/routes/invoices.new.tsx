@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useStore } from "@/lib/store";
 import { fmt, type InvoiceItem, type Product } from "@/lib/dummy-data";
 import { normalizeWhatsAppNumber } from "@/lib/phone";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 
@@ -32,7 +33,7 @@ type DraftLine = InvoiceItem & { unit?: string; code?: string; warehouse?: strin
 
 function CreateInvoice() {
   const nav = useNavigate();
-  const { customers, products, addCustomer, addProduct, addInvoice, updateInvoice, invoices } = useStore();
+  const { customers, products, addCustomer, addProduct, addInvoice, updateInvoice, invoices, addCommission, addPayment } = useStore();
 
   const editId = useMemo(() => {
     if (typeof window === "undefined") return null;
@@ -72,7 +73,7 @@ function CreateInvoice() {
   const [notesOpen, setNotesOpen] = useState(false);
   const [terms, setTerms] = useState("");
   const [termsOpen, setTermsOpen] = useState(false);
-  const [attachments, setAttachments] = useState<{ name: string; url: string; type: string }[]>([]);
+  const [attachments, setAttachments] = useState<{ name: string; url: string; type: string; path?: string }[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Dialogs
@@ -98,9 +99,33 @@ function CreateInvoice() {
       setInvoiceDate(new Date(editingInvoice.date));
       setDueDate(editingInvoice.dueDate || "");
       setNotes(editingInvoice.notes || "");
+      setTerms(editingInvoice.terms || "");
+      setCommissionPct(editingInvoice.commissionPct ?? 0);
+      setCommissionAgent(editingInvoice.commissionAgent || "");
+      if (editingInvoice.attachments?.length) {
+        Promise.all(
+          editingInvoice.attachments.map(async (a) => {
+            const { data } = await supabase.storage.from("invoice-attachments").createSignedUrl(a.path, 3600);
+            return { name: a.name, type: a.type, url: data?.signedUrl ?? "", path: a.path };
+          })
+        ).then((loaded) => setAttachments(loaded.filter((a) => a.url)));
+      }
       setLoadedEditId(editingInvoice.id);
     }
   }, [editingInvoice, loadedEditId]);
+
+  // For a brand-new invoice, default the terms text from Settings ->
+  // Terms & Condition -> Invoice Terms (previously this box always started
+  // blank and ignored the configured default entirely).
+  useEffect(() => {
+    if (editingInvoice) return;
+    supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.terms").maybeSingle()
+      .then(({ data }) => {
+        const t = (data?.setting_value as Record<string, string>) ?? {};
+        if (t.invoiceTerms) setTerms(t.invoiceTerms);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const customer = customers.find((c) => c.id === customerId);
 
@@ -135,23 +160,66 @@ function CreateInvoice() {
     if (saving) return;
     setSaving(true);
     const status: "paid" | "partial" | "unpaid" = paymentAmount >= total ? "paid" : paymentAmount > 0 ? "partial" : "unpaid";
+
+    // Upload any newly-attached files to Supabase Storage (previously these
+    // only existed as temporary blob: URLs and vanished after leaving the
+    // page — nothing was ever actually saved).
+    const uploadedAttachments: { name: string; path: string; type: string }[] = [];
+    for (const a of attachments) {
+      if (a.path) {
+        // Already uploaded in a previous save — keep it as-is.
+        uploadedAttachments.push({ name: a.name, path: a.path, type: a.type });
+      } else if (a.url.startsWith("blob:")) {
+        try {
+          const blob = await fetch(a.url).then((r) => r.blob());
+          const path = `${Date.now()}-${a.name}`;
+          const { error } = await supabase.storage.from("invoice-attachments").upload(path, blob, { contentType: a.type });
+          if (!error) uploadedAttachments.push({ name: a.name, path, type: a.type });
+        } catch { /* skip a file that failed to upload rather than blocking the whole save */ }
+      }
+    }
+
     const payload = {
       customerId,
       date: invoiceDate.toISOString().slice(0, 10),
       dueDate: dueDate || invoiceDate.toISOString().slice(0, 10),
       items: items.map(({ productId, name, qty, rate, discount }) => ({ productId, name, qty, rate, discount })),
       taxRate: taxPct, discountMode, discountValue, shippingAmount, paid: paymentAmount, notes, status,
+      terms, attachments: uploadedAttachments, commissionPct, commissionAgent,
     };
     try {
+      let invoiceId: string;
+      let invoiceNumber: string;
+      const isNew = !editingInvoice;
       if (editingInvoice) {
         await updateInvoice(editingInvoice.id, payload);
+        invoiceId = editingInvoice.id;
+        invoiceNumber = editingInvoice.number;
         toast.success(`Invoice ${editingInvoice.number} updated`);
-        setTimeout(() => nav({ to: "/invoices/$id", params: { id: editingInvoice.id }, search: opts.print ? { print: 1 } as any : undefined }), 150);
       } else {
         const inv = await addInvoice(payload);
+        invoiceId = inv.id;
+        invoiceNumber = inv.number;
         toast.success(`Invoice ${inv.number} saved`);
-        setTimeout(() => nav({ to: "/invoices/$id", params: { id: inv.id }, search: opts.print ? { print: 1 } as any : undefined }), 150);
       }
+
+      // Commission set on the invoice now actually creates a real ledger
+      // entry so it shows up on the Agents page (previously it was only a
+      // number shown on screen and saved nowhere).
+      if (commissionPct > 0 && commissionAgent.trim() && isNew) {
+        addCommission({ agentName: commissionAgent.trim(), invoiceId, commission: commissionAmount, status: "pending", date: invoiceDate.toISOString().slice(0, 10) })
+          .catch(() => toast.error("Invoice saved, but the commission record could not be created"));
+      }
+
+      // An initial payment taken while creating the invoice now creates a
+      // real Payments record too (previously it only touched the invoice's
+      // own `paid` field, so the Payments ledger never agreed with it).
+      if (paymentAmount > 0 && isNew) {
+        addPayment({ invoiceNumber, customerName: customer?.name ?? "", amount: paymentAmount, method: paymentMethod as any, date: invoiceDate.toISOString().slice(0, 10) })
+          .catch(() => toast.error("Invoice saved, but the payment record could not be created"));
+      }
+
+      setTimeout(() => nav({ to: "/invoices/$id", params: { id: invoiceId }, search: opts.print ? { print: 1 } as any : undefined }), 150);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not save invoice");
       setSaving(false);

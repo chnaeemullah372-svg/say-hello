@@ -65,6 +65,8 @@ export type InvoiceItem = {
   discount: number; // %
 };
 
+export type InvoiceAttachment = { name: string; path: string; type: string };
+
 export type Invoice = {
   id: string;
   number: string;
@@ -78,6 +80,10 @@ export type Invoice = {
   shippingAmount?: number;
   paid: number;
   notes?: string;
+  terms?: string;
+  attachments?: InvoiceAttachment[];
+  commissionPct?: number;
+  commissionAgent?: string;
   status: "paid" | "partial" | "unpaid";
 };
 

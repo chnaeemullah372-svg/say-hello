@@ -142,6 +142,10 @@ function invoiceFromRow(row: any): Invoice {
     shippingAmount: Number(row.shipping_amount ?? 0),
     paid: Number(row.paid ?? 0),
     notes: row.notes ?? undefined,
+    terms: row.terms ?? undefined,
+    attachments: (row.attachments ?? []) as import("./dummy-data").InvoiceAttachment[],
+    commissionPct: Number(row.commission_pct ?? 0),
+    commissionAgent: row.commission_agent ?? undefined,
     status: row.status as Invoice["status"],
   };
 }
@@ -514,6 +518,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         shipping_amount: i.shippingAmount ?? 0,
         paid: i.paid,
         notes: i.notes || null,
+        terms: i.terms || null,
+        attachments: (i.attachments ?? []) as unknown as import("@/integrations/supabase/types").Json,
+        commission_pct: i.commissionPct ?? 0,
+        commission_agent: i.commissionAgent || null,
         status: i.status,
         created_by: userData.user?.id,
       }).select().single();
@@ -551,6 +559,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (patch.shippingAmount !== undefined) dbPatch.shipping_amount = patch.shippingAmount;
       if (patch.paid !== undefined) dbPatch.paid = patch.paid;
       if (patch.notes !== undefined) dbPatch.notes = patch.notes;
+      if (patch.terms !== undefined) dbPatch.terms = patch.terms;
+      if (patch.attachments !== undefined) dbPatch.attachments = patch.attachments;
+      if (patch.commissionPct !== undefined) dbPatch.commission_pct = patch.commissionPct;
+      if (patch.commissionAgent !== undefined) dbPatch.commission_agent = patch.commissionAgent;
       if (patch.status !== undefined) dbPatch.status = patch.status;
       const { data, error } = await supabase.from("invoices").update(dbPatch as any).eq("id", id).select().single();
       if (error) throw new Error(error.message);

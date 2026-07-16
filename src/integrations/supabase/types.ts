@@ -394,6 +394,9 @@ export type Database = {
       }
       invoices: {
         Row: {
+          attachments: Json
+          commission_agent: string | null
+          commission_pct: number
           created_at: string
           created_by: string | null
           customer_id: string | null
@@ -409,9 +412,13 @@ export type Database = {
           shipping_amount: number
           status: string
           tax_rate: number
+          terms: string | null
           updated_at: string
         }
         Insert: {
+          attachments?: Json
+          commission_agent?: string | null
+          commission_pct?: number
           created_at?: string
           created_by?: string | null
           customer_id?: string | null
@@ -427,9 +434,13 @@ export type Database = {
           shipping_amount?: number
           status?: string
           tax_rate?: number
+          terms?: string | null
           updated_at?: string
         }
         Update: {
+          attachments?: Json
+          commission_agent?: string | null
+          commission_pct?: number
           created_at?: string
           created_by?: string | null
           customer_id?: string | null
@@ -445,6 +456,7 @@ export type Database = {
           shipping_amount?: number
           status?: string
           tax_rate?: number
+          terms?: string | null
           updated_at?: string
         }
         Relationships: [
