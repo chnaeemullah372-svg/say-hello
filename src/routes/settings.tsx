@@ -53,6 +53,7 @@ import { useAuth } from "@/lib/auth";
 import { useStore } from "@/lib/store";
 import { shoibLogin, shoibConnectPhone, shoibStatus, type ShoibWAState } from "@/lib/shoib";
 import { setCurrencySymbol, type AccountType } from "@/lib/dummy-data";
+import { CURRENCIES } from "@/lib/currencies";
 import { useTheme } from "@/lib/theme";
 import { toast } from "sonner";
 
@@ -608,8 +609,21 @@ function TaxPanel({ data, set }: PanelProps) {
     <Panel>
       <PanelHeader icon={Percent} title="Tax, GST, TDS and currency" subtitle="Default calculations for invoice, purchase and payment entries." />
       <Grid>
-        <SelectField label="Currency" value={data.currency} onChange={(v) => set("currency", v)} options={["INR", "USD", "EUR", "GBP", "AED", "PKR"]} />
-        <TextField label="Currency symbol" value={data.symbol} onChange={(v) => set("symbol", v)} />
+        <div className="grid gap-1.5">
+          <Label>Currency</Label>
+          <select
+            value={data.currency}
+            onChange={(e) => {
+              const c = CURRENCIES.find((c) => c.code === e.target.value);
+              set("currency", e.target.value);
+              if (c) set("symbol", c.symbol);
+            }}
+            className="h-9 rounded-md border bg-background px-3 text-sm"
+          >
+            {CURRENCIES.map((c) => <option key={c.code} value={c.code}>{c.code} — {c.name} ({c.symbol})</option>)}
+          </select>
+        </div>
+        <TextField label="Currency symbol (auto-set, editable)" value={data.symbol} onChange={(v) => set("symbol", v)} />
         <SelectField label="Interstate GST" value={data.interstateTax} onChange={(v) => set("interstateTax", v)} options={["auto", "igst", "cgst-sgst"]} />
       </Grid>
 
@@ -783,9 +797,11 @@ function NumberingPanel({ data, set }: PanelProps) {
       </div>
 
       <SettingBlock title="Country & currency" icon={Landmark}>
+        <div className="mb-3 rounded-lg border bg-muted/25 p-3 text-xs text-muted-foreground">
+          Currency code and symbol are set in one place — Tax &amp; Discount — so this page only controls the amount-in-words wording and number/date format, not the currency itself.
+        </div>
         <Grid>
           <TextField label="Country" value={data.country} onChange={(v) => set("country", v)} />
-          <TextField label="Currency" value={data.currency} onChange={(v) => set("currency", v)} />
           <TextField label="Currency major unit" value={data.currencyMajorUnit} onChange={(v) => set("currencyMajorUnit", v)} placeholder="e.g. Dollar / Euro / Rupee" />
           <TextField label="Currency minor unit" value={data.currencyMinorUnit} onChange={(v) => set("currencyMinorUnit", v)} placeholder="e.g. Cent / Paisa" />
           <TextField label="Separator (amount in words)" value={data.separator} onChange={(v) => set("separator", v)} />
