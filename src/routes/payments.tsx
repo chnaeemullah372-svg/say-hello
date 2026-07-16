@@ -23,18 +23,19 @@ export const Route = createFileRoute("/payments")({
 });
 
 function PaymentsPage() {
-  const { payments, addPayment, invoices, customers, updateInvoice } = useStore();
+  const { payments, addPayment, invoices, customers, updateInvoice, accounts, updateAccount } = useStore();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [type, setType] = useState("client");
   const [selected, setSelected] = useState<(typeof payments)[number] | null>(null);
   const [attachment, setAttachment] = useState("");
+  const paymentAccounts = accounts.filter((a) => a.accountType === "payment");
   const [form, setForm] = useState({
     receiptNo: `RECP${payments.length + 1}`,
     invoiceNumber: "",
     customerName: "",
     amount: 0,
-    method: "UPI" as const,
+    method: "Cash",
     transactionId: "",
     remarks: "",
     date: new Date().toISOString().slice(0, 10),
@@ -82,12 +83,19 @@ function PaymentsPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="Amount"><Input type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: +e.target.value })} /></Field>
                   <Field label="Payment Mode">
-                    <Select value={form.method} onValueChange={(v) => setForm({ ...form, method: v as typeof form.method })}>
+                    <Select value={form.method} onValueChange={(v) => setForm({ ...form, method: v })}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {["Cash", "UPI", "Card", "Bank Transfer"].map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                        {paymentAccounts.length > 0
+                          ? paymentAccounts.map((a) => <SelectItem key={a.id} value={a.name}>{a.name}</SelectItem>)
+                          : ["Cash", "UPI", "Card", "Bank Transfer"].map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
                       </SelectContent>
                     </Select>
+                    {paymentAccounts.length === 0 && (
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        No accounts set up yet — add one under Fund Management to see your real bank/cash accounts here instead of these defaults.
+                      </p>
+                    )}
                   </Field>
                 </div>
                 <Field label="Transaction Id / Cheque No"><Input value={form.transactionId} onChange={(e) => setForm({ ...form, transactionId: e.target.value })} /></Field>
@@ -117,6 +125,14 @@ function PaymentsPage() {
                       const totals = calcInvoiceTotals(selectedInvoice.items, selectedInvoice.taxRate);
                       const newStatus = newPaid >= totals.total ? "paid" : newPaid > 0 ? "partial" : "unpaid";
                       await updateInvoice(selectedInvoice.id, { paid: newPaid, status: newStatus });
+                    }
+                    // Keep Fund Management in sync: a client payment credits the
+                    // chosen account, a supplier payment debits it — same
+                    // account balances shown on /funds.
+                    const account = paymentAccounts.find((a) => a.name === form.method);
+                    if (account) {
+                      const delta = type === "client" ? form.amount : -form.amount;
+                      await updateAccount(account.id, { currentBalance: account.currentBalance + delta });
                     }
                     toast.success("Payment recorded");
                     setOpen(false);

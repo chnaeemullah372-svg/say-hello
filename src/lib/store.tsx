@@ -535,6 +535,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     addInvoice: async (i) => {
       const { data: userData } = await supabase.auth.getUser();
       const { data, error } = await supabase.from("invoices").insert({
+        ...(i.number ? { number: i.number } : {}),
         customer_id: i.customerId || null,
         date: i.date,
         due_date: i.dueDate || null,

@@ -101,7 +101,7 @@ export type Payment = {
   invoiceNumber: string;
   customerName: string;
   amount: number;
-  method: "Cash" | "UPI" | "Card" | "Bank Transfer";
+  method: string;
   date: string;
 };
 

@@ -33,7 +33,7 @@ type DraftLine = InvoiceItem & { unit?: string; code?: string; warehouse?: strin
 
 function CreateInvoice() {
   const nav = useNavigate();
-  const { customers, products, addCustomer, addProduct, addInvoice, updateInvoice, invoices, addCommission, addPayment } = useStore();
+  const { customers, products, addCustomer, addProduct, addInvoice, updateInvoice, invoices, addCommission, addPayment, accounts, updateAccount } = useStore();
 
   const editId = useMemo(() => {
     if (typeof window === "undefined") return null;
@@ -197,10 +197,31 @@ function CreateInvoice() {
         invoiceNumber = editingInvoice.number;
         toast.success(`Invoice ${editingInvoice.number} updated`);
       } else {
-        const inv = await addInvoice(payload);
+        // Use the prefix + next-number configured in Settings -> Prefix &
+        // Localization (previously this was ignored entirely — the DB
+        // just auto-generated its own INV-2026-0001-style number no
+        // matter what was set there).
+        let explicitNumber: string | undefined;
+        let numbering: Record<string, any> | null = null;
+        try {
+          const { data } = await supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.numbering").maybeSingle();
+          numbering = (data?.setting_value as Record<string, any>) ?? null;
+          if (numbering?.invoicePrefix && numbering?.invoiceNext) {
+            explicitNumber = `${numbering.invoicePrefix}${numbering.invoiceNext}`;
+          }
+        } catch { /* fall back to the DB's own numbering if settings can't be read */ }
+
+        const inv = await addInvoice({ ...payload, number: explicitNumber });
         invoiceId = inv.id;
         invoiceNumber = inv.number;
         toast.success(`Invoice ${inv.number} saved`);
+
+        if (numbering && explicitNumber) {
+          supabase.from("app_settings").upsert(
+            { setting_key: "settings.numbering", setting_value: { ...numbering, invoiceNext: String(Number(numbering.invoiceNext) + 1) } },
+            { onConflict: "setting_key" }
+          );
+        }
       }
 
       // Commission set on the invoice now actually creates a real ledger
@@ -215,8 +236,13 @@ function CreateInvoice() {
       // real Payments record too (previously it only touched the invoice's
       // own `paid` field, so the Payments ledger never agreed with it).
       if (paymentAmount > 0 && isNew) {
-        addPayment({ invoiceNumber, customerName: customer?.name ?? "", amount: paymentAmount, method: paymentMethod as any, date: invoiceDate.toISOString().slice(0, 10) })
+        addPayment({ invoiceNumber, customerName: customer?.name ?? "", amount: paymentAmount, method: paymentMethod, date: invoiceDate.toISOString().slice(0, 10) })
           .catch(() => toast.error("Invoice saved, but the payment record could not be created"));
+        const account = accounts.find((a) => a.accountType === "payment" && a.name === paymentMethod);
+        if (account) {
+          updateAccount(account.id, { currentBalance: account.currentBalance + paymentAmount })
+            .catch(() => toast.error("Payment saved, but the account balance could not be updated"));
+        }
       }
 
       setTimeout(() => nav({ to: "/invoices/$id", params: { id: invoiceId }, search: opts.print ? { print: 1 } as any : undefined }), 150);
@@ -565,7 +591,10 @@ function CreateInvoice() {
                 <Select value={paymentMethod} onValueChange={setPaymentMethod}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {["Cash", "UPI", "Card", "Bank Transfer"].map((m) => (
+                    {(accounts.filter((a) => a.accountType === "payment").length > 0
+                      ? accounts.filter((a) => a.accountType === "payment").map((a) => a.name)
+                      : ["Cash", "UPI", "Card", "Bank Transfer"]
+                    ).map((m) => (
                       <SelectItem key={m} value={m}>{m}</SelectItem>
                     ))}
                   </SelectContent>
