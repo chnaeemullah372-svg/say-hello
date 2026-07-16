@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useStore } from "@/lib/store";
 import { DocumentBoard, type DocRow } from "@/components/DocumentBoard";
 import type { SaleReturn } from "@/lib/dummy-data";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/sale-return")({
   head: () => ({ meta: [
@@ -18,7 +19,7 @@ const statusOptions = [
 ];
 
 function SaleReturnPage() {
-  const { saleReturns, customers, addSaleReturn, updateSaleReturn, deleteSaleReturn } = useStore();
+  const { saleReturns, customers, addSaleReturn, updateSaleReturn, deleteSaleReturn, updateCustomer } = useStore();
 
   const rows: DocRow[] = saleReturns.map((s) => ({
     id: s.id, number: s.number, partyId: s.customerId, date: s.date,
@@ -35,9 +36,18 @@ function SaleReturnPage() {
       rows={rows}
       parties={customers.filter((c) => c.partyType !== "supplier").map((c) => ({ id: c.id, name: c.name }))}
       statusOptions={statusOptions}
-      onCreate={(row) => {
+      onCreate={async (row) => {
         const total = row.items.reduce((s, it) => s + it.qty * it.rate, 0);
-        return addSaleReturn({ customerId: row.partyId, date: row.date, items: row.items, total, status: row.status as SaleReturn["status"], notes: row.notes });
+        const result = await addSaleReturn({ customerId: row.partyId, date: row.date, items: row.items, total, status: row.status as SaleReturn["status"], notes: row.notes });
+        // A sale return is a credit note — it reduces what the customer
+        // owes you. This never happened before; the return was recorded
+        // but the customer's balance stayed untouched.
+        const customer = customers.find((c) => c.id === row.partyId);
+        if (customer) {
+          await updateCustomer(customer.id, { balance: Math.max(0, customer.balance - total) });
+          toast.success(`Customer balance reduced by ${total.toFixed(2)}`);
+        }
+        return result;
       }}
       onUpdate={(id, patch) => {
         const total = (patch.items ?? []).reduce((s, it) => s + it.qty * it.rate, 0);

@@ -29,6 +29,7 @@ export type PartyOption = { id: string; name: string };
 
 export function DocumentBoard({
   title, subtitle, partyLabel, secondDateLabel, addLabel, rows, parties, statusOptions, partyType = "client",
+  convertLabel, onConvert,
   onCreate, onUpdate, onDelete,
 }: {
   title: string;
@@ -40,6 +41,8 @@ export function DocumentBoard({
   parties: PartyOption[];
   statusOptions: { value: string; label: string; tone: string }[];
   partyType?: "client" | "supplier";
+  convertLabel?: string;
+  onConvert?: (row: DocRow & { total: number }) => void;
   onCreate: (row: Omit<DocRow, "id" | "number">) => Promise<unknown>;
   onUpdate: (id: string, patch: Partial<DocRow>) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
@@ -245,6 +248,14 @@ export function DocumentBoard({
                   <div className="font-display font-bold text-primary">{fmt(rowTotal)}</div>
                   <div className="text-[11px] text-muted-foreground">{r.items.length} item{r.items.length !== 1 ? "s" : ""}</div>
                 </div>
+                {onConvert && r.status !== "cancelled" && (
+                  <Button
+                    type="button" size="sm" variant="outline"
+                    onClick={() => onConvert({ ...r, total: rowTotal })}
+                  >
+                    {convertLabel ?? "Convert"}
+                  </Button>
+                )}
                 <button type="button" onClick={() => startEdit(r)} className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-primary">
                   <Pencil className="h-4 w-4" />
                 </button>
