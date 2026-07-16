@@ -52,7 +52,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { useStore } from "@/lib/store";
 import { shoibLogin, shoibConnectPhone, shoibStatus, type ShoibWAState } from "@/lib/shoib";
-import type { AccountType } from "@/lib/dummy-data";
+import { setCurrencySymbol, type AccountType } from "@/lib/dummy-data";
 import { useTheme } from "@/lib/theme";
 import { toast } from "sonner";
 
@@ -436,6 +436,7 @@ function SettingsPage() {
       return;
     }
     toast.success(`${activeCategory.title} saved`);
+    if (section === "tax" && settings.tax.symbol) setCurrencySymbol(settings.tax.symbol);
   };
 
   return (

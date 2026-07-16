@@ -339,6 +339,16 @@ export function calcInvoiceTotals(items: InvoiceItem[], taxRate: number) {
   return { subtotal, discount, tax, total };
 }
 
+// Currency symbol shown by fmt() below. Lives outside React so every
+// existing `fmt(...)` call site — dozens of files — picks up the current
+// Settings -> Tax & Discount -> Currency symbol without needing each one
+// rewritten to a hook. Updated once on app load and again immediately
+// whenever the Tax settings are saved (see AppShell.tsx / settings.tsx).
+let currencySymbol = "Rs";
+export function setCurrencySymbol(symbol: string) {
+  if (symbol) currencySymbol = symbol;
+}
+
 export function fmt(n: number) {
-  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
+  return `${currencySymbol} ${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }

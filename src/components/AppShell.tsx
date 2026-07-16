@@ -7,6 +7,8 @@ import { useTheme } from "@/lib/theme";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/auth";
+import { supabase } from "@/integrations/supabase/client";
+import { setCurrencySymbol } from "@/lib/dummy-data";
 import { toast } from "sonner";
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -16,6 +18,17 @@ export function AppShell({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
 
   const isLogin = pathname.startsWith("/login");
+
+  // Pull the real currency symbol from Settings -> Tax & Discount so every
+  // fmt(...) call across the app shows it instead of a hardcoded ₹/INR.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.tax").maybeSingle()
+      .then(({ data }) => {
+        const symbol = (data?.setting_value as Record<string, string> | null)?.symbol;
+        if (symbol) setCurrencySymbol(symbol);
+      });
+  }, [isAuthenticated]);
 
   // Fix: numeric fields (Rate, Qty, Discount, Tax, Shipping, Payment amount…)
   // used to show a literal "0" that staff had to backspace before typing the
