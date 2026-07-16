@@ -47,6 +47,7 @@ const financeItems = [
 
 const insightItems = [
   { title: "Reports", url: "/reports", icon: BarChart3 },
+  { title: "Statement", url: "/statement", icon: FileText },
   { title: "Team & Access", url: "/team", icon: ShieldCheck },
   { title: "Settings", url: "/settings", icon: Settings },
 ];

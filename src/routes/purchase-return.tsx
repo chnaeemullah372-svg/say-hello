@@ -31,6 +31,7 @@ function PurchaseReturnPage() {
       title="Purchase Returns"
       subtitle={`${purchaseReturns.length} purchase returns on file`}
       partyLabel="Supplier"
+      partyType="supplier"
       secondDateLabel="Return date"
       addLabel="New Purchase Return"
       rows={rows}

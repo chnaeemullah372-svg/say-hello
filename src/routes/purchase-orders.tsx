@@ -31,6 +31,7 @@ function POPage() {
       title="Purchase Orders"
       subtitle={`${purchaseOrders.length} purchase orders on file`}
       partyLabel="Supplier"
+      partyType="supplier"
       secondDateLabel="Expected date"
       addLabel="New Purchase Order"
       rows={rows}

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Plus, Trash2, FileText, Pencil } from "lucide-react";
+import { Plus, Trash2, FileText, Pencil, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogT
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageHeader } from "@/components/PageHeader";
 import { fmt, type InvoiceItem } from "@/lib/dummy-data";
+import { useStore } from "@/lib/store";
 import { toast } from "sonner";
 
 export type DocRow = {
@@ -27,7 +28,7 @@ export type DocRow = {
 export type PartyOption = { id: string; name: string };
 
 export function DocumentBoard({
-  title, subtitle, partyLabel, secondDateLabel, addLabel, rows, parties, statusOptions,
+  title, subtitle, partyLabel, secondDateLabel, addLabel, rows, parties, statusOptions, partyType = "client",
   onCreate, onUpdate, onDelete,
 }: {
   title: string;
@@ -38,10 +39,16 @@ export function DocumentBoard({
   rows: DocRow[];
   parties: PartyOption[];
   statusOptions: { value: string; label: string; tone: string }[];
+  partyType?: "client" | "supplier";
   onCreate: (row: Omit<DocRow, "id" | "number">) => Promise<unknown>;
   onUpdate: (id: string, patch: Partial<DocRow>) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 }) {
+  const { addCustomer } = useStore();
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [quickName, setQuickName] = useState("");
+  const [quickPhone, setQuickPhone] = useState("");
+  const [quickSaving, setQuickSaving] = useState(false);
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -80,6 +87,21 @@ export function DocumentBoard({
     if (lineQty <= 0) return toast.error("Quantity must be greater than zero");
     setItems((prev) => [...prev, { productId: "", name: lineName.trim(), qty: lineQty, rate: lineRate, discount: 0 }]);
     setLineName(""); setLineQty(1); setLineRate(0);
+  };
+
+  const quickAddParty = async () => {
+    if (!quickName.trim()) return toast.error("Name is required");
+    setQuickSaving(true);
+    try {
+      const c = await addCustomer({ partyType, name: quickName.trim(), phone: quickPhone });
+      setPartyId(c.id);
+      setQuickName(""); setQuickPhone(""); setQuickAddOpen(false);
+      toast.success(`${partyType === "supplier" ? "Supplier" : "Client"} added & selected`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not save");
+    } finally {
+      setQuickSaving(false);
+    }
   };
 
   const save = async () => {
@@ -123,12 +145,30 @@ export function DocumentBoard({
               <div className="grid gap-4">
                 <div className="grid gap-1.5">
                   <Label>{partyLabel}</Label>
-                  <Select value={partyId} onValueChange={setPartyId}>
-                    <SelectTrigger><SelectValue placeholder={`Select ${partyLabel.toLowerCase()}`} /></SelectTrigger>
-                    <SelectContent>
-                      {parties.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <div className="flex gap-2">
+                    <Select value={partyId} onValueChange={setPartyId}>
+                      <SelectTrigger className="flex-1"><SelectValue placeholder={`Select ${partyLabel.toLowerCase()}`} /></SelectTrigger>
+                      <SelectContent>
+                        {parties.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <Dialog open={quickAddOpen} onOpenChange={setQuickAddOpen}>
+                      <DialogTrigger asChild>
+                        <Button type="button" variant="outline" size="icon"><UserPlus className="h-4 w-4" /></Button>
+                      </DialogTrigger>
+                      <DialogContent className="sm:max-w-sm">
+                        <DialogHeader><DialogTitle>New {partyLabel}</DialogTitle></DialogHeader>
+                        <div className="grid gap-3">
+                          <div className="grid gap-1.5"><Label>Name</Label><Input value={quickName} onChange={(e) => setQuickName(e.target.value)} autoFocus /></div>
+                          <div className="grid gap-1.5"><Label>Phone</Label><Input value={quickPhone} onChange={(e) => setQuickPhone(e.target.value)} placeholder="+92 300 …" /></div>
+                        </div>
+                        <DialogFooter>
+                          <Button variant="ghost" onClick={() => setQuickAddOpen(false)}>Cancel</Button>
+                          <Button onClick={quickAddParty} disabled={quickSaving}>{quickSaving ? "Saving…" : "Add & select"}</Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="grid gap-1.5"><Label>Date</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>

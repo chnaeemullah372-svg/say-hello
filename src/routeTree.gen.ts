@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as WhatsappLogsRouteImport } from './routes/whatsapp-logs'
 import { Route as TeamRouteImport } from './routes/team'
 import { Route as SubscriptionsRouteImport } from './routes/subscriptions'
+import { Route as StatementRouteImport } from './routes/statement'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SaleReturnRouteImport } from './routes/sale-return'
 import { Route as SaleOrderRouteImport } from './routes/sale-order'
@@ -50,6 +51,11 @@ const TeamRoute = TeamRouteImport.update({
 const SubscriptionsRoute = SubscriptionsRouteImport.update({
   id: '/subscriptions',
   path: '/subscriptions',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StatementRoute = StatementRouteImport.update({
+  id: '/statement',
+  path: '/statement',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -195,6 +201,7 @@ export interface FileRoutesByFullPath {
   '/sale-order': typeof SaleOrderRoute
   '/sale-return': typeof SaleReturnRoute
   '/settings': typeof SettingsRoute
+  '/statement': typeof StatementRoute
   '/subscriptions': typeof SubscriptionsRoute
   '/team': typeof TeamRoute
   '/whatsapp-logs': typeof WhatsappLogsRoute
@@ -224,6 +231,7 @@ export interface FileRoutesByTo {
   '/sale-order': typeof SaleOrderRoute
   '/sale-return': typeof SaleReturnRoute
   '/settings': typeof SettingsRoute
+  '/statement': typeof StatementRoute
   '/subscriptions': typeof SubscriptionsRoute
   '/team': typeof TeamRoute
   '/whatsapp-logs': typeof WhatsappLogsRoute
@@ -254,6 +262,7 @@ export interface FileRoutesById {
   '/sale-order': typeof SaleOrderRoute
   '/sale-return': typeof SaleReturnRoute
   '/settings': typeof SettingsRoute
+  '/statement': typeof StatementRoute
   '/subscriptions': typeof SubscriptionsRoute
   '/team': typeof TeamRoute
   '/whatsapp-logs': typeof WhatsappLogsRoute
@@ -285,6 +294,7 @@ export interface FileRouteTypes {
     | '/sale-order'
     | '/sale-return'
     | '/settings'
+    | '/statement'
     | '/subscriptions'
     | '/team'
     | '/whatsapp-logs'
@@ -314,6 +324,7 @@ export interface FileRouteTypes {
     | '/sale-order'
     | '/sale-return'
     | '/settings'
+    | '/statement'
     | '/subscriptions'
     | '/team'
     | '/whatsapp-logs'
@@ -343,6 +354,7 @@ export interface FileRouteTypes {
     | '/sale-order'
     | '/sale-return'
     | '/settings'
+    | '/statement'
     | '/subscriptions'
     | '/team'
     | '/whatsapp-logs'
@@ -373,6 +385,7 @@ export interface RootRouteChildren {
   SaleOrderRoute: typeof SaleOrderRoute
   SaleReturnRoute: typeof SaleReturnRoute
   SettingsRoute: typeof SettingsRoute
+  StatementRoute: typeof StatementRoute
   SubscriptionsRoute: typeof SubscriptionsRoute
   TeamRoute: typeof TeamRoute
   WhatsappLogsRoute: typeof WhatsappLogsRoute
@@ -402,6 +415,13 @@ declare module '@tanstack/react-router' {
       path: '/subscriptions'
       fullPath: '/subscriptions'
       preLoaderRoute: typeof SubscriptionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/statement': {
+      id: '/statement'
+      path: '/statement'
+      fullPath: '/statement'
+      preLoaderRoute: typeof StatementRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -597,6 +617,7 @@ const rootRouteChildren: RootRouteChildren = {
   SaleOrderRoute: SaleOrderRoute,
   SaleReturnRoute: SaleReturnRoute,
   SettingsRoute: SettingsRoute,
+  StatementRoute: StatementRoute,
   SubscriptionsRoute: SubscriptionsRoute,
   TeamRoute: TeamRoute,
   WhatsappLogsRoute: WhatsappLogsRoute,
