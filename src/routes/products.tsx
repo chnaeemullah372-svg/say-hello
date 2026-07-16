@@ -1,6 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, type ReactNode } from "react";
-import { Barcode, Calendar, Package, Pencil, Plus, Search, SlidersHorizontal, Wrench, Boxes } from "lucide-react";
+import { useMemo, useState, type ReactNode } from "react";
+import { Barcode, Calendar, Package, Pencil, Plus, Search, SlidersHorizontal, Wrench, Boxes, FileSpreadsheet, FileText, ChevronDown } from "lucide-react";
+import * as XLSX from "xlsx";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +14,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useStore } from "@/lib/store";
 import { fmt, type ItemType, type Product } from "@/lib/dummy-data";
 import { toast } from "sonner";
@@ -32,6 +38,11 @@ const emptyForm = {
   multiUnit: false, warehouse: "Main Store",
 };
 
+const REPORT_TYPES = ["All Records", "Product Sale Rate info", "Product Purchase Rate info", "Product WholeSale Rate info"] as const;
+type ReportType = (typeof REPORT_TYPES)[number];
+const SORT_OPTIONS = ["Sale Rate", "Name", "Stock"] as const;
+type SortOption = (typeof SORT_OPTIONS)[number];
+
 function ProductsPage() {
   const { products, addProduct, updateProduct } = useStore();
   const [q, setQ] = useState("");
@@ -39,8 +50,58 @@ function ProductsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [reportType, setReportType] = useState<ReportType>("All Records");
+  const [sortBy, setSortBy] = useState<SortOption>("Sale Rate");
 
-  const filtered = products.filter((p) => [p.name, p.sku, p.category].join(" ").toLowerCase().includes(q.toLowerCase()));
+  const filtered = useMemo(() => {
+    const list = products.filter((p) => [p.name, p.sku, p.category].join(" ").toLowerCase().includes(q.toLowerCase()));
+    return [...list].sort((a, b) => {
+      if (sortBy === "Name") return a.name.localeCompare(b.name);
+      if (sortBy === "Stock") return b.stock - a.stock;
+      return b.price - a.price; // Sale Rate, highest first
+    });
+  }, [products, q, sortBy]);
+
+  // Which rate column the report focuses on, matching the reference app's
+  // "Product Sale/Purchase/WholeSale Rate info" export options.
+  const reportColumn = (p: Product) => {
+    if (reportType === "Product Purchase Rate info") return p.purchaseRate ?? 0;
+    if (reportType === "Product WholeSale Rate info") return p.wholesaleRate ?? 0;
+    return p.price; // All Records / Sale Rate info both lead with sale rate
+  };
+  const reportColumnLabel =
+    reportType === "Product Purchase Rate info" ? "Purchase Rate"
+    : reportType === "Product WholeSale Rate info" ? "Wholesale Rate"
+    : "Sale Rate";
+
+  const exportExcel = () => {
+    const rows = filtered.map((p) => ({
+      Name: p.name, Type: p.itemType, SKU: p.sku, Category: p.category, Unit: p.unit,
+      ...(reportType === "All Records"
+        ? { MRP: p.mrp ?? 0, "Sale Rate": p.price, "Wholesale Rate": p.wholesaleRate ?? 0, "Purchase Rate": p.purchaseRate ?? 0, Stock: p.stock }
+        : { [reportColumnLabel]: reportColumn(p) }),
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Products");
+    XLSX.writeFile(wb, `products-${reportType.toLowerCase().replace(/\s+/g, "-")}.xlsx`);
+    toast.success("Excel file downloaded");
+  };
+
+  const exportPdf = () => {
+    const doc = new jsPDF();
+    doc.setFontSize(14);
+    doc.text(reportType, 14, 16);
+    const head = reportType === "All Records"
+      ? [["Name", "SKU", "Category", "MRP", "Sale Rate", "Wholesale", "Purchase", "Stock"]]
+      : [["Name", "SKU", "Category", reportColumnLabel]];
+    const body = filtered.map((p) => reportType === "All Records"
+      ? [p.name, p.sku, p.category, fmt(p.mrp ?? 0), fmt(p.price), fmt(p.wholesaleRate ?? 0), fmt(p.purchaseRate ?? 0), String(p.stock)]
+      : [p.name, p.sku, p.category, fmt(reportColumn(p))]);
+    autoTable(doc, { head, body, startY: 22, styles: { fontSize: 9 } });
+    doc.save(`products-${reportType.toLowerCase().replace(/\s+/g, "-")}.pdf`);
+    toast.success("PDF downloaded");
+  };
 
   const startAdd = () => { setEditingId(null); setForm(emptyForm); setOpen(true); };
   const startEdit = (p: Product) => {
@@ -159,9 +220,38 @@ function ProductsPage() {
         }
       />
 
-      <div className="relative max-w-md">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input className="pl-9" placeholder="Search products…" value={q} onChange={(e) => setQ(e.target.value)} />
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative max-w-md flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input className="pl-9" placeholder="Search products…" value={q} onChange={(e) => setQ(e.target.value)} />
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm"><SlidersHorizontal className="mr-1.5 h-3.5 w-3.5" />{sortBy}<ChevronDown className="ml-1 h-3.5 w-3.5" /></Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {SORT_OPTIONS.map((s) => <DropdownMenuItem key={s} onClick={() => setSortBy(s)}>{s}</DropdownMenuItem>)}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/30 px-3 py-2">
+        <div>
+          <div className="text-xs font-semibold text-muted-foreground">Product</div>
+          <div className="font-display text-lg font-bold">{filtered.length}</div>
+        </div>
+        <div className="flex items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">{reportType}<ChevronDown className="ml-1.5 h-3.5 w-3.5" /></Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {REPORT_TYPES.map((r) => <DropdownMenuItem key={r} onClick={() => setReportType(r)}>{r}</DropdownMenuItem>)}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button variant="outline" size="icon" onClick={exportExcel} title="Export Excel"><FileSpreadsheet className="h-4 w-4" /></Button>
+          <Button variant="outline" size="icon" onClick={exportPdf} title="Export PDF"><FileText className="h-4 w-4" /></Button>
+        </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
