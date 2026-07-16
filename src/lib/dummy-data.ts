@@ -172,6 +172,26 @@ export type SaleOrder = {
   status: SaleOrderStatus;
 };
 
+export type Expense = {
+  id: string;
+  category: string;
+  description?: string;
+  amount: number;
+  date: string;
+};
+
+export type PurchaseStatus = "paid" | "partial" | "unpaid";
+export type Purchase = {
+  id: string;
+  supplierId?: string;
+  supplierName: string;
+  items: InvoiceItem[];
+  total: number;
+  paid: number;
+  date: string;
+  status: PurchaseStatus;
+};
+
 export type PurchaseOrderStatus = "pending" | "received" | "cancelled";
 export type PurchaseOrder = {
   id: string;

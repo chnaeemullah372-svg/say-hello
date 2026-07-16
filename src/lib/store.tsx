@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
-import type { Customer, Product, Invoice, Payment, InvoiceItem, Estimate, SaleOrder, PurchaseOrder, Account, FundTransfer, DeliveryNote, SaleReturn, PurchaseReturn, ProductionEntry, Subscription, Commission, WhatsAppLog } from "./dummy-data";
+import type { Customer, Product, Invoice, Payment, InvoiceItem, Estimate, SaleOrder, PurchaseOrder, Account, FundTransfer, DeliveryNote, SaleReturn, PurchaseReturn, ProductionEntry, Subscription, Commission, WhatsAppLog, Expense, Purchase } from "./dummy-data";
 
 type Store = {
   customers: Customer[];
@@ -21,6 +21,8 @@ type Store = {
   subscriptions: Subscription[];
   commissions: Commission[];
   whatsappLogs: WhatsAppLog[];
+  expenses: Expense[];
+  purchases: Purchase[];
   loading: boolean;
   addCustomer: (c: Omit<Customer, "id" | "balance"> & { balance?: number }) => Promise<Customer>;
   updateCustomer: (id: string, patch: Partial<Customer>) => Promise<void>;
@@ -61,6 +63,12 @@ type Store = {
   addCommission: (c: Omit<Commission, "id">) => Promise<Commission>;
   updateCommission: (id: string, patch: Partial<Commission>) => Promise<void>;
   deleteCommission: (id: string) => Promise<void>;
+  addExpense: (e: Omit<Expense, "id">) => Promise<Expense>;
+  updateExpense: (id: string, patch: Partial<Expense>) => Promise<void>;
+  deleteExpense: (id: string) => Promise<void>;
+  addPurchase: (p: Omit<Purchase, "id">) => Promise<Purchase>;
+  updatePurchase: (id: string, patch: Partial<Purchase>) => Promise<void>;
+  deletePurchase: (id: string) => Promise<void>;
   getCustomer: (id: string) => Customer | undefined;
   getInvoice: (id: string) => Invoice | undefined;
   refresh: () => Promise<void>;
@@ -287,6 +295,21 @@ function whatsAppLogFromRow(row: any): WhatsAppLog {
   };
 }
 
+function expenseFromRow(row: any): Expense {
+  return {
+    id: row.id, category: row.category, description: row.description ?? undefined,
+    amount: Number(row.amount ?? 0), date: row.date,
+  };
+}
+
+function purchaseFromRow(row: any): Purchase {
+  return {
+    id: row.id, supplierId: row.supplier_id ?? undefined, supplierName: row.supplier_name ?? "",
+    items: (row.items ?? []) as InvoiceItem[], total: Number(row.total ?? 0), paid: Number(row.paid ?? 0),
+    date: row.date, status: row.status,
+  };
+}
+
 export function StoreProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated, ready } = useAuth();
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -305,6 +328,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [commissions, setCommissions] = useState<Commission[]>([]);
   const [whatsappLogs, setWhatsappLogs] = useState<WhatsAppLog[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [loading, setLoading] = useState(true);
 
   const refresh = async () => {
@@ -315,11 +340,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setDeliveryNotes([]); setSaleReturns([]); setPurchaseReturns([]); setProductionEntries([]);
       setSubscriptions([]); setCommissions([]);
       setWhatsappLogs([]);
+      setExpenses([]); setPurchases([]);
       setLoading(false);
       return;
     }
     setLoading(true);
-    const [c, p, i, pay, est, so, po, acc, ft, dn, sr, pr, pe, sub, com, wl] = await Promise.all([
+    const [c, p, i, pay, est, so, po, acc, ft, dn, sr, pr, pe, sub, com, wl, ex, pu] = await Promise.all([
       supabase.from("customers").select("*").order("created_at", { ascending: false }),
       supabase.from("products").select("*").order("created_at", { ascending: false }),
       supabase.from("invoices").select("*").order("created_at", { ascending: false }),
@@ -336,6 +362,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       supabase.from("subscriptions").select("*").order("created_at", { ascending: false }),
       supabase.from("commissions").select("*").order("created_at", { ascending: false }),
       supabase.from("whatsapp_logs").select("*").order("created_at", { ascending: false }).limit(500),
+      supabase.from("expenses").select("*").order("created_at", { ascending: false }),
+      supabase.from("purchases").select("*").order("created_at", { ascending: false }),
     ]);
     if (c.error) toast.error(`Could not load customers: ${c.error.message}`);
     if (p.error) toast.error(`Could not load products: ${p.error.message}`);
@@ -353,6 +381,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (sub.error) toast.error(`Could not load subscriptions: ${sub.error.message}`);
     if (com.error) toast.error(`Could not load commissions: ${com.error.message}`);
     if (wl.error) toast.error(`Could not load WhatsApp logs: ${wl.error.message}`);
+    if (ex.error) toast.error(`Could not load expenses: ${ex.error.message}`);
+    if (pu.error) toast.error(`Could not load purchases: ${pu.error.message}`);
     setCustomers((c.data ?? []).map(customerFromRow));
     setProducts((p.data ?? []).map(productFromRow));
     setInvoices((i.data ?? []).map(invoiceFromRow));
@@ -369,6 +399,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setSubscriptions((sub.data ?? []).map(subscriptionFromRow));
     setCommissions((com.data ?? []).map(commissionFromRow));
     setWhatsappLogs((wl.data ?? []).map(whatsAppLogFromRow));
+    setExpenses((ex.data ?? []).map(expenseFromRow));
+    setPurchases((pu.data ?? []).map(purchaseFromRow));
     setLoading(false);
   };
 
@@ -379,7 +411,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<Store>(() => ({
     customers, products, invoices, payments, estimates, saleOrders, purchaseOrders, accounts, fundTransfers,
-    deliveryNotes, saleReturns, purchaseReturns, productionEntries, subscriptions, commissions, whatsappLogs, loading, refresh,
+    deliveryNotes, saleReturns, purchaseReturns, productionEntries, subscriptions, commissions, whatsappLogs, expenses, purchases, loading, refresh,
 
     addCustomer: async (c) => {
       const { data: userData } = await supabase.auth.getUser();
@@ -973,10 +1005,68 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setCommissions((prev) => prev.filter((x) => x.id !== id));
     },
 
+    addExpense: async (e) => {
+      const { data: userData } = await supabase.auth.getUser();
+      const { data, error } = await supabase.from("expenses").insert({
+        category: e.category, description: e.description || null, amount: e.amount, date: e.date,
+        created_by: userData.user?.id,
+      }).select().single();
+      if (error || !data) throw new Error(error?.message || "Could not save expense");
+      const n = expenseFromRow(data);
+      setExpenses((prev) => [n, ...prev]);
+      return n;
+    },
+    updateExpense: async (id, patch) => {
+      const dbPatch: Record<string, unknown> = {};
+      if (patch.category !== undefined) dbPatch.category = patch.category;
+      if (patch.description !== undefined) dbPatch.description = patch.description || null;
+      if (patch.amount !== undefined) dbPatch.amount = patch.amount;
+      if (patch.date !== undefined) dbPatch.date = patch.date;
+      const { data, error } = await supabase.from("expenses").update(dbPatch as any).eq("id", id).select().single();
+      if (error) throw new Error(error.message);
+      if (data) setExpenses((prev) => prev.map((x) => (x.id === id ? expenseFromRow(data) : x)));
+    },
+    deleteExpense: async (id) => {
+      const { error } = await supabase.from("expenses").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      setExpenses((prev) => prev.filter((x) => x.id !== id));
+    },
+
+    addPurchase: async (p) => {
+      const { data: userData } = await supabase.auth.getUser();
+      const { data, error } = await supabase.from("purchases").insert({
+        supplier_id: p.supplierId || null, supplier_name: p.supplierName,
+        items: p.items as unknown as import("@/integrations/supabase/types").Json,
+        total: p.total, paid: p.paid, date: p.date, status: p.status, created_by: userData.user?.id,
+      }).select().single();
+      if (error || !data) throw new Error(error?.message || "Could not save purchase");
+      const n = purchaseFromRow(data);
+      setPurchases((prev) => [n, ...prev]);
+      return n;
+    },
+    updatePurchase: async (id, patch) => {
+      const dbPatch: Record<string, unknown> = {};
+      if (patch.supplierId !== undefined) dbPatch.supplier_id = patch.supplierId || null;
+      if (patch.supplierName !== undefined) dbPatch.supplier_name = patch.supplierName;
+      if (patch.items !== undefined) dbPatch.items = patch.items;
+      if (patch.total !== undefined) dbPatch.total = patch.total;
+      if (patch.paid !== undefined) dbPatch.paid = patch.paid;
+      if (patch.date !== undefined) dbPatch.date = patch.date;
+      if (patch.status !== undefined) dbPatch.status = patch.status;
+      const { data, error } = await supabase.from("purchases").update(dbPatch as any).eq("id", id).select().single();
+      if (error) throw new Error(error.message);
+      if (data) setPurchases((prev) => prev.map((x) => (x.id === id ? purchaseFromRow(data) : x)));
+    },
+    deletePurchase: async (id) => {
+      const { error } = await supabase.from("purchases").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      setPurchases((prev) => prev.filter((x) => x.id !== id));
+    },
+
     getCustomer: (id) => customers.find((c) => c.id === id),
     getInvoice: (id) => invoices.find((i) => i.id === id || i.number === id),
   }), [customers, products, invoices, payments, estimates, saleOrders, purchaseOrders, accounts, fundTransfers,
-      deliveryNotes, saleReturns, purchaseReturns, productionEntries, subscriptions, commissions, whatsappLogs, loading]);
+      deliveryNotes, saleReturns, purchaseReturns, productionEntries, subscriptions, commissions, whatsappLogs, expenses, purchases, loading]);
 
   return <StoreCtx.Provider value={value}>{children}</StoreCtx.Provider>;
 }

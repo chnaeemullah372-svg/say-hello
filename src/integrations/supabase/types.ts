@@ -158,6 +158,75 @@ export type Database = {
         }
         Relationships: []
       }
+      expenses: {
+        Row: {
+          amount: number
+          category: string
+          created_at: string
+          created_by: string | null
+          date: string
+          description: string | null
+          id: string
+        }
+        Insert: {
+          amount?: number
+          category: string
+          created_at?: string
+          created_by?: string | null
+          date?: string
+          description?: string | null
+          id?: string
+        }
+        Update: {
+          amount?: number
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          date?: string
+          description?: string | null
+          id?: string
+        }
+        Relationships: []
+      }
+      purchases: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          date: string
+          id: string
+          items: Json
+          paid: number
+          status: string
+          supplier_id: string | null
+          supplier_name: string
+          total: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          date?: string
+          id?: string
+          items?: Json
+          paid?: number
+          status?: string
+          supplier_id?: string | null
+          supplier_name: string
+          total?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          date?: string
+          id?: string
+          items?: Json
+          paid?: number
+          status?: string
+          supplier_id?: string | null
+          supplier_name?: string
+          total?: number
+        }
+        Relationships: []
+      }
       customers: {
         Row: {
           address: string | null
