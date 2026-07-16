@@ -99,6 +99,15 @@ function customerFromRow(row: any): Customer {
     referralPhone: row.referral_phone ?? undefined,
     referralEmail: row.referral_email ?? undefined,
     referralAddress: row.referral_address ?? undefined,
+    maxCreditLimit: row.max_credit_limit != null ? Number(row.max_credit_limit) : undefined,
+    paymentTerms: row.payment_terms ?? undefined,
+    openingBalance: Number(row.opening_balance ?? 0),
+    openingDate: row.opening_date ?? undefined,
+    bankName: row.bank_name ?? undefined,
+    payableTo: row.payable_to ?? undefined,
+    bankAccountNo: row.bank_account_no ?? undefined,
+    ifscCode: row.ifsc_code ?? undefined,
+    upiId: row.upi_id ?? undefined,
     balance: Number(row.balance ?? 0),
     payableBalance: Number(row.payable_balance ?? 0),
   };
@@ -400,7 +409,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         referral_phone: c.referralPhone || null,
         referral_email: c.referralEmail || null,
         referral_address: c.referralAddress || null,
-        balance: c.balance ?? 0,
+        max_credit_limit: c.maxCreditLimit ?? null,
+        payment_terms: c.paymentTerms || "No Due Date",
+        opening_balance: c.openingBalance ?? 0,
+        opening_date: c.openingDate || new Date().toISOString().slice(0, 10),
+        bank_name: c.bankName || null,
+        payable_to: c.payableTo || null,
+        bank_account_no: c.bankAccountNo || null,
+        ifsc_code: c.ifscCode || null,
+        upi_id: c.upiId || null,
+        balance: c.balance ?? c.openingBalance ?? 0,
         payable_balance: c.payableBalance ?? 0,
         created_by: userData.user?.id,
       }).select().single();
@@ -438,6 +456,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (patch.referralPhone !== undefined) dbPatch.referral_phone = patch.referralPhone || null;
       if (patch.referralEmail !== undefined) dbPatch.referral_email = patch.referralEmail || null;
       if (patch.referralAddress !== undefined) dbPatch.referral_address = patch.referralAddress || null;
+      if (patch.maxCreditLimit !== undefined) dbPatch.max_credit_limit = patch.maxCreditLimit ?? null;
+      if (patch.paymentTerms !== undefined) dbPatch.payment_terms = patch.paymentTerms;
+      if (patch.openingBalance !== undefined) dbPatch.opening_balance = patch.openingBalance;
+      if (patch.openingDate !== undefined) dbPatch.opening_date = patch.openingDate;
+      if (patch.bankName !== undefined) dbPatch.bank_name = patch.bankName || null;
+      if (patch.payableTo !== undefined) dbPatch.payable_to = patch.payableTo || null;
+      if (patch.bankAccountNo !== undefined) dbPatch.bank_account_no = patch.bankAccountNo || null;
+      if (patch.ifscCode !== undefined) dbPatch.ifsc_code = patch.ifscCode || null;
+      if (patch.upiId !== undefined) dbPatch.upi_id = patch.upiId || null;
       if (patch.balance !== undefined) dbPatch.balance = patch.balance;
       if (patch.payableBalance !== undefined) dbPatch.payable_balance = patch.payableBalance;
       const { data, error } = await supabase.from("customers").update(dbPatch as any).eq("id", id).select().single();

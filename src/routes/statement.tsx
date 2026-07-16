@@ -23,7 +23,8 @@ type Row = { date: string; kind: "invoice" | "payment"; label: string; debit: nu
 function StatementPage() {
   const { customers, invoices, payments } = useStore();
   const clients = customers.filter((c) => c.partyType !== "supplier");
-  const [customerId, setCustomerId] = useState(clients[0]?.id ?? "");
+  const preselected = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("customer") : null;
+  const [customerId, setCustomerId] = useState(preselected || clients[0]?.id || "");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState(new Date().toISOString().slice(0, 10));
 

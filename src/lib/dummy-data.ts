@@ -28,6 +28,15 @@ export type Customer = {
   referralPhone?: string;
   referralEmail?: string;
   referralAddress?: string;
+  maxCreditLimit?: number;
+  paymentTerms?: string;
+  openingBalance?: number;
+  openingDate?: string;
+  bankName?: string;
+  payableTo?: string;
+  bankAccountNo?: string;
+  ifscCode?: string;
+  upiId?: string;
   balance: number; // outstanding they owe us (client side)
   payableBalance?: number; // outstanding we owe them (supplier side)
 };

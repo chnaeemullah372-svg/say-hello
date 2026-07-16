@@ -162,6 +162,8 @@ export type Database = {
         Row: {
           address: string | null
           balance: number
+          bank_account_no: string | null
+          bank_name: string | null
           business_id: string | null
           city: string | null
           contact_person: string | null
@@ -174,7 +176,13 @@ export type Database = {
           name: string
           pan_no: string | null
           party_type: string
+          ifsc_code: string | null
+          max_credit_limit: number | null
+          opening_balance: number
+          opening_date: string
           payable_balance: number
+          payable_to: string | null
+          payment_terms: string | null
           phone: string | null
           phone2: string | null
           pin_code: string | null
@@ -190,12 +198,15 @@ export type Database = {
           shipping_state: string | null
           state: string | null
           updated_at: string
+          upi_id: string | null
           website: string | null
           whatsapp: string | null
         }
         Insert: {
           address?: string | null
           balance?: number
+          bank_account_no?: string | null
+          bank_name?: string | null
           business_id?: string | null
           city?: string | null
           contact_person?: string | null
@@ -208,7 +219,13 @@ export type Database = {
           name: string
           pan_no?: string | null
           party_type?: string
+          ifsc_code?: string | null
+          max_credit_limit?: number | null
+          opening_balance?: number
+          opening_date?: string
           payable_balance?: number
+          payable_to?: string | null
+          payment_terms?: string | null
           phone?: string | null
           phone2?: string | null
           pin_code?: string | null
@@ -224,12 +241,15 @@ export type Database = {
           shipping_state?: string | null
           state?: string | null
           updated_at?: string
+          upi_id?: string | null
           website?: string | null
           whatsapp?: string | null
         }
         Update: {
           address?: string | null
           balance?: number
+          bank_account_no?: string | null
+          bank_name?: string | null
           business_id?: string | null
           city?: string | null
           contact_person?: string | null
@@ -242,7 +262,13 @@ export type Database = {
           name?: string
           pan_no?: string | null
           party_type?: string
+          ifsc_code?: string | null
+          max_credit_limit?: number | null
+          opening_balance?: number
+          opening_date?: string
           payable_balance?: number
+          payable_to?: string | null
+          payment_terms?: string | null
           phone?: string | null
           phone2?: string | null
           pin_code?: string | null
@@ -258,6 +284,7 @@ export type Database = {
           shipping_state?: string | null
           state?: string | null
           updated_at?: string
+          upi_id?: string | null
           website?: string | null
           whatsapp?: string | null
         }
