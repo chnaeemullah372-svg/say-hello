@@ -5,7 +5,37 @@ to a single `.output/server/index.mjs` file that runs as a plain Node HTTP
 server and reads its port from the `PORT` environment variable — so it runs
 on any Node.js host, managed or not.
 
-There are two supported paths:
+## Using your own Supabase project instead of Lovable Cloud
+
+If you're not deploying through Lovable, you won't have Lovable Cloud's
+Supabase credentials — create your own free project at supabase.com instead.
+A brand-new project starts with an empty database, so before the app will
+work you need to create all its tables once:
+
+1. Open your project on supabase.com → **SQL Editor** → **New query**.
+2. Open `supabase/migrations/20260728000000_bootstrap_schema.sql` from this
+   repo, copy its entire contents, paste into the SQL Editor, and click
+   **Run**. This one script creates every table, security policy, and the
+   invoice-attachments storage bucket — it's the de-duplicated, tested
+   result of this project's whole migration history. (Ignore the other,
+   older-dated files in `supabase/migrations/` if any exist locally — this
+   is the one to run, and only this one, on a fresh project.)
+3. Get your API credentials: **Project Settings** → **API** → copy the
+   **Project URL**, **Project ID/Reference**, and the **anon / publishable**
+   key. Never use the **service_role** key for the app's own env vars (see
+   below) — that one is only for the WhatsApp reminder cron script.
+4. Use those values as `VITE_SUPABASE_URL`, `VITE_SUPABASE_PROJECT_ID`, and
+   `VITE_SUPABASE_PUBLISHABLE_KEY` wherever this guide asks for them.
+5. Sign up through the app itself once it's deployed — the **first account
+   created becomes admin automatically**; everyone after that starts as
+   "staff" and has to be promoted from the Team page.
+
+Note: the "Login with Google" button routes through Lovable's own OAuth
+relay (`@lovable.dev/cloud-auth-js`) and may not work once you're off
+Lovable Cloud. Plain email/password sign-up and login always work regardless
+of which Supabase project you use.
+
+There are two supported hosting paths:
 
 - **Hostinger Managed Node.js Web App Hosting** (recommended — no server
   administration, Hostinger handles the process manager, reverse proxy, and
