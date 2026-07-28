@@ -12,4 +12,11 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  // Plain Node.js server output by default, so `npm run build` alone works on any
+  // Node host (Hostinger's managed Node.js app, a VPS, etc.) without needing
+  // NITRO_PRESET set as a separate env var. Lovable's own sandbox build still
+  // forces cloudflare-module regardless of this setting.
+  nitro: {
+    preset: "node-server",
+  },
 });

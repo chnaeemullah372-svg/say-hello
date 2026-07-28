@@ -20,7 +20,6 @@ jobs:
             cd /var/www/say-hello
             git pull origin main
             npm ci
-            export NITRO_PRESET=node-server
             npm run build
             pm2 describe say-hello > /dev/null 2>&1 && pm2 restart say-hello || PORT=3000 pm2 start .output/server/index.mjs --name say-hello
             pm2 save

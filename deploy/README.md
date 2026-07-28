@@ -1,10 +1,78 @@
-# Deploying to your own VPS
+# Deploying this app
 
-This replaces Lovable's hosting with your own Ubuntu VPS, auto-deployed on
-every `git push` to `main` via GitHub Actions. Claude never touches your
-VPS directly — you run one script once, then everything is automatic.
+This is a Node.js SSR app (TanStack Start, built with Nitro). It builds down
+to a single `.output/server/index.mjs` file that runs as a plain Node HTTP
+server and reads its port from the `PORT` environment variable — so it runs
+on any Node.js host, managed or not.
 
-## One-time setup (run this yourself, on the VPS)
+There are two supported paths:
+
+- **Hostinger Managed Node.js Web App Hosting** (recommended — no server
+  administration, Hostinger handles the process manager, reverse proxy, and
+  SSL for you). See below.
+- **Your own VPS** (full control, but you manage Nginx/PM2/Certbot
+  yourself). See [`setup-vps.sh`](#optional-self-managed-vps) further down.
+
+Both deploy the exact same code — nothing in the app needs to change
+between them.
+
+## Hostinger Managed Node.js Web App Hosting
+
+Requires a Hostinger **Business** web hosting plan or any **Cloud** hosting
+plan (Node.js Web Apps aren't available on the cheapest Shared plans).
+
+1. In **hPanel** → **Websites** → **Add Website**, choose **Node.js Web App**
+   (or open an existing site's **Node.js** section).
+2. Connect this GitHub repository (or paste its URL) so hPanel deploys
+   straight from `main` on every push — no manual upload needed.
+3. Set these fields:
+   - **Application root**: `/` (repo root — `package.json` lives here)
+   - **Node.js version**: 20 (latest 20.x) or 22 — this app requires
+     `^20.19.0 || >=22.12.0` (declared in `package.json`'s `engines` field)
+   - **Install command**: `npm ci`
+   - **Build command**: `npm run build`
+   - **Application startup file**: `.output/server/index.mjs`
+     (equivalently, a startup/run command of `npm start`, which runs the
+     same file — use whichever field hPanel exposes for your plan)
+4. Add environment variables in the app's **Environment Variables** panel
+   (copy the real values from Supabase → Project Settings → API):
+   ```
+   VITE_SUPABASE_URL=https://your-project-ref.supabase.co
+   VITE_SUPABASE_PROJECT_ID=your-project-ref
+   VITE_SUPABASE_PUBLISHABLE_KEY=your-anon-public-key
+   SUPABASE_URL=https://your-project-ref.supabase.co
+   SUPABASE_PROJECT_ID=your-project-ref
+   SUPABASE_PUBLISHABLE_KEY=your-anon-public-key
+   ```
+   Saving these triggers a rebuild. Hostinger sets `PORT` itself — don't set
+   it manually, the app already listens on `process.env.PORT`.
+5. Deploy. Once it's live, attach your domain to the site in hPanel the
+   normal way and Hostinger issues SSL automatically — no `certbot` needed.
+6. Every push to `main` redeploys automatically from then on.
+
+You do **not** need PM2, Nginx, Certbot, systemd, or root/SSH access for
+this path — Hostinger's managed environment handles all of that.
+
+### Daily WhatsApp due-date reminders (managed hosting)
+
+`scripts/send-due-reminders.mjs` needs to run once a day and needs
+`SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` (service_role key, from
+Supabase → Project Settings → API — never put this one in the app's own
+`VITE_`/frontend env vars). Set it up as an hPanel **Cron Job** →
+**Custom**, running once daily, e.g.:
+```bash
+cd /home/<your-hpanel-username>/public_html && SUPABASE_URL="..." SUPABASE_SERVICE_ROLE_KEY="..." node scripts/send-due-reminders.mjs
+```
+(Adjust the path to wherever hPanel deployed the repo — check the Node.js
+app's file manager for the exact path.)
+
+## Optional: self-managed VPS
+
+If you'd rather run this on your own Ubuntu VPS instead of Hostinger's
+managed Node.js hosting — full root access, your own Nginx/PM2/Certbot,
+auto-deployed via GitHub Actions on every push to `main` — see
+[`setup-vps.sh`](./setup-vps.sh) and the steps below. This path is entirely
+optional; skip it if you're using Hostinger's managed hosting above.
 
 1. SSH into your VPS the way you already do (password is fine for this step —
    it never leaves your terminal).
@@ -31,20 +99,18 @@ VPS directly — you run one script once, then everything is automatic.
    ```bash
    cd /var/www/say-hello
    npm ci
-   NITRO_PRESET=node-server npm run build
+   npm run build
    PORT=3000 pm2 start .output/server/index.mjs --name say-hello
    pm2 save
    pm2 startup   # follow the one printed command to survive reboots
    ```
 8. Visit `http://YOUR_SERVER_IP` in a browser — the app should load.
 
-## After that
-
 Every push to `main` (from Claude or you) triggers
 `.github/workflows/deploy.yml`, which SSHs in, pulls, rebuilds, and
 restarts the app automatically — usually live within a minute.
 
-## Daily WhatsApp due-date reminders
+### Daily WhatsApp due-date reminders (VPS)
 
 Once WhatsApp is connected (Settings -> WhatsApp -> Get Pairing Code) and
 Outstanding Amount Reminder is turned on (Settings -> Alerts), run
@@ -59,7 +125,7 @@ crontab -e
 0 10 * * * cd /var/www/say-hello && /usr/bin/node scripts/send-due-reminders.mjs >> /var/log/due-reminders.log 2>&1
 ```
 
-## Adding a domain + HTTPS later
+### Adding a domain + HTTPS later (VPS)
 
 Once you point a domain's A record at the server IP, run:
 ```bash
