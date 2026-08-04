@@ -11,6 +11,7 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { getRuntimeSupabaseConfig } from "../lib/runtime-supabase-config";
 import { ThemeProvider } from "@/lib/theme";
 import { StoreProvider } from "@/lib/store";
 import { AuthProvider } from "@/lib/auth";
@@ -102,12 +103,16 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 });
 
 function RootShell({ children }: { children: ReactNode }) {
+  // Embedded inline (rather than fetched from a separate URL) so it can't
+  // be intercepted by a host's static-file routing before reaching the
+  // app — see src/lib/runtime-supabase-config.ts for why this exists at
+  // all. Must render before the app bundle hydrates.
+  const runtimeConfigScript = `window.__RUNTIME_SUPABASE_CONFIG__ = ${JSON.stringify(getRuntimeSupabaseConfig())};`;
   return (
     <html lang="en">
       <head>
         <HeadContent />
-        {/* Must load before the app bundle hydrates — see src/server.ts */}
-        <script src="/__runtime-config.js" />
+        <script dangerouslySetInnerHTML={{ __html: runtimeConfigScript }} />
       </head>
       <body>
         {children}

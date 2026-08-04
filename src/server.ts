@@ -44,35 +44,8 @@ function isH3SwallowedErrorBody(body: string): boolean {
   }
 }
 
-// Some hosts (e.g. Hostinger's managed Node.js Web App) only inject
-// configured environment variables into the running server process, not
-// into the isolated `npm run build` step — so Vite's build-time
-// `VITE_SUPABASE_*` inlining ends up empty there even when the values are
-// set correctly in the host's dashboard. This endpoint hands the browser
-// the same values read fresh from the live server's environment, so the
-// client Supabase config no longer depends on what was available at
-// build time. Only the browser-safe publishable key is exposed here —
-// never a secret/service-role key.
-function runtimeConfigResponse(): Response {
-  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "";
-  const publishableKey =
-    process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || "";
-  const body = `window.__RUNTIME_SUPABASE_CONFIG__ = ${JSON.stringify({ url, publishableKey })};`;
-  return new Response(body, {
-    status: 200,
-    headers: {
-      "content-type": "application/javascript; charset=utf-8",
-      "cache-control": "no-store",
-    },
-  });
-}
-
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
-    const url = new URL(request.url);
-    if (url.pathname === "/__runtime-config.js") {
-      return runtimeConfigResponse();
-    }
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
