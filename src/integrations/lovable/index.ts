@@ -2,7 +2,16 @@
 
 import { createLovableAuth } from "@lovable.dev/cloud-auth-js";
 import { supabase } from "../supabase/client";
-const lovableAuth = createLovableAuth();
+
+// Created lazily (not at module load) so a startup failure here — e.g. this
+// app running outside Lovable Cloud, where this relies on infrastructure
+// that isn't there — only affects someone who actually clicks "Continue
+// with Google", instead of crashing the whole app before it can render.
+let lovableAuth: ReturnType<typeof createLovableAuth> | undefined;
+function getLovableAuth() {
+  if (!lovableAuth) lovableAuth = createLovableAuth();
+  return lovableAuth;
+}
 
 type SignInOptions = {
   redirect_uri?: string;
@@ -12,12 +21,17 @@ type SignInOptions = {
 export const lovable = {
   auth: {
     signInWithOAuth: async (provider: "google" | "apple" | "microsoft" | "lovable", opts?: SignInOptions) => {
-      const result = await lovableAuth.signInWithOAuth(provider, {
-        redirect_uri: opts?.redirect_uri,
-        extraParams: {
-          ...opts?.extraParams,
-        },
-      });
+      let result;
+      try {
+        result = await getLovableAuth().signInWithOAuth(provider, {
+          redirect_uri: opts?.redirect_uri,
+          extraParams: {
+            ...opts?.extraParams,
+          },
+        });
+      } catch (e) {
+        return { error: e instanceof Error ? e : new Error(String(e)) };
+      }
 
       if (result.redirected) {
         return result;

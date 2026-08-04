@@ -4,10 +4,21 @@ import { supabase } from './client'
 
 // Must be registered as a global `functionMiddleware` in `src/start.ts`; otherwise
 // the browser never attaches the bearer token to serverFn RPCs.
+//
+// Runs before every serverFn call, including ones fired before the app
+// finishes checking auth state — so a missing/broken Supabase config (see
+// src/integrations/supabase/client.ts) must not throw here. Falling back to
+// no Authorization header just makes the serverFn behave as unauthenticated,
+// instead of crashing whatever triggered it.
 export const attachSupabaseAuth = createMiddleware({ type: 'function' }).client(
   async ({ next }) => {
-    const { data } = await supabase.auth.getSession()
-    const token = data.session?.access_token
+    let token: string | undefined;
+    try {
+      const { data } = await supabase.auth.getSession()
+      token = data.session?.access_token
+    } catch (error) {
+      console.error('[auth] Failed to read Supabase session for serverFn call', error)
+    }
     return next({
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })

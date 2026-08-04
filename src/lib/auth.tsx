@@ -73,51 +73,88 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
 
   const refreshUser = async () => {
-    const nextUser = await ensureProfileAndRole();
-    setUser(nextUser);
+    try {
+      const nextUser = await ensureProfileAndRole();
+      setUser(nextUser);
+    } catch (error) {
+      // A failed Supabase/backend call here shouldn't crash the app — it
+      // should just leave the user logged out so the login form still
+      // shows, instead of tripping the root error boundary.
+      console.error("[auth] Failed to load the signed-in user", error);
+      setUser(null);
+    }
   };
 
   useEffect(() => {
     let mounted = true;
 
-    supabase.auth.getSession().then(async ({ data }) => {
-      if (!mounted) return;
-      if (data.session) setUser(await ensureProfileAndRole());
-      else setUser(null);
-      setReady(true);
-    });
-
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      window.setTimeout(async () => {
+    async function restoreSession() {
+      try {
+        const { data } = await supabase.auth.getSession();
         if (!mounted) return;
-        if (session) setUser(await ensureProfileAndRole());
-        else setUser(null);
-        setReady(true);
-      }, 0);
-    });
+        setUser(data.session ? await ensureProfileAndRole() : null);
+      } catch (error) {
+        console.error("[auth] Failed to restore session", error);
+        if (mounted) setUser(null);
+      } finally {
+        if (mounted) setReady(true);
+      }
+    }
+    restoreSession();
+
+    // Accessing `supabase.auth` here (not just calling it) already runs the
+    // client getter and throws when the config is missing — same failure
+    // mode as every call above, just synchronous instead of inside a promise.
+    let unsubscribe: (() => void) | undefined;
+    try {
+      const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+        window.setTimeout(async () => {
+          if (!mounted) return;
+          try {
+            setUser(session ? await ensureProfileAndRole() : null);
+          } catch (error) {
+            console.error("[auth] Failed to refresh user on auth state change", error);
+            if (mounted) setUser(null);
+          } finally {
+            if (mounted) setReady(true);
+          }
+        }, 0);
+      });
+      unsubscribe = () => listener.subscription.unsubscribe();
+    } catch (error) {
+      console.error("[auth] Failed to subscribe to auth state changes", error);
+    }
 
     return () => {
       mounted = false;
-      listener.subscription.unsubscribe();
+      unsubscribe?.();
     };
   }, []);
 
   const login = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-    if (error) return { ok: false, error: error.message };
-    await refreshUser();
-    return { ok: true };
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      if (error) return { ok: false, error: error.message };
+      await refreshUser();
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
   };
 
   const signup = async (name: string, email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({
-      email: email.trim(),
-      password,
-      options: { data: { full_name: name.trim() || email.trim().split("@")[0] } },
-    });
-    if (error) return { ok: false, error: error.message };
-    await refreshUser();
-    return { ok: true };
+    try {
+      const { error } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+        options: { data: { full_name: name.trim() || email.trim().split("@")[0] } },
+      });
+      if (error) return { ok: false, error: error.message };
+      await refreshUser();
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
   };
 
   const loginWithGoogle = async () => {
@@ -128,7 +165,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch (error) {
+      console.error("[auth] Failed to sign out", error);
+    }
     setUser(null);
   };
 
