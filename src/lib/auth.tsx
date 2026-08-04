@@ -1,6 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable";
 
 type AppRole = "admin" | "manager" | "cashier" | "staff";
 export type AuthUser = { id: string; name: string; role: AppRole; email: string };
@@ -158,10 +157,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const loginWithGoogle = async () => {
-    const result = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
-    if (result.error) return { ok: false, error: result.error.message };
-    if (!result.redirected) await refreshUser();
-    return { ok: true };
+    // Talks to Supabase's own Google OAuth (configured in the Supabase
+    // dashboard under Authentication -> Providers), not Lovable Cloud's
+    // OAuth proxy — that only exists on Lovable's own infrastructure and
+    // 404s once the app runs anywhere else (e.g. Hostinger).
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: window.location.origin },
+      });
+      if (error) return { ok: false, error: error.message };
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
   };
 
   const logout = async () => {
