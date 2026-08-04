@@ -10,7 +10,6 @@ type AuthCtx = {
   ready: boolean;
   login: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
   signup: (name: string, email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
-  loginWithGoogle: () => Promise<{ ok: boolean; error?: string }>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 };
@@ -156,23 +155,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const loginWithGoogle = async () => {
-    // Talks to Supabase's own Google OAuth (configured in the Supabase
-    // dashboard under Authentication -> Providers), not Lovable Cloud's
-    // OAuth proxy — that only exists on Lovable's own infrastructure and
-    // 404s once the app runs anywhere else (e.g. Hostinger).
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: { redirectTo: window.location.origin },
-      });
-      if (error) return { ok: false, error: error.message };
-      return { ok: true };
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) };
-    }
-  };
-
   const logout = async () => {
     try {
       await supabase.auth.signOut();
@@ -182,7 +164,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
-  return <Ctx.Provider value={{ user, isAuthenticated: !!user, ready, login, signup, loginWithGoogle, logout, refreshUser }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ user, isAuthenticated: !!user, ready, login, signup, logout, refreshUser }}>{children}</Ctx.Provider>;
 }
 
 export function useAuth() {
