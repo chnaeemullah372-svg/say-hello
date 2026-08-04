@@ -2,6 +2,12 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
+declare global {
+  interface Window {
+    __RUNTIME_SUPABASE_CONFIG__?: { url?: string; publishableKey?: string };
+  }
+}
+
 function isNewSupabaseApiKey(value: string): boolean {
   return value.startsWith('sb_publishable_') || value.startsWith('sb_secret_');
 }
@@ -28,10 +34,15 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
 
 
 function createSupabaseClient() {
-  // Use import.meta.env for client-side (Vite build-time replacement)
-  // Fall back to process.env for SSR (server-side rendering)
-  const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-  const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY;
+  // Prefer the config the server hands the browser at request time (see
+  // src/server.ts /__runtime-config.js) — this works even on hosts that
+  // don't expose env vars to the `npm run build` step. Fall back to
+  // import.meta.env for client-side (Vite build-time replacement), then
+  // process.env for SSR (server-side rendering).
+  const runtimeConfig = typeof window !== "undefined" ? window.__RUNTIME_SUPABASE_CONFIG__ : undefined;
+  const SUPABASE_URL = runtimeConfig?.url || import.meta.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+  const SUPABASE_PUBLISHABLE_KEY =
+    runtimeConfig?.publishableKey || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY;
 
   if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
     const missing = [

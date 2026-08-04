@@ -104,7 +104,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 function RootShell({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <head><HeadContent /></head>
+      <head>
+        <HeadContent />
+        {/* Must load before the app bundle hydrates — see src/server.ts */}
+        <script src="/__runtime-config.js" />
+      </head>
       <body>
         {children}
         <Scripts />
