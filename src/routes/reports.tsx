@@ -4,10 +4,9 @@ import { PageHeader } from "@/components/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { monthlySales, topProducts, fmt } from "@/lib/dummy-data";
+import { monthlySales, topProducts, fmt, calcInvoiceTotals, type Customer, type Invoice, type Purchase, type Product, type Expense, type Payment, type SaleOrder } from "@/lib/dummy-data";
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useStore } from "@/lib/store";
-import { calcInvoiceTotals } from "@/lib/dummy-data";
 import { ChevronRight, FileSpreadsheet, Printer, Search } from "lucide-react";
 
 export const Route = createFileRoute("/reports")({
@@ -28,16 +27,281 @@ const reportSections = [
   { title: "Other Reports", items: ["Payment Category Ledger / Transaction", "Expense Category Report", "Profit / Loss", "Product wise Profit / Loss", "Client wise Profit / Loss"] },
 ];
 
+type ReportTable = { columns: string[]; rows: (string | number)[][]; total: number; dateFrom: string; dateTo: string };
+
+function dateRange(dates: string[]): [string, string] {
+  const valid = dates.filter(Boolean).sort();
+  return valid.length ? [valid[0], valid[valid.length - 1]] : ["-", "-"];
+}
+
+function invoiceWithTotals(inv: Invoice) {
+  const t = calcInvoiceTotals(inv.items, inv.taxRate, inv.discountMode, inv.discountValue, inv.shippingAmount);
+  return { ...inv, ...t, balance: t.total - inv.paid };
+}
+
+// Builds the table + summary for one specific report, using real store data
+// scoped to what that report's name actually means — previously every
+// report (regardless of title) showed the same fake invoice snippet.
+function buildReport(
+  section: string,
+  item: string,
+  store: { invoices: Invoice[]; purchases: Purchase[]; customers: Customer[]; products: Product[]; expenses: Expense[]; payments: Payment[]; saleOrders: SaleOrder[] },
+): ReportTable {
+  const invoices = store.invoices.map(invoiceWithTotals);
+  const customerName = (id?: string) => store.customers.find((c) => c.id === id)?.name ?? "-";
+
+  const invoiceTable = (rows: typeof invoices, label = "Amount"): ReportTable => ({
+    columns: ["Invoice #", "Customer", "Date", label, "Balance"],
+    rows: rows.map((i) => [i.number, customerName(i.customerId), i.date, fmt(i.total), fmt(i.balance)]),
+    total: rows.reduce((s, i) => s + i.total, 0),
+    ...(() => { const [from, to] = dateRange(rows.map((i) => i.date)); return { dateFrom: from, dateTo: to }; })(),
+  });
+
+  const purchaseTable = (rows: Purchase[]): ReportTable => ({
+    columns: ["Purchase #", "Supplier", "Date", "Total", "Paid", "Balance"],
+    rows: rows.map((p) => [p.id.slice(0, 8), p.supplierName, p.date, fmt(p.total), fmt(p.paid), fmt(p.total - p.paid)]),
+    total: rows.reduce((s, p) => s + p.total, 0),
+    ...(() => { const [from, to] = dateRange(rows.map((p) => p.date)); return { dateFrom: from, dateTo: to }; })(),
+  });
+
+  switch (`${section}::${item}`) {
+    case "Sales::Sale / Purchase / Payment Report":
+    case "Sales::Overall Sales Report":
+    case "Sales::Invoice Report":
+      return invoiceTable(invoices);
+
+    case "Sales::Gross & Net Sale Payment Report": {
+      const rows = invoices;
+      return {
+        columns: ["Invoice #", "Customer", "Gross (before tax)", "Tax", "Net (paid)"],
+        rows: rows.map((i) => [i.number, customerName(i.customerId), fmt(i.subtotal), fmt(i.tax), fmt(i.paid)]),
+        total: rows.reduce((s, i) => s + i.paid, 0),
+        ...(() => { const [from, to] = dateRange(rows.map((i) => i.date)); return { dateFrom: from, dateTo: to }; })(),
+      };
+    }
+
+    case "Sales::Outstanding Balance Report":
+      return invoiceTable(invoices.filter((i) => i.balance > 0));
+
+    case "Sales::Unpaid Invoice Report":
+      return invoiceTable(invoices.filter((i) => i.paid === 0));
+
+    case "Sales::Sale Order Report": {
+      const rows = store.saleOrders;
+      return {
+        columns: ["Order #", "Customer", "Delivery Date", "Status", "Items"],
+        rows: rows.map((s) => [s.number, customerName(s.customerId), s.deliveryDate, s.status, String(s.items.length)]),
+        total: rows.length,
+        ...(() => { const [from, to] = dateRange(rows.map((s) => s.date)); return { dateFrom: from, dateTo: to }; })(),
+      };
+    }
+
+    case "Sales::Sale Tax Report": {
+      const rows = invoices.filter((i) => i.taxRate > 0);
+      return {
+        columns: ["Invoice #", "Customer", "Date", "Tax Rate", "Tax Amount"],
+        rows: rows.map((i) => [i.number, customerName(i.customerId), i.date, `${i.taxRate}%`, fmt(i.tax)]),
+        total: rows.reduce((s, i) => s + i.tax, 0),
+        ...(() => { const [from, to] = dateRange(rows.map((i) => i.date)); return { dateFrom: from, dateTo: to }; })(),
+      };
+    }
+
+    case "Purchase::Sale / Purchase / Payment Report":
+    case "Purchase::Overall Purchase Report":
+    case "Purchase::Purchase Report":
+    case "Purchase::Gross & Net Purchase Payment Report":
+      return purchaseTable(store.purchases);
+
+    case "Purchase::Unpaid Purchase Report":
+      return purchaseTable(store.purchases.filter((p) => p.paid === 0));
+
+    case "Purchase::Outstanding Payment Report":
+      return purchaseTable(store.purchases.filter((p) => p.total - p.paid > 0));
+
+    case "Purchase::Purchase Tax Report": {
+      const rows = store.purchases.map((p) => {
+        const taxable = p.items.reduce((s, it) => s + it.qty * it.rate * (1 - it.discount / 100), 0);
+        return { ...p, taxable };
+      });
+      return {
+        columns: ["Purchase #", "Supplier", "Date", "Taxable Amount", "Total"],
+        rows: rows.map((p) => [p.id.slice(0, 8), p.supplierName, p.date, fmt(p.taxable), fmt(p.total)]),
+        total: rows.reduce((s, p) => s + p.total, 0),
+        ...(() => { const [from, to] = dateRange(rows.map((p) => p.date)); return { dateFrom: from, dateTo: to }; })(),
+      };
+    }
+
+    case "Client Ledger / Transactions::Client Ledger / Transactions": {
+      const rows = store.customers.filter((c) => c.partyType !== "supplier");
+      return {
+        columns: ["Client", "Phone", "Invoices", "Total Billed", "Balance"],
+        rows: rows.map((c) => {
+          const own = invoices.filter((i) => i.customerId === c.id);
+          const billed = own.reduce((s, i) => s + i.total, 0);
+          return [c.name, c.phone || "-", String(own.length), fmt(billed), fmt(c.balance)];
+        }),
+        total: rows.reduce((s, c) => s + c.balance, 0),
+        dateFrom: "-", dateTo: "-",
+      };
+    }
+
+    case "Client Ledger / Transactions::Client/Supplier Overall Report": {
+      const rows = store.customers;
+      return {
+        columns: ["Name", "Type", "Region", "Balance", "Payable"],
+        rows: rows.map((c) => [c.name, c.partyType, c.region || "-", fmt(c.balance), fmt(c.payableBalance ?? 0)]),
+        total: rows.reduce((s, c) => s + c.balance, 0),
+        dateFrom: "-", dateTo: "-",
+      };
+    }
+
+    case "Product::Inventory":
+      return {
+        columns: ["Product", "SKU", "Stock", "Low Stock At", "Unit"],
+        rows: store.products.map((p) => [p.name, p.sku, String(p.stock), String(p.lowStockAt), p.unit]),
+        total: store.products.reduce((s, p) => s + p.stock, 0),
+        dateFrom: "-", dateTo: "-",
+      };
+
+    case "Product::Product Report":
+      return {
+        columns: ["Product", "Category", "Sale Rate", "Purchase Rate", "Stock"],
+        rows: store.products.map((p) => [p.name, p.category, fmt(p.price), fmt(p.purchaseRate ?? 0), String(p.stock)]),
+        total: store.products.length,
+        dateFrom: "-", dateTo: "-",
+      };
+
+    case "Product::Product Sales Report": {
+      const sold = new Map<string, { qty: number; amount: number }>();
+      for (const i of invoices) {
+        for (const it of i.items) {
+          const cur = sold.get(it.name) ?? { qty: 0, amount: 0 };
+          cur.qty += it.qty;
+          cur.amount += it.qty * it.rate * (1 - it.discount / 100);
+          sold.set(it.name, cur);
+        }
+      }
+      const rows = [...sold.entries()];
+      return {
+        columns: ["Product", "Qty Sold", "Sales Amount"],
+        rows: rows.map(([name, v]) => [name, String(v.qty), fmt(v.amount)]),
+        total: rows.reduce((s, [, v]) => s + v.amount, 0),
+        ...(() => { const [from, to] = dateRange(invoices.map((i) => i.date)); return { dateFrom: from, dateTo: to }; })(),
+      };
+    }
+
+    case "Product::Product Purchases Report": {
+      const bought = new Map<string, { qty: number; amount: number }>();
+      for (const p of store.purchases) {
+        for (const it of p.items) {
+          const cur = bought.get(it.name) ?? { qty: 0, amount: 0 };
+          cur.qty += it.qty;
+          cur.amount += it.qty * it.rate * (1 - it.discount / 100);
+          bought.set(it.name, cur);
+        }
+      }
+      const rows = [...bought.entries()];
+      return {
+        columns: ["Product", "Qty Purchased", "Purchase Amount"],
+        rows: rows.map(([name, v]) => [name, String(v.qty), fmt(v.amount)]),
+        total: rows.reduce((s, [, v]) => s + v.amount, 0),
+        ...(() => { const [from, to] = dateRange(store.purchases.map((p) => p.date)); return { dateFrom: from, dateTo: to }; })(),
+      };
+    }
+
+    case "Other Reports::Payment Category Ledger / Transaction": {
+      const byMethod = new Map<string, number>();
+      for (const p of store.payments) byMethod.set(p.method, (byMethod.get(p.method) ?? 0) + p.amount);
+      const rows = [...byMethod.entries()];
+      return {
+        columns: ["Payment Method", "Total Received"],
+        rows: rows.map(([method, amt]) => [method, fmt(amt)]),
+        total: rows.reduce((s, [, amt]) => s + amt, 0),
+        ...(() => { const [from, to] = dateRange(store.payments.map((p) => p.date)); return { dateFrom: from, dateTo: to }; })(),
+      };
+    }
+
+    case "Other Reports::Expense Category Report": {
+      const byCategory = new Map<string, number>();
+      for (const e of store.expenses) byCategory.set(e.category, (byCategory.get(e.category) ?? 0) + e.amount);
+      const rows = [...byCategory.entries()];
+      return {
+        columns: ["Category", "Total Spent"],
+        rows: rows.map(([cat, amt]) => [cat, fmt(amt)]),
+        total: rows.reduce((s, [, amt]) => s + amt, 0),
+        ...(() => { const [from, to] = dateRange(store.expenses.map((e) => e.date)); return { dateFrom: from, dateTo: to }; })(),
+      };
+    }
+
+    case "Other Reports::Profit / Loss": {
+      const sales = invoices.reduce((s, i) => s + i.total, 0);
+      const purchaseCost = store.purchases.reduce((s, p) => s + p.total, 0);
+      const expenseCost = store.expenses.reduce((s, e) => s + e.amount, 0);
+      const profit = sales - purchaseCost - expenseCost;
+      return {
+        columns: ["Line", "Amount"],
+        rows: [
+          ["Sales", fmt(sales)],
+          ["Purchases", fmt(-purchaseCost)],
+          ["Expenses", fmt(-expenseCost)],
+          ["Net Profit / Loss", fmt(profit)],
+        ],
+        total: profit,
+        dateFrom: "-", dateTo: "-",
+      };
+    }
+
+    case "Other Reports::Product wise Profit / Loss": {
+      const byProduct = new Map<string, { revenue: number; cost: number }>();
+      for (const i of invoices) {
+        for (const it of i.items) {
+          const cur = byProduct.get(it.name) ?? { revenue: 0, cost: 0 };
+          const product = store.products.find((p) => p.name === it.name);
+          cur.revenue += it.qty * it.rate * (1 - it.discount / 100);
+          cur.cost += it.qty * (product?.purchaseRate ?? 0);
+          byProduct.set(it.name, cur);
+        }
+      }
+      const rows = [...byProduct.entries()];
+      return {
+        columns: ["Product", "Revenue", "Cost", "Profit / Loss"],
+        rows: rows.map(([name, v]) => [name, fmt(v.revenue), fmt(v.cost), fmt(v.revenue - v.cost)]),
+        total: rows.reduce((s, [, v]) => s + (v.revenue - v.cost), 0),
+        dateFrom: "-", dateTo: "-",
+      };
+    }
+
+    case "Other Reports::Client wise Profit / Loss": {
+      const rows = store.customers.filter((c) => c.partyType !== "supplier").map((c) => {
+        const own = invoices.filter((i) => i.customerId === c.id);
+        const revenue = own.reduce((s, i) => s + i.total, 0);
+        const collected = own.reduce((s, i) => s + i.paid, 0);
+        return [c.name, fmt(revenue), fmt(collected), fmt(revenue - collected)];
+      });
+      return {
+        columns: ["Client", "Billed", "Collected", "Outstanding"],
+        rows,
+        total: 0,
+        dateFrom: "-", dateTo: "-",
+      };
+    }
+
+    default:
+      return { columns: ["No data"], rows: [], total: 0, dateFrom: "-", dateTo: "-" };
+  }
+}
+
 function ReportsPage() {
-  const { invoices } = useStore();
-  const [selectedReport, setSelectedReport] = useState<string | null>(null);
-  const totals = invoices.map(i => ({ ...i, ...calcInvoiceTotals(i.items, i.taxRate, i.discountMode, i.discountValue, i.shippingAmount) }));
-  const paid = totals.reduce((s, i) => s + i.paid, 0);
-  const outstanding = totals.reduce((s, i) => s + (i.total - i.paid), 0);
+  const store = useStore();
+  const [selectedReport, setSelectedReport] = useState<{ section: string; item: string } | null>(null);
+  const invoices = store.invoices.map(invoiceWithTotals);
+  const paid = invoices.reduce((s, i) => s + i.paid, 0);
+  const outstanding = invoices.reduce((s, i) => s + i.balance, 0);
   const receivables = [
     { name: "Collected", value: paid },
     { name: "Outstanding", value: outstanding },
   ];
+  const report = selectedReport ? buildReport(selectedReport.section, selectedReport.item, store) : null;
 
   return (
     <div className="space-y-6">
@@ -54,7 +318,7 @@ function ReportsPage() {
               <div key={section.title}>
                 <div className="bg-muted/50 px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{section.title}</div>
                 {section.items.map((item) => (
-                  <button key={`${section.title}-${item}`} type="button" onClick={() => setSelectedReport(item)} className="flex w-full items-center justify-between px-4 py-3 text-left text-sm hover:bg-muted/50">
+                  <button key={`${section.title}-${item}`} type="button" onClick={() => setSelectedReport({ section: section.title, item })} className="flex w-full items-center justify-between px-4 py-3 text-left text-sm hover:bg-muted/50">
                     <span className="flex items-center gap-2"><FileSpreadsheet className="h-4 w-4 text-primary" />{item}</span>
                     <ChevronRight className="h-4 w-4 text-muted-foreground" />
                   </button>
@@ -124,26 +388,35 @@ function ReportsPage() {
 
       <Dialog open={!!selectedReport} onOpenChange={(v) => !v && setSelectedReport(null)}>
         <DialogContent className="sm:max-w-2xl">
-          <DialogHeader><DialogTitle>{selectedReport}</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-3">
-              <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">From</div><div className="font-medium">01 Jul 2026</div></CardContent></Card>
-              <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">To</div><div className="font-medium">07 Jul 2026</div></CardContent></Card>
-              <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Total</div><div className="font-display font-bold text-primary">{fmt(totals.reduce((s, i) => s + i.total, 0))}</div></CardContent></Card>
+          <DialogHeader><DialogTitle>{selectedReport?.item}</DialogTitle></DialogHeader>
+          {report && (
+            <div className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">From</div><div className="font-medium">{report.dateFrom}</div></CardContent></Card>
+                <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">To</div><div className="font-medium">{report.dateTo}</div></CardContent></Card>
+                <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Total</div><div className="font-display font-bold text-primary">{fmt(report.total)}</div></CardContent></Card>
+              </div>
+              <div className="max-h-[50vh] overflow-auto rounded-xl border">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50 text-xs uppercase text-muted-foreground">
+                    <tr>{report.columns.map((c) => <th key={c} className="px-4 py-2 text-left first:text-left [&:not(:first-child)]:text-right">{c}</th>)}</tr>
+                  </thead>
+                  <tbody>
+                    {report.rows.length === 0 && <tr><td colSpan={report.columns.length} className="px-4 py-6 text-center text-muted-foreground">No records yet</td></tr>}
+                    {report.rows.map((row, i) => (
+                      <tr key={i} className="border-t">
+                        {row.map((cell, j) => <td key={j} className="px-4 py-2 [&:not(:first-child)]:text-right">{cell}</td>)}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => window.print()}><Printer className="mr-1.5 h-4 w-4" />Print</Button>
+                <Button onClick={() => setSelectedReport(null)}>Done</Button>
+              </div>
             </div>
-            <div className="overflow-hidden rounded-xl border">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/50 text-xs uppercase text-muted-foreground"><tr><th className="px-4 py-2 text-left">Party</th><th className="px-4 py-2 text-right">Amount</th><th className="px-4 py-2 text-right">Balance</th></tr></thead>
-                <tbody>
-                  {totals.slice(0, 4).map((i) => <tr key={i.id} className="border-t"><td className="px-4 py-2">{i.number}</td><td className="px-4 py-2 text-right">{fmt(i.total)}</td><td className="px-4 py-2 text-right">{fmt(i.total - i.paid)}</td></tr>)}
-                </tbody>
-              </table>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => window.print()}><Printer className="mr-1.5 h-4 w-4" />Print</Button>
-              <Button onClick={() => setSelectedReport(null)}>Done</Button>
-            </div>
-          </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

@@ -21,15 +21,19 @@ type Store = {
   subscriptions: Subscription[];
   commissions: Commission[];
   whatsappLogs: WhatsAppLog[];
+  deleteWhatsappLog: (id: string) => Promise<void>;
   expenses: Expense[];
   purchases: Purchase[];
   loading: boolean;
   addCustomer: (c: Omit<Customer, "id" | "balance"> & { balance?: number }) => Promise<Customer>;
   updateCustomer: (id: string, patch: Partial<Customer>) => Promise<void>;
+  deleteCustomer: (id: string) => Promise<void>;
   addProduct: (p: Omit<Product, "id">) => Promise<Product>;
   updateProduct: (id: string, patch: Partial<Product>) => Promise<void>;
+  deleteProduct: (id: string) => Promise<void>;
   addInvoice: (i: Omit<Invoice, "id" | "number"> & { number?: string }) => Promise<Invoice>;
   addPayment: (p: Omit<Payment, "id">) => Promise<Payment>;
+  deletePayment: (id: string) => Promise<void>;
   updateInvoice: (id: string, patch: Partial<Invoice>) => Promise<void>;
   deleteInvoice: (id: string) => Promise<void>;
   addEstimate: (e: Omit<Estimate, "id" | "number">) => Promise<Estimate>;
@@ -45,6 +49,7 @@ type Store = {
   updateAccount: (id: string, patch: Partial<Account>) => Promise<void>;
   deleteAccount: (id: string) => Promise<void>;
   addFundTransfer: (f: Omit<FundTransfer, "id">) => Promise<FundTransfer>;
+  deleteFundTransfer: (id: string) => Promise<void>;
   addDeliveryNote: (d: Omit<DeliveryNote, "id" | "number">) => Promise<DeliveryNote>;
   updateDeliveryNote: (id: string, patch: Partial<DeliveryNote>) => Promise<void>;
   deleteDeliveryNote: (id: string) => Promise<void>;
@@ -508,6 +513,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
     },
 
+    deleteCustomer: async (id) => {
+      const { error } = await supabase.from("customers").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      setCustomers((prev) => prev.filter((c) => c.id !== id));
+    },
+
     addProduct: async (p) => {
       const { data: userData } = await supabase.auth.getUser();
       const { data, error } = await supabase.from("products").insert({
@@ -565,6 +576,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
     },
 
+    deleteProduct: async (id) => {
+      const { error } = await supabase.from("products").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      setProducts((prev) => prev.filter((p) => p.id !== id));
+    },
+
     addInvoice: async (i) => {
       const { data: userData } = await supabase.auth.getUser();
       const { data, error } = await supabase.from("invoices").insert({
@@ -607,6 +624,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const np = paymentFromRow(data);
       setPayments((prev) => [np, ...prev]);
       return np;
+    },
+
+    deletePayment: async (id) => {
+      const { error } = await supabase.from("payments").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      setPayments((prev) => prev.filter((p) => p.id !== id));
     },
 
     updateInvoice: async (id, patch) => {
@@ -865,6 +888,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return nf;
     },
 
+    deleteFundTransfer: async (id) => {
+      const transfer = fundTransfers.find((f) => f.id === id);
+      if (transfer) {
+        const from = accounts.find((a) => a.id === transfer.fromAccountId);
+        const to = accounts.find((a) => a.id === transfer.toAccountId);
+        if (from) {
+          const { data: d1 } = await supabase.from("accounts").update({ current_balance: from.currentBalance + transfer.amount } as any).eq("id", from.id).select().single();
+          if (d1) setAccounts((prev) => prev.map((a) => (a.id === from.id ? accountFromRow(d1) : a)));
+        }
+        if (to) {
+          const { data: d2 } = await supabase.from("accounts").update({ current_balance: to.currentBalance - transfer.amount } as any).eq("id", to.id).select().single();
+          if (d2) setAccounts((prev) => prev.map((a) => (a.id === to.id ? accountFromRow(d2) : a)));
+        }
+      }
+      const { error } = await supabase.from("fund_transfers").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      setFundTransfers((prev) => prev.filter((f) => f.id !== id));
+    },
+
     addDeliveryNote: async (d) => {
       const { data: userData } = await supabase.auth.getUser();
       const { data, error } = await supabase.from("delivery_notes").insert({
@@ -1094,6 +1136,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase.from("purchases").delete().eq("id", id);
       if (error) throw new Error(error.message);
       setPurchases((prev) => prev.filter((x) => x.id !== id));
+    },
+
+    deleteWhatsappLog: async (id) => {
+      const { error } = await supabase.from("whatsapp_logs").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      setWhatsappLogs((prev) => prev.filter((x) => x.id !== id));
     },
 
     getCustomer: (id) => customers.find((c) => c.id === id),

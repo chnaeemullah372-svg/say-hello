@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ArrowLeftRight,
   Banknote,
@@ -53,6 +53,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { useStore } from "@/lib/store";
+import * as XLSX from "xlsx";
 import { shoibLogin, shoibConnectPhone, shoibStatus, type ShoibWAState } from "@/lib/shoib";
 import { setCurrencySymbol, type AccountType } from "@/lib/dummy-data";
 import { CURRENCIES } from "@/lib/currencies";
@@ -1348,7 +1349,114 @@ function WhatsAppPanel({ data, set, isAdmin }: PanelProps & { isAdmin: boolean }
   );
 }
 
+// Every collection the app stores, with the store methods needed to back
+// it up, restore it, or wipe it. Kept in one place so Download/Export/
+// Import/Reset all agree on exactly what "all business data" means.
+function useBackupCollections() {
+  const store = useStore();
+  return [
+    { key: "customers", label: "Customers", rows: store.customers, add: store.addCustomer, del: store.deleteCustomer },
+    { key: "products", label: "Products", rows: store.products, add: store.addProduct, del: store.deleteProduct },
+    { key: "invoices", label: "Invoices", rows: store.invoices, add: store.addInvoice, del: store.deleteInvoice },
+    { key: "payments", label: "Payments", rows: store.payments, add: store.addPayment, del: store.deletePayment },
+    { key: "estimates", label: "Estimates", rows: store.estimates, add: store.addEstimate, del: store.deleteEstimate },
+    { key: "saleOrders", label: "Sale Orders", rows: store.saleOrders, add: store.addSaleOrder, del: store.deleteSaleOrder },
+    { key: "purchaseOrders", label: "Purchase Orders", rows: store.purchaseOrders, add: store.addPurchaseOrder, del: store.deletePurchaseOrder },
+    { key: "accounts", label: "Accounts", rows: store.accounts, add: store.addAccount, del: store.deleteAccount },
+    { key: "fundTransfers", label: "Fund Transfers", rows: store.fundTransfers, add: store.addFundTransfer, del: store.deleteFundTransfer },
+    { key: "deliveryNotes", label: "Delivery Notes", rows: store.deliveryNotes, add: store.addDeliveryNote, del: store.deleteDeliveryNote },
+    { key: "saleReturns", label: "Sale Returns", rows: store.saleReturns, add: store.addSaleReturn, del: store.deleteSaleReturn },
+    { key: "purchaseReturns", label: "Purchase Returns", rows: store.purchaseReturns, add: store.addPurchaseReturn, del: store.deletePurchaseReturn },
+    { key: "productionEntries", label: "Production Entries", rows: store.productionEntries, add: store.addProductionEntry, del: store.deleteProductionEntry },
+    { key: "subscriptions", label: "Subscriptions", rows: store.subscriptions, add: store.addSubscription, del: store.deleteSubscription },
+    { key: "commissions", label: "Commissions", rows: store.commissions, add: store.addCommission, del: store.deleteCommission },
+    { key: "whatsappLogs", label: "WhatsApp Logs", rows: store.whatsappLogs, add: null, del: store.deleteWhatsappLog },
+    { key: "expenses", label: "Expenses", rows: store.expenses, add: store.addExpense, del: store.deleteExpense },
+    { key: "purchases", label: "Purchases", rows: store.purchases, add: store.addPurchase, del: store.deletePurchase },
+  ] as const;
+}
+
 function BackupPanel({ data, set }: PanelProps) {
+  const collections = useBackupCollections();
+  const [importing, setImporting] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetConfirmText, setResetConfirmText] = useState("");
+  const [resetting, setResetting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const downloadBackup = () => {
+    const payload: Record<string, unknown> = {
+      app: "Prestige Invoice",
+      exportedAt: new Date().toISOString(),
+    };
+    for (const c of collections) payload[c.key] = c.rows;
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    set("lastBackup", new Date().toLocaleString());
+    toast.success("Backup downloaded");
+  };
+
+  const exportExcel = () => {
+    const wb = XLSX.utils.book_new();
+    for (const c of collections) {
+      const ws = XLSX.utils.json_to_sheet(c.rows as unknown as Record<string, unknown>[]);
+      XLSX.utils.book_append_sheet(wb, ws, c.label.slice(0, 31));
+    }
+    XLSX.writeFile(wb, `export-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    toast.success("Excel file downloaded");
+  };
+
+  const importBackup = async (file: File) => {
+    setImporting(true);
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text) as Record<string, any[]>;
+      let added = 0;
+      let skippedCollections = 0;
+      for (const c of collections) {
+        const rows = parsed[c.key];
+        if (!Array.isArray(rows) || rows.length === 0) continue;
+        if (!c.add) { skippedCollections++; continue; }
+        for (const row of rows) {
+          try {
+            await c.add(row as any);
+            added++;
+          } catch { /* skip a row that fails to import rather than aborting the whole restore */ }
+        }
+      }
+      toast.success(`Restored ${added} record${added === 1 ? "" : "s"} from backup${skippedCollections ? ` (${skippedCollections} collection(s) skipped)` : ""}`);
+    } catch {
+      toast.error("Could not read that backup file — is it a valid export from this app?");
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const resetData = async () => {
+    setResetting(true);
+    try {
+      let deleted = 0;
+      for (const c of collections) {
+        for (const row of c.rows as { id: string }[]) {
+          try {
+            await c.del(row.id);
+            deleted++;
+          } catch { /* skip a row that fails to delete rather than aborting the whole reset */ }
+        }
+      }
+      toast.success(`Deleted ${deleted} record${deleted === 1 ? "" : "s"}`);
+      setResetOpen(false);
+      setResetConfirmText("");
+    } finally {
+      setResetting(false);
+    }
+  };
+
   return (
     <Panel>
       <PanelHeader icon={DatabaseBackup} title="Backup, import and export" subtitle="Business data safety tools." />
@@ -1362,11 +1470,43 @@ function BackupPanel({ data, set }: PanelProps) {
         <ToggleField label="Include images" checked={data.includeImages} onChange={(v) => set("includeImages", v)} />
       </ToggleGrid>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <ActionButton icon={DatabaseBackup} label="Download backup" />
-        <ActionButton icon={Upload} label="Import backup" />
-        <ActionButton icon={FileBarChart} label="Export Excel" />
-        <ActionButton icon={Trash2} label="Reset data" danger />
+        <ActionButton icon={DatabaseBackup} label="Download backup" onClick={downloadBackup} />
+        <ActionButton icon={Upload} label={importing ? "Importing…" : "Import backup"} onClick={() => fileInputRef.current?.click()} disabled={importing} />
+        <ActionButton icon={FileBarChart} label="Export Excel" onClick={exportExcel} />
+        <ActionButton icon={Trash2} label="Reset data" danger onClick={() => setResetOpen(true)} />
       </div>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="application/json"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) importBackup(file);
+          e.target.value = "";
+        }}
+      />
+
+      <Dialog open={resetOpen} onOpenChange={(v) => { setResetOpen(v); if (!v) setResetConfirmText(""); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Reset all data?</DialogTitle></DialogHeader>
+          <div className="space-y-3 text-sm">
+            <p className="text-destructive">
+              This permanently deletes every customer, product, invoice, payment and other business record — there is no undo. Download a backup first if you're not sure.
+            </p>
+            <div className="grid gap-1.5">
+              <Label>Type DELETE to confirm</Label>
+              <Input value={resetConfirmText} onChange={(e) => setResetConfirmText(e.target.value)} placeholder="DELETE" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setResetOpen(false)}>Cancel</Button>
+            <Button variant="destructive" disabled={resetConfirmText !== "DELETE" || resetting} onClick={resetData}>
+              {resetting ? "Deleting…" : "Delete everything"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Panel>
   );
 }
@@ -1565,8 +1705,8 @@ function StatCard({ icon: Icon, label, value }: { icon: typeof Store; label: str
   );
 }
 
-function ActionButton({ icon: Icon, label, danger }: { icon: typeof Store; label: string; danger?: boolean }) {
-  return <Button variant={danger ? "destructive" : "outline"} onClick={() => toast.info(`${label} action ready`)}><Icon className="mr-1.5 h-4 w-4" />{label}</Button>;
+function ActionButton({ icon: Icon, label, danger, onClick, disabled }: { icon: typeof Store; label: string; danger?: boolean; onClick?: () => void; disabled?: boolean }) {
+  return <Button variant={danger ? "destructive" : "outline"} onClick={onClick ?? (() => toast.info(`${label} action ready`))} disabled={disabled}><Icon className="mr-1.5 h-4 w-4" />{label}</Button>;
 }
 
 function humanize(value: string) {
