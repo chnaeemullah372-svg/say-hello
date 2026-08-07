@@ -75,6 +75,7 @@ export const Route = createFileRoute("/settings")({
 
 type SectionKey = keyof SettingsState;
 type ActiveKey = SectionKey | "accounts" | "fundManagement" | "import";
+type SettingsGroup = "Company Information" | "General Settings" | "Template Settings" | "Communication";
 type Category = {
   key: ActiveKey;
   title: string;
@@ -82,7 +83,9 @@ type Category = {
   icon: typeof Store;
   badge?: string;
   tone: string;
+  group: SettingsGroup;
 };
+const SETTINGS_GROUPS: SettingsGroup[] = ["Company Information", "General Settings", "Template Settings", "Communication"];
 
 type SettingsState = {
   business: Record<string, string | boolean>;
@@ -392,29 +395,36 @@ const defaults: SettingsState = {
 };
 
 const categories: Category[] = [
-  { key: "business", title: "Business Profile", subtitle: "Logo, GST, address", icon: Store, badge: "Main", tone: "text-primary bg-primary/10 ring-primary/20" },
-  { key: "invoice", title: "Invoice Setup", subtitle: "Columns, terms, QR", icon: ReceiptText, badge: "A-Z", tone: "text-sapphire bg-sapphire/10 ring-sapphire/20" },
-  { key: "tax", title: "Tax / GST / TDS", subtitle: "Rates and sections", icon: Percent, badge: "TDS", tone: "text-coral bg-coral/10 ring-coral/20" },
-  { key: "terms", title: "Terms & Condition", subtitle: "Per-document terms text", icon: FileSignature, tone: "text-jade bg-jade/10 ring-jade/20" },
-  { key: "accounts", title: "Accounts & Categories", subtitle: "Payment accounts & expense categories", icon: Landmark, tone: "text-orchid bg-orchid/10 ring-orchid/20" },
-  { key: "fundManagement", title: "Fund Management", subtitle: "Transfer money between accounts", icon: ArrowLeftRight, tone: "text-aqua bg-aqua/10 ring-aqua/20" },
-  { key: "whatsapp", title: "WhatsApp", subtitle: "Connect your account, message templates", icon: MessageCircle, tone: "text-jade bg-jade/10 ring-jade/20" },
-  { key: "numbering", title: "Prefix & Localization", subtitle: "Prefixes, country, currency, formats", icon: Hash, tone: "text-amber bg-amber/10 ring-amber/20" },
-  { key: "print", title: "Page & Print", subtitle: "A4, thermal, PDF", icon: Printer, tone: "text-jade bg-jade/10 ring-jade/20" },
-  { key: "renameFields", title: "Rename Field Name", subtitle: "Change field labels on invoices/documents", icon: PenLine, tone: "text-sapphire bg-sapphire/10 ring-sapphire/20" },
-  { key: "customFields", title: "Add Custom Fields", subtitle: "Add extra fields to documents", icon: Plus, tone: "text-jade bg-jade/10 ring-jade/20" },
-  { key: "templateSettings", title: "Template Settings", subtitle: "Show or hide fields and totals", icon: FileText, tone: "text-coral bg-coral/10 ring-coral/20" },
-  { key: "items", title: "Items & Stock", subtitle: "Products, units, alerts", icon: Boxes, tone: "text-orchid bg-orchid/10 ring-orchid/20" },
-  { key: "payment", title: "Payment", subtitle: "Cash, UPI, due", icon: WalletCards, tone: "text-aqua bg-aqua/10 ring-aqua/20" },
-  { key: "bank", title: "Bank / UPI", subtitle: "Invoice bank details", icon: Landmark, tone: "text-primary bg-primary/10 ring-primary/20" },
-  { key: "users", title: "Admin & Users", subtitle: "Roles and access", icon: ShieldCheck, badge: "Admin", tone: "text-coral bg-coral/10 ring-coral/20" },
-  { key: "notifications", title: "Alerts", subtitle: "Reminders and reports", icon: Bell, tone: "text-amber bg-amber/10 ring-amber/20" },
-  { key: "gmail", title: "Gmail / Email", subtitle: "SMTP templates", icon: Mail, badge: "Secret", tone: "text-sapphire bg-sapphire/10 ring-sapphire/20" },
-  { key: "backup", title: "Backup / Export", subtitle: "CSV, Excel, restore", icon: DatabaseBackup, tone: "text-orchid bg-orchid/10 ring-orchid/20" },
-  { key: "homeScreen", title: "Home Screen", subtitle: "Dashboard widgets, monthly or all-time", icon: LayoutDashboard, tone: "text-sapphire bg-sapphire/10 ring-sapphire/20" },
-  { key: "import", title: "Import", subtitle: "Bulk-add clients and products from Excel", icon: Upload, tone: "text-jade bg-jade/10 ring-jade/20" },
-  { key: "appearance", title: "Appearance", subtitle: "Language and theme", icon: Palette, tone: "text-aqua bg-aqua/10 ring-aqua/20" },
-  { key: "security", title: "Security", subtitle: "Login and audit", icon: LockKeyhole, tone: "text-primary bg-primary/10 ring-primary/20" },
+  // Company Information
+  { key: "business", title: "Business Profile", subtitle: "Business details shown on documents: logo, GST, address and company info.", icon: Store, badge: "Main", tone: "text-primary bg-primary/10 ring-primary/20", group: "Company Information" },
+  { key: "bank", title: "Bank / UPI", subtitle: "Bank and UPI details shown on invoices so customers know where to pay.", icon: Landmark, tone: "text-primary bg-primary/10 ring-primary/20", group: "Company Information" },
+  { key: "tax", title: "Tax / GST / TDS", subtitle: "Set taxes and discounts for bills. Apply item-wise or on the full bill.", icon: Percent, badge: "TDS", tone: "text-coral bg-coral/10 ring-coral/20", group: "Company Information" },
+  { key: "terms", title: "Terms & Condition", subtitle: "Terms shown on documents. Set different text for invoices, estimates, purchases, etc.", icon: FileSignature, tone: "text-jade bg-jade/10 ring-jade/20", group: "Company Information" },
+  { key: "accounts", title: "Accounts & Categories", subtitle: "Create accounts for payments and expenses. Helps organize and track your money.", icon: Landmark, tone: "text-orchid bg-orchid/10 ring-orchid/20", group: "Company Information" },
+  { key: "fundManagement", title: "Fund Management", subtitle: "Transfer money between payment accounts. Keeps proper records of fund movement.", icon: ArrowLeftRight, tone: "text-aqua bg-aqua/10 ring-aqua/20", group: "Company Information" },
+  { key: "items", title: "Items & Stock", subtitle: "Products, units, low-stock alerts and warehouse tracking.", icon: Boxes, tone: "text-orchid bg-orchid/10 ring-orchid/20", group: "Company Information" },
+  { key: "payment", title: "Payment", subtitle: "Cash, UPI and due-payment defaults used when recording payments.", icon: WalletCards, tone: "text-aqua bg-aqua/10 ring-aqua/20", group: "Company Information" },
+  { key: "users", title: "Admin & Users", subtitle: "Add and manage staff members. Control what each person can access.", icon: ShieldCheck, badge: "Admin", tone: "text-coral bg-coral/10 ring-coral/20", group: "Company Information" },
+
+  // General Settings
+  { key: "numbering", title: "Prefix & Localization", subtitle: "Set invoice, estimate and other document numbers. Choose country, number & date format, currency.", icon: Hash, tone: "text-amber bg-amber/10 ring-amber/20", group: "General Settings" },
+  { key: "homeScreen", title: "Home Screen", subtitle: "Customize what you see on the home screen. Set widgets to show monthly or all-time data.", icon: LayoutDashboard, tone: "text-sapphire bg-sapphire/10 ring-sapphire/20", group: "General Settings" },
+  { key: "backup", title: "Backup / Export", subtitle: "Keep your data safe with a backup. Restore it anytime when needed.", icon: DatabaseBackup, tone: "text-orchid bg-orchid/10 ring-orchid/20", group: "General Settings" },
+  { key: "import", title: "Import", subtitle: "Import clients and products from Excel. Add data quickly into the app.", icon: Upload, tone: "text-jade bg-jade/10 ring-jade/20", group: "General Settings" },
+  { key: "notifications", title: "Alerts", subtitle: "Reminder message settings for unpaid bills and scheduled reports.", icon: Bell, tone: "text-amber bg-amber/10 ring-amber/20", group: "General Settings" },
+  { key: "print", title: "Page & Print", subtitle: "Set document printing preferences. Choose A4/A3 or thermal printer and paper size.", icon: Printer, tone: "text-jade bg-jade/10 ring-jade/20", group: "General Settings" },
+  { key: "appearance", title: "Appearance", subtitle: "Choose your preferred app language and theme.", icon: Palette, tone: "text-aqua bg-aqua/10 ring-aqua/20", group: "General Settings" },
+  { key: "security", title: "Security", subtitle: "Login methods, session timeout and audit log.", icon: LockKeyhole, tone: "text-primary bg-primary/10 ring-primary/20", group: "General Settings" },
+
+  // Template Settings
+  { key: "invoice", title: "Invoice Setup", subtitle: "Choose which columns, terms and QR code appear on your invoices.", icon: ReceiptText, badge: "A-Z", tone: "text-sapphire bg-sapphire/10 ring-sapphire/20", group: "Template Settings" },
+  { key: "renameFields", title: "Rename Field Name", subtitle: "Change field labels on invoices/documents. Use names that suit your business.", icon: PenLine, tone: "text-sapphire bg-sapphire/10 ring-sapphire/20", group: "Template Settings" },
+  { key: "customFields", title: "Add Custom Fields", subtitle: "Add extra fields to documents. Store more details if needed.", icon: Plus, tone: "text-jade bg-jade/10 ring-jade/20", group: "Template Settings" },
+  { key: "templateSettings", title: "Template Settings", subtitle: "Control what appears on invoices/documents. Show or hide fields and totals.", icon: FileText, tone: "text-coral bg-coral/10 ring-coral/20", group: "Template Settings" },
+
+  // Communication
+  { key: "whatsapp", title: "WhatsApp", subtitle: "Connect your account and set message templates.", icon: MessageCircle, tone: "text-jade bg-jade/10 ring-jade/20", group: "Communication" },
+  { key: "gmail", title: "Gmail / Email", subtitle: "SMTP connection and email templates.", icon: Mail, badge: "Secret", tone: "text-sapphire bg-sapphire/10 ring-sapphire/20", group: "Communication" },
 ];
 
 function SettingsPage() {
@@ -519,26 +529,33 @@ function SettingsPage() {
               </div>
               {loading && <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />}
             </div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-1">
-              {categories.map((category) => (
-                <button
-                  key={category.key}
-                  type="button"
-                  onClick={() => setActive(category.key)}
-                  className={`group flex min-h-[82px] items-center gap-3 rounded-lg border p-3 text-left transition hover:bg-muted/60 xl:min-h-0 ${active === category.key ? "border-primary bg-primary/5 shadow-sm" : "bg-card"}`}
-                >
-                  <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg ring-1 ${category.tone}`}>
-                    <category.icon className="h-5 w-5" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-1.5">
-                      <span className="truncate text-sm font-semibold leading-tight">{category.title}</span>
-                      {category.badge && <Badge variant="secondary" className="hidden px-1.5 py-0 text-[10px] sm:inline-flex">{category.badge}</Badge>}
-                    </span>
-                    <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{category.subtitle}</span>
-                  </span>
-                  <ChevronRight className="hidden h-4 w-4 text-muted-foreground xl:block" />
-                </button>
+            <div className="space-y-4">
+              {SETTINGS_GROUPS.map((group) => (
+                <div key={group}>
+                  <div className="mb-1.5 px-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{group}</div>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-1">
+                    {categories.filter((c) => c.group === group).map((category) => (
+                      <button
+                        key={category.key}
+                        type="button"
+                        onClick={() => setActive(category.key)}
+                        className={`group flex min-h-[88px] items-center gap-3.5 rounded-lg border p-3.5 text-left transition hover:bg-muted/60 xl:min-h-0 ${active === category.key ? "border-primary bg-primary/5 shadow-sm" : "bg-card"}`}
+                      >
+                        <span className={`grid h-12 w-12 shrink-0 place-items-center rounded-lg ring-1 ${category.tone}`}>
+                          <category.icon className="h-6 w-6" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center gap-1.5">
+                            <span className="truncate text-sm font-semibold leading-tight">{category.title}</span>
+                            {category.badge && <Badge variant="secondary" className="hidden px-1.5 py-0 text-[10px] sm:inline-flex">{category.badge}</Badge>}
+                          </span>
+                          <span className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-muted-foreground">{category.subtitle}</span>
+                        </span>
+                        <ChevronRight className="hidden h-5 w-5 shrink-0 text-muted-foreground xl:block" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           </CardContent>
@@ -873,7 +890,7 @@ function PrintPanel({ data, set }: PanelProps) {
     <Panel>
       <PanelHeader icon={Printer} title="Page layout and print" subtitle="A4, A5, thermal print, PDF margins and watermarks." />
       <Grid>
-        <SelectField label="Paper size" value={data.paper} onChange={(v) => set("paper", v)} options={["a4", "a5", "letter", "legal", "thermal-80mm", "thermal-58mm"]} />
+        <SelectField label="Paper size" value={data.paper} onChange={(v) => set("paper", v)} options={["a4", "a5", "a3", "letter", "legal", "thermal-80mm", "thermal-58mm"]} />
         <SelectField label="Orientation" value={data.orientation} onChange={(v) => set("orientation", v)} options={["portrait", "landscape"]} />
         <TextField label="Top margin (mm)" value={data.marginTop} onChange={(v) => set("marginTop", v)} type="number" />
         <TextField label="Right margin (mm)" value={data.marginRight} onChange={(v) => set("marginRight", v)} type="number" />
@@ -913,7 +930,7 @@ function PrintPanel({ data, set }: PanelProps) {
             <TextField label="Maximum character in single line" value={data.maxCharsPerLine} onChange={(v) => set("maxCharsPerLine", v)} type="number" />
           </Grid>
         ) : (
-          <SelectField label="Print Size" value={data.paper.toUpperCase()} onChange={(v) => set("paper", v.toLowerCase())} options={["A4", "A5", "LETTER", "LEGAL"]} />
+          <SelectField label="Print Size" value={data.paper.toUpperCase()} onChange={(v) => set("paper", v.toLowerCase())} options={["A4", "A5", "A3", "LETTER", "LEGAL"]} />
         )}
       </SettingBlock>
     </Panel>

@@ -66,7 +66,7 @@ function InvoiceView() {
   // @page rule at all, so the browser just used its own default (often
   // Letter, not the A4/A5/thermal size configured in the app).
   const PAGE_SIZE: Record<string, string> = {
-    a4: "A4", a5: "A5", letter: "letter", legal: "legal",
+    a4: "A4", a5: "A5", a3: "A3", letter: "letter", legal: "legal",
     "thermal-80mm": "80mm 297mm", "thermal-58mm": "58mm 297mm",
   };
   const pageCss = `@page { size: ${PAGE_SIZE[printSettings.paper] ?? "A4"} ${printSettings.orientation === "landscape" ? "landscape" : "portrait"}; margin: ${printSettings.marginTop ?? 12}mm ${printSettings.marginRight ?? 10}mm ${printSettings.marginBottom ?? 12}mm ${printSettings.marginLeft ?? 10}mm; }`;
