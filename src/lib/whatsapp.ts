@@ -1,60 +1,64 @@
 import { supabase } from "@/integrations/supabase/client";
-import { shoibSendText } from "@/lib/shoib";
-
-export type WhatsAppSendInput = {
-  apiBase: string;
-  token: string;
-  toNumber: string;
-  message: string;
-};
+import { sendWhatsAppText, sendWhatsAppDocument } from "@/lib/whatsapp-actions";
 
 export type WhatsAppSendResult = { ok: boolean; error?: string };
 
-/**
- * Sends a text message through the connected Shoib WhatsApp gateway
- * (see src/lib/shoib.ts — the account is connected once from Settings ->
- * WhatsApp using a phone-number pairing code).
- */
-export async function sendWhatsAppMessage(input: WhatsAppSendInput): Promise<WhatsAppSendResult> {
-  if (!input.token) {
-    return { ok: false, error: "WhatsApp isn't connected yet — connect it from Settings -> WhatsApp first" };
-  }
+async function sendToNumber(
+  toNumber: string,
+  message: string,
+  document?: { pdfBase64: string; fileName: string },
+): Promise<WhatsAppSendResult & { waMessageId?: string }> {
   try {
-    await shoibSendText(input.apiBase, input.token, input.toNumber.replace(/\D/g, ""), input.message);
-    return { ok: true };
+    const { waMessageId } = document
+      ? await sendWhatsAppDocument({ data: { phone: toNumber, pdfBase64: document.pdfBase64, fileName: document.fileName, caption: message } })
+      : await sendWhatsAppText({ data: { phone: toNumber, text: message } });
+    return { ok: true, waMessageId };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Could not reach the WhatsApp gateway" };
+    return { ok: false, error: err instanceof Error ? err.message : "Could not reach WhatsApp — is it connected in Settings?" };
   }
 }
 
 /**
- * Sends a WhatsApp message and records the attempt in whatsapp_logs so it
- * shows up on the monitoring page, regardless of whether it succeeds.
+ * Sends a WhatsApp message (optionally with a document attached) to one or
+ * two numbers and records every attempt in whatsapp_logs so it shows up on
+ * the monitoring page and this invoice's "Check History", regardless of
+ * whether it succeeds. `wa_message_id` is stored per attempt so the engine's
+ * delivered/read receipts (see whatsapp-engine.server.ts) can find it back.
  */
 export async function sendAndLogWhatsApp(params: {
-  apiBase: string;
-  token: string;
   customerId?: string;
   customerName?: string;
-  toNumber: string;
+  toNumbers: (string | undefined | null)[];
   message: string;
   messageType: "invoice" | "due_reminder" | "order_status" | "other";
   referenceId?: string;
   referenceNumber?: string;
-}) {
+  document?: { pdfBase64: string; fileName: string };
+}): Promise<WhatsAppSendResult> {
+  const numbers = [...new Set(params.toNumbers.filter((n): n is string => !!n?.trim()))];
+  if (numbers.length === 0) return { ok: false, error: "No WhatsApp number on file for this customer" };
+
   const { data: userData } = await supabase.auth.getUser();
-  const result = await sendWhatsAppMessage(params);
-  await supabase.from("whatsapp_logs").insert({
-    customer_id: params.customerId || null,
-    customer_name: params.customerName || null,
-    whatsapp_number: params.toNumber,
-    message_type: params.messageType,
-    reference_id: params.referenceId || null,
-    reference_number: params.referenceNumber || null,
-    message_text: params.message,
-    status: result.ok ? "sent" : "failed",
-    error_message: result.error || null,
-    created_by: userData.user?.id,
-  });
-  return result;
+  let lastError: string | undefined;
+  let anyOk = false;
+
+  for (const toNumber of numbers) {
+    const result = await sendToNumber(toNumber, params.message, params.document);
+    if (result.ok) anyOk = true; else lastError = result.error;
+    await supabase.from("whatsapp_logs").insert({
+      customer_id: params.customerId || null,
+      customer_name: params.customerName || null,
+      whatsapp_number: toNumber,
+      wa_message_id: result.waMessageId || null,
+      message_type: params.messageType,
+      reference_id: params.referenceId || null,
+      reference_number: params.referenceNumber || null,
+      message_text: params.message,
+      status: result.ok ? "sent" : "failed",
+      error_message: result.error || null,
+      created_by: userData.user?.id,
+    });
+  }
+
+  return anyOk ? { ok: true } : { ok: false, error: lastError };
 }

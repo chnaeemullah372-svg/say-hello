@@ -8,6 +8,7 @@ export type Customer = {
   phone: string;
   phone2?: string;
   whatsapp?: string;
+  whatsapp2?: string;
   email?: string;
   website?: string;
   region?: string;

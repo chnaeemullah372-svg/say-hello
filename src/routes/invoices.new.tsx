@@ -251,7 +251,7 @@ function CreateInvoice() {
         }
       }
 
-      setTimeout(() => nav({ to: "/invoices/$id", params: { id: invoiceId }, search: opts.print ? { print: 1 } as any : undefined }), 150);
+      setTimeout(() => nav({ to: "/invoices/$id", params: { id: invoiceId }, search: { new: 1, ...(opts.print ? { print: 1 } : {}) } as any }), 150);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not save invoice");
       setSaving(false);

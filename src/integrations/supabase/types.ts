@@ -156,6 +156,7 @@ export type Database = {
           upi_id: string | null
           website: string | null
           whatsapp: string | null
+          whatsapp2: string | null
         }
         Insert: {
           address?: string | null
@@ -199,6 +200,7 @@ export type Database = {
           upi_id?: string | null
           website?: string | null
           whatsapp?: string | null
+          whatsapp2?: string | null
         }
         Update: {
           address?: string | null
@@ -242,6 +244,7 @@ export type Database = {
           upi_id?: string | null
           website?: string | null
           whatsapp?: string | null
+          whatsapp2?: string | null
         }
         Relationships: []
       }

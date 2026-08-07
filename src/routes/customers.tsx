@@ -14,7 +14,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useStore } from "@/lib/store";
 import { fmt, type Customer, type PartyType } from "@/lib/dummy-data";
 import { normalizeWhatsAppNumber } from "@/lib/phone";
-import { supabase } from "@/integrations/supabase/client";
 import { sendAndLogWhatsApp } from "@/lib/whatsapp";
 import { toast } from "sonner";
 
@@ -30,7 +29,7 @@ type Tab = "client" | "supplier" | "both";
 
 const emptyForm = {
   partyType: "client" as PartyType,
-  name: "", contactPerson: "", phone: "", phone2: "", whatsapp: "", email: "", website: "", region: "",
+  name: "", contactPerson: "", phone: "", phone2: "", whatsapp: "", whatsapp2: "", email: "", website: "", region: "",
   gstin: "", businessId: "", panNo: "",
   address: "", pinCode: "", city: "", state: "", country: "",
   shippingSameAsBilling: true, shippingPinCode: "", shippingCity: "", shippingState: "", shippingCountry: "",
@@ -59,14 +58,10 @@ function CustomersPage() {
     if (!waTarget?.whatsapp) return;
     setWaSending(true);
     try {
-      const { data } = await supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.whatsapp").maybeSingle();
-      const wa = (data?.setting_value as Record<string, string>) ?? {};
       const result = await sendAndLogWhatsApp({
-        apiBase: wa.shoibApiBase || "https://hatelecom.xyz/api",
-        token: wa.shoibToken || "",
         customerId: waTarget.id,
         customerName: waTarget.name,
-        toNumber: waTarget.whatsapp,
+        toNumbers: [waTarget.whatsapp],
         message: waMessage,
         messageType: "other",
       });
@@ -104,7 +99,7 @@ function CustomersPage() {
     setEditingId(c.id);
     setForm({
       partyType: c.partyType, name: c.name, contactPerson: c.contactPerson ?? "", phone: c.phone,
-      phone2: c.phone2 ?? "", whatsapp: c.whatsapp ?? "", email: c.email ?? "", website: c.website ?? "", region: c.region ?? "",
+      phone2: c.phone2 ?? "", whatsapp: c.whatsapp ?? "", whatsapp2: c.whatsapp2 ?? "", email: c.email ?? "", website: c.website ?? "", region: c.region ?? "",
       gstin: c.gstin ?? "", businessId: c.businessId ?? "", panNo: c.panNo ?? "",
       address: c.address ?? "", pinCode: c.pinCode ?? "", city: c.city ?? "", state: c.state ?? "", country: c.country ?? "",
       shippingSameAsBilling: c.shippingSameAsBilling ?? true, shippingPinCode: c.shippingPinCode ?? "", shippingCity: c.shippingCity ?? "",
@@ -124,7 +119,11 @@ function CustomersPage() {
     if (duplicate) return toast.error("Client/Supplier with this name already exists");
     if (saving) return;
     setSaving(true);
-    const payload = { ...form, whatsapp: form.whatsapp ? normalizeWhatsAppNumber(form.whatsapp) : "" };
+    const payload = {
+      ...form,
+      whatsapp: form.whatsapp ? normalizeWhatsAppNumber(form.whatsapp) : "",
+      whatsapp2: form.whatsapp2 ? normalizeWhatsAppNumber(form.whatsapp2) : "",
+    };
     try {
       if (editingId) {
         await updateCustomer(editingId, payload);
@@ -175,6 +174,10 @@ function CustomersPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="grid gap-1.5"><Label>Contact Number 2</Label><Input value={form.phone2} onChange={(e) => setForm({ ...form, phone2: e.target.value })} /></div>
                   <div className="grid gap-1.5"><Label>WhatsApp</Label><Input value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: e.target.value })} placeholder="+92 300 …" /></div>
+                </div>
+                <div className="grid gap-1.5">
+                  <Label>WhatsApp 2 (optional)</Label>
+                  <Input value={form.whatsapp2} onChange={(e) => setForm({ ...form, whatsapp2: e.target.value })} placeholder="+92 300 … — invoices and reminders also go here" />
                 </div>
 
                 <Button type="button" variant="ghost" size="sm" className="justify-start px-2 text-accent hover:text-accent" onClick={() => setShowMore((v) => !v)}>

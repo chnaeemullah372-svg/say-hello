@@ -92,6 +92,7 @@ function customerFromRow(row: any): Customer {
     phone: row.phone ?? "",
     phone2: row.phone2 ?? undefined,
     whatsapp: row.whatsapp ?? undefined,
+    whatsapp2: row.whatsapp2 ?? undefined,
     email: row.email ?? undefined,
     website: row.website ?? undefined,
     region: row.region ?? undefined,
@@ -427,6 +428,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         phone: c.phone || null,
         phone2: c.phone2 || null,
         whatsapp: c.whatsapp || null,
+        whatsapp2: c.whatsapp2 || null,
         email: c.email || null,
         website: c.website || null,
         region: c.region || null,
@@ -474,6 +476,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (patch.phone !== undefined) dbPatch.phone = patch.phone || null;
       if (patch.phone2 !== undefined) dbPatch.phone2 = patch.phone2 || null;
       if (patch.whatsapp !== undefined) dbPatch.whatsapp = patch.whatsapp || null;
+      if (patch.whatsapp2 !== undefined) dbPatch.whatsapp2 = patch.whatsapp2 || null;
       if (patch.email !== undefined) dbPatch.email = patch.email || null;
       if (patch.website !== undefined) dbPatch.website = patch.website || null;
       if (patch.region !== undefined) dbPatch.region = patch.region || null;
