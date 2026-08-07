@@ -356,6 +356,7 @@ export function calcInvoiceTotals(
   taxRate: number,
   discountMode: "rate" | "flat" = "rate",
   discountValue = 0,
+  shippingAmount = 0,
 ) {
   const subtotal = items.reduce((s, it) => s + it.qty * it.rate, 0);
   const lineDiscount = items.reduce((s, it) => s + (it.qty * it.rate * it.discount) / 100, 0);
@@ -369,7 +370,10 @@ export function calcInvoiceTotals(
   const discount = lineDiscount + globalDiscount;
   const taxable = Math.max(0, afterLineDiscount - globalDiscount);
   const tax = (taxable * taxRate) / 100;
-  const total = taxable + tax;
+  // Shipping is part of the Total shown while creating an invoice; every
+  // other screen recomputed the total from items/tax/discount alone and
+  // silently dropped it, understating the total everywhere except create.
+  const total = taxable + tax + shippingAmount;
   return { subtotal, discount, tax, total };
 }
 
@@ -381,6 +385,9 @@ export function calcInvoiceTotals(
 let currencySymbol = "Rs";
 export function setCurrencySymbol(symbol: string) {
   if (symbol) currencySymbol = symbol;
+}
+export function getCurrencySymbol() {
+  return currencySymbol;
 }
 
 export function fmt(n: number) {

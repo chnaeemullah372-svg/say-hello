@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useStore } from "@/lib/store";
-import { fmt, type InvoiceItem, type Product } from "@/lib/dummy-data";
+import { fmt, getCurrencySymbol, type InvoiceItem, type Product } from "@/lib/dummy-data";
 import { normalizeWhatsAppNumber } from "@/lib/phone";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -81,6 +81,7 @@ function CreateInvoice() {
   // Dialogs
   const [custOpen, setCustOpen] = useState(false);
   const [addCustOpen, setAddCustOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [itemDlgOpen, setItemDlgOpen] = useState(false);
   const emptyNewCust = { name: "", phone: "", whatsapp: "", email: "", address: "", referralName: "", referralPhone: "", referralEmail: "", referralAddress: "" };
@@ -157,7 +158,7 @@ function CreateInvoice() {
 
   const removeLine = (i: number) => setItems((p) => p.filter((_, idx) => idx !== i));
 
-  const save = async (opts: { print?: boolean; preview?: boolean } = {}) => {
+  const save = async (opts: { print?: boolean } = {}) => {
     if (!customerId) return toast.error("Please select a client (Bill To)");
     if (!items.length) return toast.error("Add at least one item");
     if (saving) return;
@@ -182,12 +183,20 @@ function CreateInvoice() {
       }
     }
 
+    // taxEnabled/taxInclusive aren't columns on the invoice — they only ever
+    // existed as local state here. Both mean "no tax is actually added to
+    // the total" (see taxAmount above), so persist that as taxRate 0 rather
+    // than the typed percentage — otherwise calcInvoiceTotals() has no way
+    // to know tax was off/inclusive and recomputes a nonzero tax on every
+    // other screen (view, list, statement, reports) that was never charged.
+    const effectiveTaxRate = !taxEnabled || taxInclusive ? 0 : taxPct;
+
     const payload = {
       customerId,
       date: invoiceDate.toISOString().slice(0, 10),
       dueDate: dueDate || invoiceDate.toISOString().slice(0, 10),
       items: items.map(({ productId, name, qty, rate, discount }) => ({ productId, name, qty, rate, discount })),
-      taxRate: taxPct, discountMode, discountValue, shippingAmount, shippingAddress, paid: paymentAmount, notes, status,
+      taxRate: effectiveTaxRate, discountMode, discountValue, shippingAmount, shippingAddress, paid: paymentAmount, notes, status,
       terms, attachments: uploadedAttachments, commissionPct, commissionAgent,
     };
     try {
@@ -203,28 +212,22 @@ function CreateInvoice() {
         // Use the prefix + next-number configured in Settings -> Prefix &
         // Localization (previously this was ignored entirely — the DB
         // just auto-generated its own INV-2026-0001-style number no
-        // matter what was set there).
+        // matter what was set there). next_document_number() reads and
+        // increments the counter as one locked, atomic step so two staff
+        // saving at the same moment can't both be handed the same number.
         let explicitNumber: string | undefined;
-        let numbering: Record<string, any> | null = null;
         try {
-          const { data } = await supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.numbering").maybeSingle();
-          numbering = (data?.setting_value as Record<string, any>) ?? null;
-          if (numbering?.invoicePrefix && numbering?.invoiceNext) {
-            explicitNumber = `${numbering.invoicePrefix}${numbering.invoiceNext}`;
-          }
-        } catch { /* fall back to the DB's own numbering if settings can't be read */ }
+          const { data } = await supabase.rpc("next_document_number", {
+            p_prefix_key: "invoicePrefix",
+            p_next_key: "invoiceNext",
+          });
+          if (data) explicitNumber = data as string;
+        } catch { /* fall back to the DB's own numbering if the RPC isn't available */ }
 
         const inv = await addInvoice({ ...payload, number: explicitNumber });
         invoiceId = inv.id;
         invoiceNumber = inv.number;
         toast.success(`Invoice ${inv.number} saved`);
-
-        if (numbering && explicitNumber) {
-          supabase.from("app_settings").upsert(
-            { setting_key: "settings.numbering", setting_value: { ...numbering, invoiceNext: String(Number(numbering.invoiceNext) + 1) } },
-            { onConflict: "setting_key" }
-          );
-        }
       }
 
       // Commission set on the invoice now actually creates a real ledger
@@ -502,7 +505,7 @@ function CreateInvoice() {
                 className="h-9 pr-8 text-right"
               />
               <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">
-                {discountMode === "rate" ? "%" : "₹"}
+                {discountMode === "rate" ? "%" : getCurrencySymbol()}
               </span>
             </div>
             <span className="min-w-[80px] text-right text-sm font-semibold tabular-nums">{fmt(discountAmount)}</span>
@@ -544,7 +547,7 @@ function CreateInvoice() {
           <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2 px-4 py-3">
             <span className="text-xs font-semibold">Shipping Amount</span>
             <div className="relative">
-              <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">₹</span>
+              <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">{getCurrencySymbol()}</span>
               <Input
                 type="number"
                 min={0}
@@ -755,7 +758,11 @@ function CreateInvoice() {
             { icon: Save, label: saving ? "Saving…" : "Save", onClick: () => save() },
             { icon: Send, label: "Send", onClick: () => toast.info("Send: backend pending") },
             { icon: Printer, label: "Print", onClick: () => save({ print: true }) },
-            { icon: Eye, label: "Preview", onClick: () => save({ preview: true }) },
+            // Preview must never write anything — it used to call the same
+            // save() path as the Save button, so tapping it actually
+            // created a real invoice (consuming a number) instead of just
+            // showing what would be saved.
+            { icon: Eye, label: "Preview", onClick: () => setPreviewOpen(true) },
           ].map((a) => (
             <button
               key={a.label}
@@ -770,6 +777,40 @@ function CreateInvoice() {
           ))}
         </div>
       </div>
+
+      {/* Preview — a read-only look at what Save would create, no writes */}
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader><DialogTitle>Invoice preview</DialogTitle></DialogHeader>
+          <div className="space-y-4 text-sm">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Bill To</div>
+              <div className="font-semibold">{customer?.name || "No client selected"}</div>
+            </div>
+            <div className="divide-y rounded-lg border">
+              {items.length === 0 && <div className="px-3 py-4 text-center text-xs text-muted-foreground">No items added yet</div>}
+              {items.map((it, i) => (
+                <div key={i} className="flex items-center justify-between gap-3 px-3 py-2">
+                  <div className="min-w-0 flex-1 truncate">{it.name || "Untitled"} <span className="text-muted-foreground">× {it.qty}</span></div>
+                  <div className="shrink-0 font-medium tabular-nums">{fmt(it.qty * it.rate * (1 - it.discount / 100))}</div>
+                </div>
+              ))}
+            </div>
+            <div className="space-y-1 rounded-lg border p-3">
+              <div className="flex justify-between"><span className="text-muted-foreground">Base amount</span><span className="tabular-nums">{fmt(baseAmount)}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Discount</span><span className="tabular-nums">- {fmt(discountAmount)}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Tax</span><span className="tabular-nums">{fmt(taxAmount)}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Shipping</span><span className="tabular-nums">{fmt(shippingAmount)}</span></div>
+              <div className="mt-1 flex justify-between border-t pt-1 font-display text-base font-bold"><span>Total</span><span className="tabular-nums">{fmt(total)}</span></div>
+            </div>
+            {notes && <div><div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Notes</div><div>{notes}</div></div>}
+            {terms && <div><div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Terms</div><div className="whitespace-pre-wrap text-xs text-muted-foreground">{terms}</div></div>}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setPreviewOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Client picker */}
       <Dialog open={shipAddrOpen} onOpenChange={setShipAddrOpen}>

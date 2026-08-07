@@ -1005,7 +1005,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      next_document_number: {
+        Args: { p_prefix_key: string; p_next_key: string }
+        Returns: string
+      }
     }
     Enums: {
       app_role: "admin" | "manager" | "cashier" | "staff"

@@ -117,6 +117,21 @@ type CustomFieldDef = {
   inCalculation: boolean;
 };
 
+// Exported so pages that only need one section (e.g. the invoice view's
+// Template Settings toggles) can merge server data over the same defaults
+// shown here, instead of treating "no row saved yet" as everything-off.
+export const templateSettingsDefaults: Record<string, boolean> = {
+  showBankInEstimate: true, showAmountInWords: true, showBalanceInWords: true,
+  showNotesInLedger: true, enableAdjustmentInLedger: true, showCompanyNameBelowSignature: true,
+  showOldBalance: true, showAllPaymentDetails: true, showNotesInPdf: true,
+  showTermsInFullRow: true, autoSaveOnSharePrint: true, enablePaidStamp: true,
+  showTimeInDocuments: true, disableProductIfZeroStock: true, showAgentNameInInvoice: true,
+  enableWarehouseManagement: true, showHeaderAllPages: false, showAttachmentsInPdf: false,
+  showImageColumn: false, hideQuantityColumn: false, hideSrNoColumn: true,
+  hideHsnColumn: false, hideRateColumn: false, hideDiscountColumn: false,
+  hideTaxColumn: false, showSubtotal: false,
+};
+
 const defaults: SettingsState = {
   business: {
     businessName: "Prestige Store",
@@ -372,17 +387,7 @@ const defaults: SettingsState = {
     purchaseOrderNo: "Purchase Order No.", saleOrderNo: "Sale Order No.", saleReturnNo: "Sale Return No.",
     receiptNo: "Receipt No", deliveryNoteNo: "Delivery Note No.",
   },
-  templateSettings: {
-    showBankInEstimate: true, showAmountInWords: true, showBalanceInWords: true,
-    showNotesInLedger: true, enableAdjustmentInLedger: true, showCompanyNameBelowSignature: true,
-    showOldBalance: true, showAllPaymentDetails: true, showNotesInPdf: true,
-    showTermsInFullRow: true, autoSaveOnSharePrint: true, enablePaidStamp: true,
-    showTimeInDocuments: true, disableProductIfZeroStock: true, showAgentNameInInvoice: true,
-    enableWarehouseManagement: true, showHeaderAllPages: false, showAttachmentsInPdf: false,
-    showImageColumn: false, hideQuantityColumn: false, hideSrNoColumn: true,
-    hideHsnColumn: false, hideRateColumn: false, hideDiscountColumn: false,
-    hideTaxColumn: false, showSubtotal: false,
-  },
+  templateSettings: templateSettingsDefaults,
   customFields: { fields: [] },
 };
 

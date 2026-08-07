@@ -636,6 +636,39 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
 
     deleteInvoice: async (id) => {
+      // Deleting an invoice used to leave its Payment and Commission
+      // records behind as orphans, and never reversed the account-balance
+      // credit a payment made when it was recorded — so a deleted invoice
+      // could still be showing money collected/owed on the Payments and
+      // Fund Management pages. Reverse those side effects first.
+      const inv = invoices.find((i) => i.id === id);
+      if (inv) {
+        const relatedPayments = payments.filter((p) => p.invoiceNumber === inv.number);
+        for (const p of relatedPayments) {
+          const account = accounts.find((a) => a.accountType === "payment" && a.name === p.method);
+          if (account) {
+            await supabase.from("accounts").update({ current_balance: account.currentBalance - p.amount }).eq("id", account.id);
+          }
+          await supabase.from("payments").delete().eq("id", p.id);
+        }
+        if (relatedPayments.length) {
+          const deletedIds = new Set(relatedPayments.map((p) => p.id));
+          setPayments((prev) => prev.filter((p) => !deletedIds.has(p.id)));
+          setAccounts((prev) => prev.map((a) => {
+            const reversed = relatedPayments
+              .filter((p) => a.accountType === "payment" && a.name === p.method)
+              .reduce((s, p) => s + p.amount, 0);
+            return reversed ? { ...a, currentBalance: a.currentBalance - reversed } : a;
+          }));
+        }
+
+        const relatedCommissionIds = commissions.filter((c) => c.invoiceId === id).map((c) => c.id);
+        if (relatedCommissionIds.length) {
+          await supabase.from("commissions").delete().in("id", relatedCommissionIds);
+          setCommissions((prev) => prev.filter((c) => !relatedCommissionIds.includes(c.id)));
+        }
+      }
+
       const { error } = await supabase.from("invoices").delete().eq("id", id);
       if (error) throw new Error(error.message);
       setInvoices((prev) => prev.filter((i) => i.id !== id));

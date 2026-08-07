@@ -1,14 +1,17 @@
 import { createFileRoute, Link, useParams } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Printer, ArrowLeft, Sparkles, Download, MessageCircle } from "lucide-react";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useStore } from "@/lib/store";
-import { calcInvoiceTotals, fmt } from "@/lib/dummy-data";
+import { calcInvoiceTotals, fmt, getCurrencySymbol } from "@/lib/dummy-data";
 import { numberToWords } from "@/lib/numberToWords";
 import { StatusPill } from "@/components/StatusPill";
 import { supabase } from "@/integrations/supabase/client";
 import { sendAndLogWhatsApp } from "@/lib/whatsapp";
+import { templateSettingsDefaults } from "@/routes/settings";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/invoices/$id")({
@@ -29,9 +32,10 @@ function InvoiceView() {
   const [business, setBusiness] = useState<Record<string, any>>({});
   const [bank, setBank] = useState<Record<string, any>>({});
   const [labels, setLabels] = useState<Record<string, string>>({});
-  const [tpl, setTpl] = useState<Record<string, boolean>>({});
+  const [tpl, setTpl] = useState<Record<string, boolean>>(templateSettingsDefaults);
   const [customFields, setCustomFields] = useState<{ id: string; fieldName: string; placement: string }[]>([]);
   const [printSettings, setPrintSettings] = useState<Record<string, any>>({});
+  const [numbering, setNumbering] = useState<Record<string, any>>({});
 
   useEffect(() => {
     if (typeof window !== "undefined" && window.location.search.includes("print=1")) {
@@ -44,14 +48,16 @@ function InvoiceView() {
       supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.templateSettings").maybeSingle(),
       supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.customFields").maybeSingle(),
       supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.print").maybeSingle(),
-    ]).then(([b, bk, rf, ts, cf, pr]) => {
+      supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.numbering").maybeSingle(),
+    ]).then(([b, bk, rf, ts, cf, pr, nb]) => {
       if (b.data?.setting_value) setBusiness(b.data.setting_value as Record<string, any>);
       if (bk.data?.setting_value) setBank(bk.data.setting_value as Record<string, any>);
       if (rf.data?.setting_value) setLabels(rf.data.setting_value as Record<string, string>);
-      if (ts.data?.setting_value) setTpl(ts.data.setting_value as Record<string, boolean>);
+      if (ts.data?.setting_value) setTpl({ ...templateSettingsDefaults, ...(ts.data.setting_value as Record<string, boolean>) });
       const fields = (cf.data?.setting_value as { fields?: any[] } | null)?.fields;
       if (fields) setCustomFields(fields);
       if (pr.data?.setting_value) setPrintSettings(pr.data.setting_value as Record<string, any>);
+      if (nb.data?.setting_value) setNumbering(nb.data.setting_value as Record<string, any>);
     });
   }, []);
 
@@ -80,7 +86,7 @@ function InvoiceView() {
       const message = (wa.invoiceMessage || "Hello {customer}, your invoice {invoice_no} of {amount} is ready.")
         .replace("{customer}", customer.name)
         .replace("{invoice_no}", inv.number)
-        .replace("{amount}", fmt(calcInvoiceTotals(inv.items, inv.taxRate, inv.discountMode, inv.discountValue).total));
+        .replace("{amount}", fmt(calcInvoiceTotals(inv.items, inv.taxRate, inv.discountMode, inv.discountValue, inv.shippingAmount).total));
       const result = await sendAndLogWhatsApp({
         apiBase: wa.shoibApiBase || "https://hatelecom.xyz/api",
         token: wa.shoibToken || "",
@@ -101,8 +107,52 @@ function InvoiceView() {
   };
 
   if (!inv) return <div className="p-10 text-center text-muted-foreground">Invoice not found. <Link to="/invoices" className="text-accent underline">Back to invoices</Link></div>;
-  const totals = calcInvoiceTotals(inv.items, inv.taxRate, inv.discountMode, inv.discountValue);
+  const totals = calcInvoiceTotals(inv.items, inv.taxRate, inv.discountMode, inv.discountValue, inv.shippingAmount);
   const balance = totals.total - inv.paid;
+
+  // "Download PDF" used to just call window.print() — identical to the
+  // Print button, and on most setups that opens the browser's print
+  // dialog rather than actually downloading a file. This builds and saves
+  // a real .pdf using the same library already used for Products exports.
+  // jsPDF's default font can't render most non-ASCII currency glyphs (₹
+  // came out as a garbled superscript-1) — fall back to a plain-ASCII
+  // label in the PDF only; the on-screen/print view is unaffected.
+  const pdfSymbol = /^[\x00-\x7F]*$/.test(getCurrencySymbol()) ? getCurrencySymbol() : "Rs";
+  const pdfFmt = (n: number) => `${pdfSymbol} ${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  const downloadPdf = () => {
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text(business.businessName || business.legalName || "Your Business", 14, 16);
+    doc.setFontSize(10);
+    doc.text(`Invoice ${inv.number}`, 14, 23);
+    doc.text(`Date: ${inv.date}`, 140, 16);
+    doc.text(`Due: ${inv.dueDate || "-"}`, 140, 21);
+    doc.text(`Bill To: ${customer?.name || ""}`, 14, 30);
+    autoTable(doc, {
+      startY: 36,
+      head: [["Description", "Qty", "Rate", "Disc", "Tax", "Amount"]],
+      body: inv.items.map((it) => [
+        it.name,
+        String(it.qty),
+        pdfFmt(it.rate),
+        `${it.discount}%`,
+        `${inv.taxRate}%`,
+        pdfFmt(it.qty * it.rate * (1 - it.discount / 100)),
+      ]),
+      styles: { fontSize: 9 },
+    });
+    const finalY = (doc as any).lastAutoTable.finalY + 8;
+    doc.setFontSize(10);
+    doc.text(`Discount: - ${pdfFmt(totals.discount)}`, 140, finalY);
+    doc.text(`Tax: ${pdfFmt(totals.tax)}`, 140, finalY + 5);
+    doc.text(`Shipping: ${pdfFmt(inv.shippingAmount ?? 0)}`, 140, finalY + 10);
+    doc.setFontSize(12);
+    doc.text(`Total: ${pdfFmt(totals.total)}`, 140, finalY + 18);
+    doc.text(`Balance due: ${pdfFmt(Math.max(0, balance))}`, 140, finalY + 25);
+    doc.save(`${inv.number}.pdf`);
+    toast.success("PDF downloaded");
+  };
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -129,7 +179,7 @@ function InvoiceView() {
           {customer?.whatsapp && (
             <Button variant="outline" onClick={() => setWaPrompt(true)}><MessageCircle className="mr-1.5 h-4 w-4" />Send WhatsApp</Button>
           )}
-          <Button variant="outline" onClick={() => window.print()}><Download className="mr-1.5 h-4 w-4" />Download PDF</Button>
+          <Button variant="outline" onClick={downloadPdf}><Download className="mr-1.5 h-4 w-4" />Download PDF</Button>
           <Button onClick={() => { if (customer?.whatsapp) setWaPrompt(true); window.print(); }}><Printer className="mr-1.5 h-4 w-4" />Print</Button>
         </div>
       </div>
@@ -250,7 +300,10 @@ function InvoiceView() {
               <dd className="font-display text-lg font-bold">{fmt(Math.max(0, balance))}</dd>
             </div>
             {tpl.showAmountInWords && (
-              <div className="pt-1 text-[11px] italic text-muted-foreground">{L("amountInWords", "Amount in words")}: {numberToWords(Math.round(totals.total))} only</div>
+              <div className="pt-1 text-[11px] italic text-muted-foreground">
+                {L("amountInWords", "Amount in words")}: {numbering.currencyMajorUnit ? `${numbering.currencyMajorUnit} ` : ""}
+                {numberToWords(Math.round(totals.total))} {numbering.suffix || "only"}
+              </div>
             )}
           </dl>
         </section>
