@@ -18,6 +18,7 @@ import {
   LayoutDashboard,
   ListChecks,
   LockKeyhole,
+  LogOut,
   Mail,
   MessageCircle,
   MonitorSmartphone,
@@ -26,11 +27,13 @@ import {
   Percent,
   Plus,
   Printer,
+  QrCode,
   ReceiptText,
   RefreshCw,
   Save,
   Send,
   ShieldCheck,
+  Smartphone,
   Stamp,
   Store,
   Trash2,
@@ -38,6 +41,7 @@ import {
   UserCog,
   Users,
   WalletCards,
+  Wrench,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
@@ -54,7 +58,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { useStore } from "@/lib/store";
 import * as XLSX from "xlsx";
-import { shoibLogin, shoibConnectPhone, shoibStatus, type ShoibWAState } from "@/lib/shoib";
+import {
+  getWhatsAppStatus,
+  connectWhatsAppQR,
+  connectWhatsAppPhone,
+  disconnectWhatsApp,
+  resetWhatsAppSession,
+  type WAStateUI,
+  type WAStatus,
+} from "@/lib/whatsapp-actions";
 import { setCurrencySymbol, type AccountType } from "@/lib/dummy-data";
 import { CURRENCIES } from "@/lib/currencies";
 import { useTheme } from "@/lib/theme";
@@ -327,6 +339,7 @@ const defaults: SettingsState = {
     shoibPassword: "",
     shoibToken: "",
     connectionStatus: "disconnected",
+    pairingBrandCode: "",
     invoiceMessage:
       "Hello {customer}, your invoice {invoice_no} of {amount} is ready. Please find the copy attached.",
     reminderMessage:
@@ -1241,80 +1254,174 @@ function WhatsAppPanel({ data, set, isAdmin }: PanelProps & { isAdmin: boolean }
     ["orderCompletedMode", "orderCompletedMessage", "Completed"],
     ["orderCancelledMode", "orderCancelledMessage", "Cancelled"],
   ];
-  const [connecting, setConnecting] = useState(false);
-  const [live, setLive] = useState<ShoibWAState | null>(null);
-  const [connectError, setConnectError] = useState<string | null>(null);
 
-  const connect = async () => {
-    if (!data.shoibUsername || !data.shoibPassword) return toast.error("Enter the Shoib account username & password first");
-    if (!data.number) return toast.error("Enter the WhatsApp number to connect first");
-    setConnecting(true);
-    setConnectError(null);
+  const statusLabel: Record<WAStatus, string> = {
+    disconnected: "Not connected",
+    connecting: "Connecting…",
+    qr_ready: "Scan the QR code",
+    pairing: "Enter the pairing code",
+    connected: "Connected",
+  };
+
+  const [wa, setWa] = useState<WAStateUI | null>(null);
+  const [mode, setMode] = useState<"qr" | "phone">("qr");
+  const [phoneInput, setPhoneInput] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [disconnectOpen, setDisconnectOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const refresh = async () => {
     try {
-      const { token } = await shoibLogin(data.shoibApiBase, data.shoibUsername, data.shoibPassword);
-      set("shoibToken", token);
-      await shoibConnectPhone(data.shoibApiBase, token, data.number.replace(/\D/g, ""));
-      const poll = async (attempt = 0) => {
-        const st = await shoibStatus(data.shoibApiBase, token);
-        setLive(st);
-        if (st.status === "connected") {
-          set("connectionStatus", "connected");
-          toast.success("WhatsApp connected! Remember to hit Save to keep this.");
-          setConnecting(false);
-          return;
-        }
-        if (st.lastError) {
-          setConnectError(st.lastError);
-          setConnecting(false);
-          return;
-        }
-        if (attempt < 60) setTimeout(() => poll(attempt + 1), 2000);
-        else { setConnecting(false); setConnectError("Timed out waiting for connection"); }
-      };
-      poll();
+      const state = await getWhatsAppStatus();
+      setWa(state);
+      return state;
     } catch (err) {
-      setConnectError(err instanceof Error ? err.message : "Could not connect");
-      setConnecting(false);
+      toast.error(err instanceof Error ? err.message : "Could not read WhatsApp status");
+      return null;
     }
+  };
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin]);
+
+  useEffect(() => {
+    if (pollRef.current) { clearTimeout(pollRef.current); pollRef.current = null; }
+    if (wa && (wa.status === "connecting" || wa.status === "qr_ready" || wa.status === "pairing")) {
+      pollRef.current = setTimeout(refresh, 3000);
+    }
+    return () => { if (pollRef.current) clearTimeout(pollRef.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wa?.status, wa?.qr, wa?.pairingCode]);
+
+  const runAction = async (fn: () => Promise<WAStateUI>) => {
+    setBusy(true);
+    try {
+      const state = await fn();
+      setWa(state);
+      return state;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "WhatsApp action failed");
+      return null;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const connectQR = () => runAction(() => connectWhatsAppQR());
+  const connectPhone = () => {
+    if (!phoneInput.trim()) { toast.error("Enter the WhatsApp number to connect first"); return; }
+    return runAction(() => connectWhatsAppPhone({ data: { phone: phoneInput, brandCode: data.pairingBrandCode || undefined } }));
+  };
+  const doDisconnect = async () => {
+    const state = await runAction(() => disconnectWhatsApp());
+    if (state) setDisconnectOpen(false);
+  };
+  const doReset = async () => {
+    const state = await runAction(() => resetWhatsAppSession());
+    if (state) { setResetOpen(false); setMode("qr"); }
   };
 
   return (
     <Panel>
-      <PanelHeader icon={MessageCircle} title="WhatsApp" subtitle="Connects via your own Shoib WhatsApp gateway using a phone-number pairing code — the same method as the Shoib app." />
+      <PanelHeader icon={MessageCircle} title="WhatsApp" subtitle="Link this app's own WhatsApp number to send invoices and reminders directly — no third-party gateway." />
       {!isAdmin && (
         <div className="rounded-lg border border-amber/40 bg-amber/10 p-3 text-xs">
-          Connection settings and the pairing action are locked to Admin only. You can still see and use the message templates below.
+          Connection settings and linking are locked to Admin only. You can still see and use the message templates below.
         </div>
       )}
-      <fieldset disabled={!isAdmin} className={!isAdmin ? "opacity-60" : undefined}>
-        <Grid>
-          <TextField label="WhatsApp display name" value={data.displayName} onChange={(v) => set("displayName", v)} />
-          <TextField label="WhatsApp number to connect" value={data.number} onChange={(v) => set("number", v)} placeholder="923001234567" />
-          <TextField label="Shoib API base URL" value={data.shoibApiBase} onChange={(v) => set("shoibApiBase", v)} />
-          <TextField label="Shoib account username" value={data.shoibUsername} onChange={(v) => set("shoibUsername", v)} />
-          <TextField label="Shoib account password" value={data.shoibPassword} onChange={(v) => set("shoibPassword", v)} type="password" />
-        </Grid>
-
-        <div className="mt-3 rounded-lg border bg-card p-4">
+      {isAdmin && (
+        <div className="rounded-lg border bg-card p-4">
           <div className="mb-3 flex items-center justify-between">
             <span className="font-semibold">Connection</span>
-            <Badge variant="outline" className={data.connectionStatus === "connected" ? "border-accent/40 text-accent" : "border-muted-foreground/30 text-muted-foreground"}>
-              {data.connectionStatus === "connected" ? "Connected" : "Not connected"}
+            <Badge variant="outline" className={wa?.status === "connected" ? "border-accent/40 text-accent" : "border-muted-foreground/30 text-muted-foreground"}>
+              {wa ? statusLabel[wa.status] : "Checking…"}
             </Badge>
           </div>
-          <Button type="button" onClick={connect} disabled={connecting}>
-            {connecting ? "Getting pairing code…" : "Get Pairing Code"}
-          </Button>
-          {live?.pairingCode && (
-            <div className="mt-4 rounded-lg bg-primary p-4 text-center text-primary-foreground">
-              <div className="text-xs font-semibold uppercase tracking-wider opacity-80">Your pairing code</div>
-              <div className="mt-1 font-display text-3xl font-bold tracking-[0.3em]">{live.pairingCode}</div>
-              <div className="mt-2 text-xs opacity-80">On the phone with this number: WhatsApp → Linked Devices → Link with phone number → enter this code.</div>
+
+          {wa?.status === "connected" ? (
+            <div className="space-y-3">
+              <div className="rounded-lg bg-accent/10 p-3 text-sm">
+                Linked to <span className="font-semibold">{wa.phoneNumber ?? "this device"}</span>
+                {wa.connectedAt && <span className="text-muted-foreground"> — since {new Date(wa.connectedAt).toLocaleString()}</span>}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="outline" onClick={() => setDisconnectOpen(true)} disabled={busy}>
+                  <LogOut className="mr-1.5 h-4 w-4" />Disconnect
+                </Button>
+                <Button type="button" variant="destructive" onClick={() => setResetOpen(true)} disabled={busy}>
+                  <Wrench className="mr-1.5 h-4 w-4" />Auto-fix / Reset
+                </Button>
+              </div>
             </div>
+          ) : (
+            <fieldset disabled={busy} className={busy ? "opacity-70" : undefined}>
+              <div className="mb-3 inline-flex rounded-lg border bg-muted/40 p-1">
+                <button type="button" onClick={() => setMode("qr")} className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${mode === "qr" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>
+                  <QrCode className="mr-1 inline h-3.5 w-3.5" />QR code
+                </button>
+                <button type="button" onClick={() => setMode("phone")} className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${mode === "phone" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>
+                  <Smartphone className="mr-1 inline h-3.5 w-3.5" />Phone number
+                </button>
+              </div>
+
+              {mode === "qr" ? (
+                wa?.qrDataUrl ? (
+                  <div className="flex flex-col items-center gap-2 rounded-lg border bg-white p-4">
+                    <img src={wa.qrDataUrl} alt="WhatsApp QR code" className="h-56 w-56" />
+                    <div className="text-xs text-muted-foreground">WhatsApp → Linked Devices → Link a Device → scan this</div>
+                  </div>
+                ) : (
+                  <Button type="button" onClick={connectQR} disabled={busy}>{busy ? "Starting…" : "Show QR code"}</Button>
+                )
+              ) : (
+                <div className="space-y-3">
+                  <Grid>
+                    <TextField label="WhatsApp number to connect" value={phoneInput} onChange={setPhoneInput} placeholder="923001234567" />
+                    <TextField label="Custom pairing-code name (optional, 8 characters)" value={data.pairingBrandCode ?? ""} onChange={(v) => set("pairingBrandCode", v.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8))} placeholder="PRESTIGE" />
+                  </Grid>
+                  <Button type="button" onClick={connectPhone} disabled={busy}>{busy ? "Getting pairing code…" : "Get pairing code"}</Button>
+                  {wa?.pairingCode && (
+                    <div className="rounded-lg bg-primary p-4 text-center text-primary-foreground">
+                      <div className="text-xs font-semibold uppercase tracking-wider opacity-80">Your pairing code</div>
+                      <div className="mt-1 font-display text-3xl font-bold tracking-[0.3em]">{wa.pairingCode}</div>
+                      <div className="mt-2 text-xs opacity-80">On that phone: WhatsApp → Linked Devices → Link with phone number → enter this code.</div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </fieldset>
           )}
-          {connectError && <div className="mt-3 text-sm text-destructive">{connectError}</div>}
+
+          {wa?.lastError && <div className="mt-3 text-sm text-destructive">{wa.lastError}</div>}
         </div>
-      </fieldset>
+      )}
+
+      <Dialog open={disconnectOpen} onOpenChange={setDisconnectOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Disconnect WhatsApp?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">Invoices and reminders will stop sending on WhatsApp until you link a number again. The linked-device session stays saved, so reconnecting won't need a new QR or pairing code.</p>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDisconnectOpen(false)} disabled={busy}>Cancel</Button>
+            <Button variant="destructive" disabled={busy} onClick={doDisconnect}>{busy ? "Disconnecting…" : "Disconnect"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={resetOpen} onOpenChange={setResetOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Reset WhatsApp session?</DialogTitle></DialogHeader>
+          <p className="text-sm text-destructive">This wipes the saved linked-device session completely and starts a fresh QR code. Use this only if the connection is stuck or broken and Disconnect didn't help.</p>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setResetOpen(false)} disabled={busy}>Cancel</Button>
+            <Button variant="destructive" disabled={busy} onClick={doReset}>{busy ? "Resetting…" : "Reset session"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <SettingBlock title="Message templates" icon={MessageCircle}>
         <TextAreaField label="Invoice message" value={data.invoiceMessage} onChange={(v) => set("invoiceMessage", v)} />
         <TextAreaField label="Payment reminder message" value={data.reminderMessage} onChange={(v) => set("reminderMessage", v)} />

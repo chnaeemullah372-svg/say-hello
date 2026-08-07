@@ -968,6 +968,7 @@ export type Database = {
           reference_id: string | null
           reference_number: string | null
           status: string
+          wa_message_id: string | null
           whatsapp_number: string
         }
         Insert: {
@@ -982,6 +983,7 @@ export type Database = {
           reference_id?: string | null
           reference_number?: string | null
           status?: string
+          wa_message_id?: string | null
           whatsapp_number: string
         }
         Update: {
@@ -996,7 +998,38 @@ export type Database = {
           reference_id?: string | null
           reference_number?: string | null
           status?: string
+          wa_message_id?: string | null
           whatsapp_number?: string
+        }
+        Relationships: []
+      }
+      whatsapp_session: {
+        Row: {
+          connected_at: string | null
+          id: string
+          last_error: string | null
+          pairing_brand_code: string
+          phone_number: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          connected_at?: string | null
+          id?: string
+          last_error?: string | null
+          pairing_brand_code?: string
+          phone_number?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          connected_at?: string | null
+          id?: string
+          last_error?: string | null
+          pairing_brand_code?: string
+          phone_number?: string | null
+          status?: string
+          updated_at?: string
         }
         Relationships: []
       }
