@@ -21,9 +21,13 @@ work you need to create all its tables once:
    older-dated files in `supabase/migrations/` if any exist locally — this
    is the one to run, and only this one, on a fresh project.)
 3. Get your API credentials: **Project Settings** → **API** → copy the
-   **Project URL**, **Project ID/Reference**, and the **anon / publishable**
-   key. Never use the **service_role** key for the app's own env vars (see
-   below) — that one is only for the WhatsApp reminder cron script.
+   **Project URL**, **Project ID/Reference**, the **anon / publishable**
+   key, and the **service_role** key. The service_role key bypasses row
+   security, so treat it like a password — but the app's own WhatsApp
+   engine (Settings → WhatsApp) now needs it server-side to store the
+   linked-device session and log message status, so it does have to go
+   into the app's own environment variables (step 4 below), never into a
+   `VITE_`-prefixed one (those ship to the browser).
 4. Use those values as `VITE_SUPABASE_URL`, `VITE_SUPABASE_PROJECT_ID`, and
    `VITE_SUPABASE_PUBLISHABLE_KEY` wherever this guide asks for them.
 5. Sign up through the app itself once it's deployed — the **first account
@@ -73,9 +77,14 @@ plan (Node.js Web Apps aren't available on the cheapest Shared plans).
    SUPABASE_URL=https://your-project-ref.supabase.co
    SUPABASE_PROJECT_ID=your-project-ref
    SUPABASE_PUBLISHABLE_KEY=your-anon-public-key
+   SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
    ```
-   Saving these triggers a rebuild. Hostinger sets `PORT` itself — don't set
-   it manually, the app already listens on `process.env.PORT`.
+   The last one (`SUPABASE_SERVICE_ROLE_KEY`) is required for
+   Settings → WhatsApp to work (connecting, sending, and tracking
+   delivered/read status) — without it those calls fail with a "Missing
+   Supabase environment variable(s)" error. Saving these triggers a
+   rebuild. Hostinger sets `PORT` itself — don't set it manually, the app
+   already listens on `process.env.PORT`.
 5. Deploy. Once it's live, attach your domain to the site in hPanel the
    normal way and Hostinger issues SSL automatically — no `certbot` needed.
 6. Every push to `main` redeploys automatically from then on.
@@ -86,10 +95,11 @@ this path — Hostinger's managed environment handles all of that.
 ### Daily WhatsApp due-date reminders (managed hosting)
 
 `scripts/send-due-reminders.mjs` needs to run once a day and needs
-`SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` (service_role key, from
-Supabase → Project Settings → API — never put this one in the app's own
-`VITE_`/frontend env vars). Set it up as an hPanel **Cron Job** →
-**Custom**, running once daily, e.g.:
+`SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` — you've already set both in
+step 4 above, so the cron job inherits them from the app's environment;
+just never put the service_role key in a `VITE_`-prefixed/frontend var.
+Set it up as an hPanel **Cron Job** → **Custom**, running once daily,
+e.g.:
 ```bash
 cd /home/<your-hpanel-username>/public_html && SUPABASE_URL="..." SUPABASE_SERVICE_ROLE_KEY="..." node scripts/send-due-reminders.mjs
 ```
