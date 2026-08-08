@@ -397,5 +397,9 @@ export function getCurrencySymbol() {
 }
 
 export function fmt(n: number) {
-  return `${currencySymbol} ${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  // Negating a zero total (e.g. fmt(-someReturnsThatHappenToBeZero)) produces
+  // JS's -0, which toLocaleString renders as "-0.00" — a stray minus sign
+  // in front of nothing that reads as a mistake on a financial statement.
+  // Adding 0 collapses -0 back to 0 per IEEE 754 without touching any other value.
+  return `${currencySymbol} ${(n + 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
