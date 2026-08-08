@@ -33,7 +33,7 @@ type DraftLine = InvoiceItem & { unit?: string; code?: string; warehouse?: strin
 
 function CreateInvoice() {
   const nav = useNavigate();
-  const { customers, products, addCustomer, addProduct, addInvoice, updateInvoice, invoices, addCommission, addPayment, accounts, updateAccount } = useStore();
+  const { customers, products, addCustomer, updateCustomer, addProduct, addInvoice, updateInvoice, invoices, addCommission, addPayment, accounts, updateAccount } = useStore();
 
   const editId = useMemo(() => {
     if (typeof window === "undefined") return null;
@@ -87,6 +87,7 @@ function CreateInvoice() {
   const emptyNewCust = { name: "", phone: "", whatsapp: "", email: "", address: "", referralName: "", referralPhone: "", referralEmail: "", referralAddress: "" };
   const [newCust, setNewCust] = useState(emptyNewCust);
   const [newCustMore, setNewCustMore] = useState(false);
+  const [isEditingClient, setIsEditingClient] = useState(false);
 
   // Load the existing invoice into the form when editing (fixes: Edit button
   // used to open a blank form and silently create a duplicate invoice).
@@ -382,13 +383,36 @@ function CreateInvoice() {
               </div>
               <div className="flex items-center justify-between border-t border-background/70 px-4 py-2.5 text-sm">
                 <span className="text-muted-foreground">Address</span>
-                <button
-                  type="button"
-                  onClick={() => setCustOpen(true)}
-                  className="rounded-md bg-destructive/15 px-2.5 py-1 text-[11px] font-semibold text-destructive"
-                >
-                  Change client
-                </button>
+                <div className="flex gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewCust({
+                        name: customer.name ?? "",
+                        phone: customer.phone ?? "",
+                        whatsapp: customer.whatsapp ?? "",
+                        email: customer.email ?? "",
+                        address: customer.address ?? "",
+                        referralName: customer.referralName ?? "",
+                        referralPhone: customer.referralPhone ?? "",
+                        referralEmail: customer.referralEmail ?? "",
+                        referralAddress: customer.referralAddress ?? "",
+                      });
+                      setIsEditingClient(true);
+                      setAddCustOpen(true);
+                    }}
+                    className="rounded-md bg-accent/25 px-2.5 py-1 text-[11px] font-semibold text-accent-foreground"
+                  >
+                    Edit Client
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCustOpen(true)}
+                    className="rounded-md bg-destructive/15 px-2.5 py-1 text-[11px] font-semibold text-destructive"
+                  >
+                    Change client
+                  </button>
+                </div>
               </div>
               <div className="flex items-center justify-between border-t border-background/70 px-4 py-2.5 text-sm">
                 <div className="min-w-0">
@@ -855,9 +879,9 @@ function CreateInvoice() {
       </Dialog>
 
       {/* Add client */}
-      <Dialog open={addCustOpen} onOpenChange={(o) => { setAddCustOpen(o); if (!o) setNewCustMore(false); }}>
+      <Dialog open={addCustOpen} onOpenChange={(o) => { setAddCustOpen(o); if (!o) { setNewCustMore(false); setIsEditingClient(false); } }}>
         <DialogContent className="max-h-[85vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Quick add client</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{isEditingClient ? "Edit client" : "Quick add client"}</DialogTitle></DialogHeader>
           <div className="grid gap-3">
             <div className="grid gap-1.5"><Label>Customer Name</Label><Input autoFocus value={newCust.name} onChange={(e) => setNewCust({ ...newCust, name: e.target.value })} placeholder="Full name" /></div>
             <div className="grid gap-1.5"><Label>Customer Contact Number</Label><Input value={newCust.phone} onChange={(e) => setNewCust({ ...newCust, phone: e.target.value })} placeholder="+92 300 …" /></div>
@@ -887,17 +911,24 @@ function CreateInvoice() {
             <Button variant="ghost" onClick={() => setAddCustOpen(false)}>Cancel</Button>
             <Button onClick={async () => {
               if (!newCust.name) return toast.error("Name required");
+              const payload = { ...newCust, whatsapp: newCust.whatsapp ? normalizeWhatsAppNumber(newCust.whatsapp) : "" };
               try {
-                const c = await addCustomer({ ...newCust, partyType: "client", whatsapp: newCust.whatsapp ? normalizeWhatsAppNumber(newCust.whatsapp) : "" });
-                setCustomerId(c.id);
+                if (isEditingClient) {
+                  await updateCustomer(customerId, payload);
+                  toast.success("Client updated");
+                } else {
+                  const c = await addCustomer({ ...payload, partyType: "client" });
+                  setCustomerId(c.id);
+                  toast.success("Client added & selected");
+                }
                 setNewCust(emptyNewCust);
                 setNewCustMore(false);
+                setIsEditingClient(false);
                 setAddCustOpen(false);
-                toast.success("Client added & selected");
               } catch (err) {
                 toast.error(err instanceof Error ? err.message : "Could not save client");
               }
-            }}>Add & select</Button>
+            }}>{isEditingClient ? "Save changes" : "Add & select"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
