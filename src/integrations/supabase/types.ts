@@ -490,6 +490,47 @@ export type Database = {
           },
         ]
       }
+      payment_reminder_sends: {
+        Row: {
+          created_at: string
+          due_date_snapshot: string
+          error_message: string | null
+          id: string
+          invoice_id: string
+          reminder_date: string
+          status: string
+          wa_message_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          due_date_snapshot: string
+          error_message?: string | null
+          id?: string
+          invoice_id: string
+          reminder_date: string
+          status?: string
+          wa_message_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          due_date_snapshot?: string
+          error_message?: string | null
+          id?: string
+          invoice_id?: string
+          reminder_date?: string
+          status?: string
+          wa_message_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_reminder_sends_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payments: {
         Row: {
           amount: number

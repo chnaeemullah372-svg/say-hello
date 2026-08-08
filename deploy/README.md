@@ -92,19 +92,23 @@ plan (Node.js Web Apps aren't available on the cheapest Shared plans).
 You do **not** need PM2, Nginx, Certbot, systemd, or root/SSH access for
 this path — Hostinger's managed environment handles all of that.
 
-### Daily WhatsApp due-date reminders (managed hosting)
+### WhatsApp due-date reminders — no cron job needed
 
-`scripts/send-due-reminders.mjs` needs to run once a day and needs
-`SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` — you've already set both in
-step 4 above, so the cron job inherits them from the app's environment;
-just never put the service_role key in a `VITE_`-prefixed/frontend var.
-Set it up as an hPanel **Cron Job** → **Custom**, running once daily,
-e.g.:
-```bash
-cd /home/<your-hpanel-username>/public_html && SUPABASE_URL="..." SUPABASE_SERVICE_ROLE_KEY="..." node scripts/send-due-reminders.mjs
-```
-(Adjust the path to wherever hPanel deployed the repo — check the Node.js
-app's file manager for the exact path.)
+Unlike most invoicing tools, this app does **not** need a separate cron
+job for reminders — the due-date checker runs by itself, once a day,
+inside the same always-on Node process as the WhatsApp connection (see
+`src/lib/reminder-scheduler.server.ts`). This is intentional: WhatsApp
+(Baileys) only allows one live connection per linked device, so the
+reminder checker has to share that same process rather than being a
+second script that opens a second connection.
+
+Nothing to configure beyond `SUPABASE_SERVICE_ROLE_KEY` (already set in
+step 4 above) and turning the reminder on in Settings -> Alerts ->
+Outstanding Amount Reminder. It re-checks every unpaid/partial invoice
+against its current due date and balance on every run, so editing a due
+date or clearing a payment takes effect on the very next run with nothing
+to reset by hand. There's also a "Run check now" button in that same
+Settings panel for testing without waiting a full day.
 
 ## Optional: self-managed VPS
 
@@ -150,20 +154,15 @@ Every push to `main` (from Claude or you) triggers
 `.github/workflows/deploy.yml`, which SSHs in, pulls, rebuilds, and
 restarts the app automatically — usually live within a minute.
 
-### Daily WhatsApp due-date reminders (VPS)
+### WhatsApp due-date reminders (VPS)
 
-Once WhatsApp is connected (Settings -> WhatsApp -> Get Pairing Code) and
-Outstanding Amount Reminder is turned on (Settings -> Alerts), run
-`scripts/send-due-reminders.mjs` once a day to message customers whose
-invoices are overdue. Add `SUPABASE_SERVICE_ROLE_KEY` to `.env` on the
+No cron job needed here either — see "WhatsApp due-date reminders — no
+cron job needed" above; the same in-process checker applies regardless
+of hosting path. Just add `SUPABASE_SERVICE_ROLE_KEY` to `.env` on the
 VPS (from Supabase -> Project Settings -> API -> service_role — this key
-bypasses RLS, so it must never end up in the frontend bundle), then add
-a cron entry:
-```bash
-crontab -e
-# add this line to run it every day at 10am server time:
-0 10 * * * cd /var/www/say-hello && /usr/bin/node scripts/send-due-reminders.mjs >> /var/log/due-reminders.log 2>&1
-```
+bypasses RLS, so it must never end up in the frontend bundle), connect
+WhatsApp from Settings -> WhatsApp, and turn on Outstanding Amount
+Reminder in Settings -> Alerts.
 
 ### Adding a domain + HTTPS later (VPS)
 

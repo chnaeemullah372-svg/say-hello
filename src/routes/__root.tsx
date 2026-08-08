@@ -102,6 +102,15 @@ function RootShell({ children }: { children: ReactNode }) {
   // app — see src/lib/runtime-supabase-config.ts for why this exists at
   // all. Must render before the app bundle hydrates.
   const runtimeConfigScript = `window.__RUNTIME_SUPABASE_CONFIG__ = ${JSON.stringify(getRuntimeSupabaseConfig())};`;
+
+  // Starts the once-a-day due-reminder heartbeat exactly once per server
+  // process, on the first request it handles after boot — this file only
+  // ever renders server-side, so window is never defined here in
+  // production, but the guard keeps it explicit and matches this
+  // codebase's .server.ts-import convention (see reminder-scheduler.server.ts).
+  if (typeof window === "undefined") {
+    void import("@/lib/reminder-scheduler.server").then((m) => m.ensureReminderSchedulerStarted());
+  }
   return (
     <html lang="en">
       <head>

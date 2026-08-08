@@ -67,6 +67,7 @@ import {
   type WAStateUI,
   type WAStatus,
 } from "@/lib/whatsapp-actions";
+import { runDueReminderCheckNow } from "@/lib/due-reminders-actions";
 import { setCurrencySymbol, type AccountType } from "@/lib/dummy-data";
 import { CURRENCIES } from "@/lib/currencies";
 import { useTheme } from "@/lib/theme";
@@ -315,8 +316,9 @@ const defaults: SettingsState = {
     ownerEmail: "owner@prestige.store",
     reminderTime: "10:00",
     outstandingReminderEnabled: false,
-    outstandingReminderDays: "7",
+    outstandingReminderInterval: "7",
     outstandingReminderMode: "whatsapp",
+    outstandingReminderReferral: false,
     outstandingReminderTemplate:
       "Dear #CompanyName, this is a reminder that payment of #InvoiceNumber (of #Balance) is due today. It might be busy with your work, but it would be appreciated if you could look into this. Please let me know if you have any queries.",
   },
@@ -1194,6 +1196,22 @@ function UsersPanel({ data, set }: PanelProps) {
 }
 
 function NotificationsPanel({ data, set }: PanelProps) {
+  const [checking, setChecking] = useState(false);
+  const [lastResult, setLastResult] = useState<{ checked: number; sent: number; skipped: number; failed: number } | null>(null);
+
+  const runCheckNow = async () => {
+    setChecking(true);
+    try {
+      const stats = await runDueReminderCheckNow();
+      setLastResult(stats);
+      toast.success(`Checked ${stats.checked} invoice(s) — ${stats.sent} sent, ${stats.skipped} skipped, ${stats.failed} failed`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not run the reminder check");
+    } finally {
+      setChecking(false);
+    }
+  };
+
   return (
     <Panel>
       <PanelHeader icon={Bell} title="Notifications and reminders" subtitle="Invoice, payment, stock and report alerts." />
@@ -1211,11 +1229,37 @@ function NotificationsPanel({ data, set }: PanelProps) {
       </ToggleGrid>
       <SettingBlock title="Outstanding Amount Reminder" icon={Bell}>
         <ToggleField label="Enable reminder" checked={data.outstandingReminderEnabled} onChange={(v) => set("outstandingReminderEnabled", v)} />
+        <p className="text-xs text-muted-foreground">
+          Runs automatically once a day. Every unpaid/partial invoice is checked against its <strong>current</strong> due date and balance each time —
+          editing a due date or clearing a payment takes effect on the very next run, with nothing to reset by hand.
+        </p>
         <Grid>
-          <TextField label="Remind after (days overdue)" value={data.outstandingReminderDays} onChange={(v) => set("outstandingReminderDays", v)} type="number" />
+          <SelectField
+            label="Repeat every"
+            value={data.outstandingReminderInterval}
+            onChange={(v) => set("outstandingReminderInterval", v)}
+            options={["7", "15", "alternate", "daily"]}
+            optionLabels={{ "7": "7 days", "15": "15 days", alternate: "Alternate days", daily: "Daily" }}
+          />
           <SelectField label="Message mode" value={data.outstandingReminderMode} onChange={(v) => set("outstandingReminderMode", v)} options={["whatsapp", "sms"]} />
         </Grid>
+        <ToggleField
+          label="Also send to referral number"
+          checked={data.outstandingReminderReferral}
+          onChange={(v) => set("outstandingReminderReferral", v)}
+        />
         <TextAreaField label="Reminder message template (use #CompanyName, #InvoiceNumber, #Balance)" value={data.outstandingReminderTemplate} onChange={(v) => set("outstandingReminderTemplate", v)} />
+        <div className="flex flex-wrap items-center gap-3">
+          <Button type="button" variant="outline" onClick={runCheckNow} disabled={checking}>
+            <RefreshCw className={`mr-1.5 h-4 w-4 ${checking ? "animate-spin" : ""}`} />
+            {checking ? "Checking…" : "Run check now"}
+          </Button>
+          {lastResult && (
+            <span className="text-xs text-muted-foreground">
+              Last run: {lastResult.checked} checked, {lastResult.sent} sent, {lastResult.skipped} skipped, {lastResult.failed} failed
+            </span>
+          )}
+        </div>
       </SettingBlock>
     </Panel>
   );
@@ -1759,14 +1803,14 @@ function TextAreaField({ label, value, onChange }: { label: string; value: strin
   );
 }
 
-function SelectField({ label, value, onChange, options }: { label: string; value: string | boolean; onChange: (value: string) => void; options: string[] }) {
+function SelectField({ label, value, onChange, options, optionLabels }: { label: string; value: string | boolean; onChange: (value: string) => void; options: string[]; optionLabels?: Record<string, string> }) {
   return (
     <div className="grid gap-1.5">
       <Label>{label}</Label>
       <Select value={String(value)} onValueChange={onChange}>
         <SelectTrigger><SelectValue /></SelectTrigger>
         <SelectContent>
-          {options.map((option) => <SelectItem key={option} value={option}>{humanize(option)}</SelectItem>)}
+          {options.map((option) => <SelectItem key={option} value={option}>{optionLabels?.[option] ?? humanize(option)}</SelectItem>)}
         </SelectContent>
       </Select>
     </div>
