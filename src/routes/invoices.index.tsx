@@ -22,7 +22,7 @@ import { StatusPill } from "@/components/StatusPill";
 
 export const Route = createFileRoute("/invoices/")({
   head: () => ({ meta: [
-    { title: "Invoices — Prestige Invoice" },
+    { title: "Invoices — CN Invoice" },
     { name: "description", content: "All your invoices — search by number, customer name, phone or reference." },
   ]}),
   component: InvoiceList,
@@ -113,7 +113,7 @@ function InvoiceList() {
         }
       />
 
-      {/* UniPay-style top search bar */}
+      {/* Top search bar */}
       <Card className="border-border/70">
         <CardContent className="p-3 sm:p-4">
           <div className="relative">

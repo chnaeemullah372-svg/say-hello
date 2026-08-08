@@ -75,7 +75,7 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/settings")({
   head: () => ({
     meta: [
-      { title: "Settings — UniPay Invoice Control" },
+      { title: "Settings — CN Invoice" },
       {
         name: "description",
         content:
@@ -518,7 +518,7 @@ function SettingsPage() {
     <div className="space-y-5">
       <PageHeader
         title="Settings"
-        subtitle="UniPay-style complete control panel for invoice, tax, print, users, Gmail, WhatsApp and backup"
+        subtitle="Complete control panel for invoice, tax, print, users, Gmail, WhatsApp and backup"
         action={
           <Button asChild variant="outline">
             <Link to="/team"><ShieldCheck className="mr-1.5 h-4 w-4" />Admin Control</Link>
@@ -1493,7 +1493,7 @@ function BackupPanel({ data, set }: PanelProps) {
 
   const downloadBackup = () => {
     const payload: Record<string, unknown> = {
-      app: "Prestige Invoice",
+      app: "CN Invoice",
       exportedAt: new Date().toISOString(),
     };
     for (const c of collections) payload[c.key] = c.rows;

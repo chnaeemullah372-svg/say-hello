@@ -10,7 +10,7 @@ import { toast } from "sonner";
 
 export const Route = createFileRoute("/import")({
   head: () => ({ meta: [
-    { title: "Import — Prestige Invoice" },
+    { title: "Import — CN Invoice" },
     { name: "description", content: "Bulk-import clients and products from an Excel sheet." },
   ]}),
   component: ImportPage,

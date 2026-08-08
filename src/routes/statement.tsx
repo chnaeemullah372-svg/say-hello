@@ -12,7 +12,7 @@ import { calcInvoiceTotals, fmt } from "@/lib/dummy-data";
 
 export const Route = createFileRoute("/statement")({
   head: () => ({ meta: [
-    { title: "Statement — Prestige Invoice" },
+    { title: "Statement — CN Invoice" },
     { name: "description", content: "A running ledger of every invoice and payment for one client, like a bank statement." },
   ]}),
   component: StatementPage,

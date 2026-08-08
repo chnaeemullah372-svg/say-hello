@@ -16,7 +16,7 @@ import { toast } from "sonner";
 
 export const Route = createFileRoute("/subscriptions")({
   head: () => ({ meta: [
-    { title: "Subscriptions — Prestige Invoice" },
+    { title: "Subscriptions — CN Invoice" },
     { name: "description", content: "Automate recurring billing for repeat customers." },
   ]}),
   component: SubsPage,

@@ -6,7 +6,7 @@ import { toast } from "sonner";
 
 export const Route = createFileRoute("/sale-order")({
   head: () => ({ meta: [
-    { title: "Sale Orders — Prestige Invoice" },
+    { title: "Sale Orders — CN Invoice" },
     { name: "description", content: "Confirmed customer orders awaiting delivery." },
   ]}),
   component: SaleOrderPage,

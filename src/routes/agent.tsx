@@ -16,7 +16,7 @@ import { toast } from "sonner";
 
 export const Route = createFileRoute("/agent")({
   head: () => ({ meta: [
-    { title: "Agents — Prestige Invoice" },
+    { title: "Agents — CN Invoice" },
     { name: "description", content: "Field sales agents and their commission ledger." },
   ]}),
   component: AgentPage,

@@ -10,8 +10,8 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/login")({
   head: () => ({
     meta: [
-      { title: "Sign in — Prestige Invoice" },
-      { name: "description", content: "Sign in to your Prestige Invoice workspace." },
+      { title: "Sign in — CN Invoice" },
+      { name: "description", content: "Sign in to your CN Invoice workspace." },
     ],
   }),
   component: LoginPage,
@@ -51,7 +51,7 @@ function LoginPage() {
             <Sparkles className="h-5 w-5" />
           </div>
           <div>
-            <div className="font-display text-xl font-bold">Prestige</div>
+            <div className="font-display text-xl font-bold">CN</div>
             <div className="text-xs uppercase tracking-widest text-primary-foreground/70">Invoice Suite</div>
           </div>
         </div>
@@ -80,7 +80,7 @@ function LoginPage() {
           </div>
         </div>
 
-        <div className="relative text-xs text-primary-foreground/60">© 2026 Prestige Invoice — Demo build</div>
+        <div className="relative text-xs text-primary-foreground/60">© 2026 CN Invoice — Demo build</div>
       </div>
 
       <div className="flex items-center justify-center bg-background px-6 py-10">
@@ -90,7 +90,7 @@ function LoginPage() {
               <div className="grid h-10 w-10 place-items-center rounded-xl bg-primary text-primary-foreground">
                 <Sparkles className="h-4 w-4" />
               </div>
-              <div className="font-display text-xl font-bold">Prestige</div>
+              <div className="font-display text-xl font-bold">CN</div>
             </div>
           </div>
           <h2 className="font-display text-2xl font-bold">{mode === "signin" ? "Welcome back" : "Create admin account"}</h2>
@@ -144,7 +144,7 @@ function LoginPage() {
           </div>
 
           <p className="mt-6 text-center text-xs text-muted-foreground">
-            New to Prestige? <Link to="/" className="text-accent hover:underline">Explore the demo</Link>
+            New to CN Invoice? <Link to="/" className="text-accent hover:underline">Explore the demo</Link>
           </p>
         </div>
       </div>

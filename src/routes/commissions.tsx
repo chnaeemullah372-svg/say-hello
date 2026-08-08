@@ -10,7 +10,7 @@ import { toast } from "sonner";
 
 export const Route = createFileRoute("/commissions")({
   head: () => ({ meta: [
-    { title: "Commissions — Prestige Invoice" },
+    { title: "Commissions — CN Invoice" },
     { name: "description", content: "Track and pay sales team commissions." },
   ]}),
   component: CommissionsPage,

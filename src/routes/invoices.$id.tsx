@@ -16,7 +16,7 @@ import { toast } from "sonner";
 
 export const Route = createFileRoute("/invoices/$id")({
   head: () => ({ meta: [
-    { title: "Invoice — Prestige Invoice" },
+    { title: "Invoice — CN Invoice" },
     { name: "description", content: "Print-ready invoice view." },
   ]}),
   component: InvoiceView,

@@ -11,7 +11,7 @@ import { ChevronRight, FileSpreadsheet, Printer, Search } from "lucide-react";
 
 export const Route = createFileRoute("/reports")({
   head: () => ({ meta: [
-    { title: "Reports — Prestige Invoice" },
+    { title: "Reports — CN Invoice" },
     { name: "description", content: "Sales, top products and receivables at a glance." },
   ]}),
   component: ReportsPage,

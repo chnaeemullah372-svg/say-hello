@@ -12,7 +12,7 @@ import { calcInvoiceTotals, fmt } from "@/lib/dummy-data";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Dashboard — Prestige Invoice" },
+      { title: "Dashboard — CN Invoice" },
       { name: "description", content: "Business overview: sales, purchases, payments, expenses and orders in one place." },
     ],
   }),

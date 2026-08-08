@@ -9,7 +9,7 @@ import { useStore } from "@/lib/store";
 
 export const Route = createFileRoute("/whatsapp-logs")({
   head: () => ({ meta: [
-    { title: "WhatsApp Monitoring — Prestige Invoice" },
+    { title: "WhatsApp Monitoring — CN Invoice" },
     { name: "description", content: "Every WhatsApp message the app has tried to send, with delivery status." },
   ]}),
   component: WhatsAppLogsPage,

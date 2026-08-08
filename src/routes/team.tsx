@@ -16,7 +16,7 @@ import { toast } from "sonner";
 
 export const Route = createFileRoute("/team")({
   head: () => ({ meta: [
-    { title: "Team & Access — Prestige Invoice" },
+    { title: "Team & Access — CN Invoice" },
     { name: "description", content: "Manage team members, roles and permissions." },
   ]}),
   component: TeamPage,
