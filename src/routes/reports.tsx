@@ -35,7 +35,7 @@ function dateRange(dates: string[]): [string, string] {
 }
 
 function invoiceWithTotals(inv: Invoice) {
-  const t = calcInvoiceTotals(inv.items, inv.taxRate, inv.discountMode, inv.discountValue, inv.shippingAmount);
+  const t = calcInvoiceTotals(inv.items, inv.taxRate, inv.discountMode, inv.discountValue, inv.shippingAmount, inv.taxInclusive);
   return { ...inv, ...t, balance: t.total - inv.paid };
 }
 

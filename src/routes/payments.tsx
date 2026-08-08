@@ -58,7 +58,7 @@ function PaymentsPage() {
   const selectedInvoice = type === "client" ? invoices.find((i) => i.number === form.reference) : undefined;
   const selectedPurchase = type === "supplier" ? purchases.find((p) => p.number === form.reference) : undefined;
   const unpaidBills = invoices
-    .map((i) => ({ invoice: i, totals: calcInvoiceTotals(i.items, i.taxRate, i.discountMode, i.discountValue, i.shippingAmount), customer: customers.find((c) => c.id === i.customerId) }))
+    .map((i) => ({ invoice: i, totals: calcInvoiceTotals(i.items, i.taxRate, i.discountMode, i.discountValue, i.shippingAmount, i.taxInclusive), customer: customers.find((c) => c.id === i.customerId) }))
     .filter((x) => x.totals.total - x.invoice.paid > 0);
   const unpaidPurchases = purchases
     .map((p) => ({ purchase: p, supplier: customers.find((c) => c.id === p.supplierId) }))
@@ -74,7 +74,7 @@ function PaymentsPage() {
 
       if (type === "client" && selectedInvoice) {
         const newPaid = selectedInvoice.paid + form.amount;
-        const totals = calcInvoiceTotals(selectedInvoice.items, selectedInvoice.taxRate, selectedInvoice.discountMode, selectedInvoice.discountValue, selectedInvoice.shippingAmount);
+        const totals = calcInvoiceTotals(selectedInvoice.items, selectedInvoice.taxRate, selectedInvoice.discountMode, selectedInvoice.discountValue, selectedInvoice.shippingAmount, selectedInvoice.taxInclusive);
         const newStatus = newPaid >= totals.total ? "paid" : newPaid > 0 ? "partial" : "unpaid";
         await updateInvoice(selectedInvoice.id, { paid: newPaid, status: newStatus });
         // The invoice's outstanding amount is what raised the client's
@@ -131,7 +131,7 @@ function PaymentsPage() {
                     <Select value={form.reference} onValueChange={(v) => {
                       const inv = invoices.find(i => i.number === v);
                       const cust = customers.find(c => c.id === inv?.customerId);
-                      const totals = inv ? calcInvoiceTotals(inv.items, inv.taxRate, inv.discountMode, inv.discountValue, inv.shippingAmount) : null;
+                      const totals = inv ? calcInvoiceTotals(inv.items, inv.taxRate, inv.discountMode, inv.discountValue, inv.shippingAmount, inv.taxInclusive) : null;
                       setForm(f => ({ ...f, reference: v, customerName: cust?.name ?? "", amount: totals && inv ? Math.max(0, totals.total - inv.paid) : f.amount }));
                     }}>
                       <SelectTrigger><SelectValue placeholder="Select invoice / client" /></SelectTrigger>
@@ -180,7 +180,7 @@ function PaymentsPage() {
                 {(selectedInvoice || selectedPurchase) && (
                   <div className="rounded-xl border bg-muted/25 p-3 text-sm">
                     <div className="mb-2 font-semibold">Outstanding</div>
-                    {selectedInvoice && <div className="flex items-center justify-between"><span>{selectedInvoice.number}</span><span className="font-display font-bold text-primary">{fmt(Math.max(0, calcInvoiceTotals(selectedInvoice.items, selectedInvoice.taxRate, selectedInvoice.discountMode, selectedInvoice.discountValue, selectedInvoice.shippingAmount).total - selectedInvoice.paid))}</span></div>}
+                    {selectedInvoice && <div className="flex items-center justify-between"><span>{selectedInvoice.number}</span><span className="font-display font-bold text-primary">{fmt(Math.max(0, calcInvoiceTotals(selectedInvoice.items, selectedInvoice.taxRate, selectedInvoice.discountMode, selectedInvoice.discountValue, selectedInvoice.shippingAmount, selectedInvoice.taxInclusive).total - selectedInvoice.paid))}</span></div>}
                     {selectedPurchase && <div className="flex items-center justify-between"><span>{selectedPurchase.number}</span><span className="font-display font-bold text-primary">{fmt(Math.max(0, selectedPurchase.total - selectedPurchase.paid))}</span></div>}
                   </div>
                 )}
@@ -273,7 +273,7 @@ function PaymentsPage() {
                   const pur = purchases.find((p) => p.number === deleteTarget.invoiceNumber);
                   if (inv) {
                     const newPaid = Math.max(0, inv.paid - deleteTarget.amount);
-                    const totals = calcInvoiceTotals(inv.items, inv.taxRate, inv.discountMode, inv.discountValue, inv.shippingAmount);
+                    const totals = calcInvoiceTotals(inv.items, inv.taxRate, inv.discountMode, inv.discountValue, inv.shippingAmount, inv.taxInclusive);
                     const newStatus = newPaid >= totals.total ? "paid" : newPaid > 0 ? "partial" : "unpaid";
                     await updateInvoice(inv.id, { paid: newPaid, status: newStatus });
                     const customer = customers.find((c) => c.id === inv.customerId);

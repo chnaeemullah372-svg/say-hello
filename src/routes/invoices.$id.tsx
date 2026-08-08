@@ -88,7 +88,7 @@ function InvoiceView() {
   // produce the exact same file.
   const buildPdfDoc = () => {
     if (!inv) return null;
-    const totals = calcInvoiceTotals(inv.items, inv.taxRate, inv.discountMode, inv.discountValue, inv.shippingAmount);
+    const totals = calcInvoiceTotals(inv.items, inv.taxRate, inv.discountMode, inv.discountValue, inv.shippingAmount, inv.taxInclusive);
     const balance = totals.total - inv.paid;
     const pdfSymbol = /^[\x00-\x7F]*$/.test(getCurrencySymbol()) ? getCurrencySymbol() : "Rs";
     const pdfFmt = (n: number) => `${pdfSymbol} ${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -116,7 +116,7 @@ function InvoiceView() {
     const finalY = (doc as any).lastAutoTable.finalY + 8;
     doc.setFontSize(10);
     doc.text(`Discount: - ${pdfFmt(totals.discount)}`, 140, finalY);
-    doc.text(`Tax: ${pdfFmt(totals.tax)}`, 140, finalY + 5);
+    doc.text(`Tax${inv.taxInclusive ? " (included)" : ""}: ${pdfFmt(totals.tax)}`, 140, finalY + 5);
     doc.text(`Shipping: ${pdfFmt(inv.shippingAmount ?? 0)}`, 140, finalY + 10);
     doc.setFontSize(12);
     doc.text(`Total: ${pdfFmt(totals.total)}`, 140, finalY + 18);
@@ -132,7 +132,7 @@ function InvoiceView() {
     if (!inv || !customer || (!customer.whatsapp && !customer.whatsapp2)) return;
     setWaSending(true);
     try {
-      const totals = calcInvoiceTotals(inv.items, inv.taxRate, inv.discountMode, inv.discountValue, inv.shippingAmount);
+      const totals = calcInvoiceTotals(inv.items, inv.taxRate, inv.discountMode, inv.discountValue, inv.shippingAmount, inv.taxInclusive);
       const message = (waSettings.invoiceMessage || "Hello {customer}, your invoice {invoice_no} of {amount} is ready.")
         .replace("{customer}", customer.name)
         .replace("{invoice_no}", inv.number)
@@ -182,7 +182,7 @@ function InvoiceView() {
   }, [inv, customer, waSettings.sendInvoice]);
 
   if (!inv) return <div className="p-10 text-center text-muted-foreground">Invoice not found. <Link to="/invoices" className="text-accent underline">Back to invoices</Link></div>;
-  const totals = calcInvoiceTotals(inv.items, inv.taxRate, inv.discountMode, inv.discountValue, inv.shippingAmount);
+  const totals = calcInvoiceTotals(inv.items, inv.taxRate, inv.discountMode, inv.discountValue, inv.shippingAmount, inv.taxInclusive);
   const balance = totals.total - inv.paid;
 
   // "Download PDF" used to just call window.print() — identical to the
@@ -343,7 +343,7 @@ function InvoiceView() {
           <dl className="w-full max-w-xs space-y-2 text-sm">
             {tpl.showSubtotal !== false && <Row label="Subtotal" value={fmt(totals.subtotal)} />}
             <Row label={L("discount", "Discount")} value={`- ${fmt(totals.discount)}`} />
-            <Row label={`Tax (${inv.taxRate}%)`} value={fmt(totals.tax)} />
+            <Row label={`Tax (${inv.taxRate}%${inv.taxInclusive ? ", included" : ""})`} value={fmt(totals.tax)} />
             <div className="my-2 border-t border-dashed gold-hairline" />
             <div className="flex items-baseline justify-between">
               <dt className="font-display font-semibold">{L("total", "Total")}</dt>

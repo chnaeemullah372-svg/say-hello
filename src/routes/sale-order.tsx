@@ -40,6 +40,8 @@ function SaleOrderPage() {
         dueDate: new Date().toISOString().slice(0, 10),
         items: row.items,
         taxRate: row.taxRate,
+        taxEnabled: row.taxRate > 0,
+        taxInclusive: false,
         paid: 0,
         notes: row.notes,
         status: "unpaid",

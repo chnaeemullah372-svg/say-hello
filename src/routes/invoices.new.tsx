@@ -112,6 +112,8 @@ function CreateInvoice() {
       setItems(editingInvoice.items.map((it) => ({ ...it })));
       setDiscountMode(editingInvoice.discountMode ?? "rate");
       setDiscountValue(editingInvoice.discountValue ?? 0);
+      setTaxEnabled(editingInvoice.taxEnabled);
+      setTaxInclusive(editingInvoice.taxInclusive);
       setTaxPct(editingInvoice.taxRate);
       setShippingAmount(editingInvoice.shippingAmount ?? 0);
       setShippingAddress(editingInvoice.shippingAddress ?? "");
@@ -192,8 +194,11 @@ function CreateInvoice() {
   );
   const discountAmount = discountMode === "rate" ? (baseAmount * discountValue) / 100 : discountValue;
   const taxable = Math.max(0, baseAmount - discountAmount);
-  const taxAmount = !taxEnabled || taxInclusive ? 0 : (taxable * taxPct) / 100;
-  const total = taxable + taxAmount + shippingAmount;
+  // Inclusive tax is extracted from the taxable amount (already baked into
+  // item prices) for display purposes, not added on top — total must not
+  // double-count it. Matches calcInvoiceTotals()'s treatment exactly.
+  const taxAmount = !taxEnabled ? 0 : taxInclusive ? taxable - taxable / (1 + taxPct / 100) : (taxable * taxPct) / 100;
+  const total = !taxEnabled || taxInclusive ? taxable + shippingAmount : taxable + taxAmount + shippingAmount;
   const commissionAmount = (total * commissionPct) / 100;
   const balance = Math.max(0, total - paymentAmount);
 
@@ -296,20 +301,19 @@ function CreateInvoice() {
       }
     }
 
-    // taxEnabled/taxInclusive aren't columns on the invoice — they only ever
-    // existed as local state here. Both mean "no tax is actually added to
-    // the total" (see taxAmount above), so persist that as taxRate 0 rather
-    // than the typed percentage — otherwise calcInvoiceTotals() has no way
-    // to know tax was off/inclusive and recomputes a nonzero tax on every
-    // other screen (view, list, statement, reports) that was never charged.
-    const effectiveTaxRate = !taxEnabled || taxInclusive ? 0 : taxPct;
+    // taxEnabled/taxInclusive are real columns (see the tenant_id-scoped
+    // tax-mode migration) — the rate is always stored as-typed now, so
+    // reopening this invoice for edit, and every other screen that
+    // recomputes totals (view, list, statement, reports), can tell "no tax"
+    // apart from "18% inclusive" instead of both collapsing to the same 0.
+    const effectiveTaxRate = taxEnabled ? taxPct : 0;
 
     const payload = {
       customerId,
       date: invoiceDate.toISOString().slice(0, 10),
       dueDate: dueDate || invoiceDate.toISOString().slice(0, 10),
       items: items.map(({ productId, name, qty, rate, discount }) => ({ productId, name, qty, rate, discount })),
-      taxRate: effectiveTaxRate, discountMode, discountValue, shippingAmount, shippingAddress, paid: paymentAmount, notes, status,
+      taxRate: effectiveTaxRate, taxEnabled, taxInclusive, discountMode, discountValue, shippingAmount, shippingAddress, paid: paymentAmount, notes, status,
       terms, attachments: uploadedAttachments, commissionPct, commissionAgent,
     };
     try {

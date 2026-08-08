@@ -161,6 +161,8 @@ function invoiceFromRow(row: any): Invoice {
     dueDate: row.due_date ?? "",
     items: (row.items ?? []) as InvoiceItem[],
     taxRate: Number(row.tax_rate ?? 0),
+    taxEnabled: row.tax_enabled ?? true,
+    taxInclusive: row.tax_inclusive ?? false,
     discountMode: (row.discount_mode as Invoice["discountMode"]) ?? "rate",
     discountValue: Number(row.discount_value ?? 0),
     shippingAmount: Number(row.shipping_amount ?? 0),
@@ -616,6 +618,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         due_date: i.dueDate || null,
         items: i.items as unknown as import("@/integrations/supabase/types").Json,
         tax_rate: i.taxRate,
+        tax_enabled: i.taxEnabled,
+        tax_inclusive: i.taxInclusive,
         discount_mode: i.discountMode ?? "rate",
         discount_value: i.discountValue ?? 0,
         shipping_amount: i.shippingAmount ?? 0,
@@ -666,6 +670,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (patch.dueDate !== undefined) dbPatch.due_date = patch.dueDate || null;
       if (patch.items !== undefined) dbPatch.items = patch.items;
       if (patch.taxRate !== undefined) dbPatch.tax_rate = patch.taxRate;
+      if (patch.taxEnabled !== undefined) dbPatch.tax_enabled = patch.taxEnabled;
+      if (patch.taxInclusive !== undefined) dbPatch.tax_inclusive = patch.taxInclusive;
       if (patch.discountMode !== undefined) dbPatch.discount_mode = patch.discountMode;
       if (patch.discountValue !== undefined) dbPatch.discount_value = patch.discountValue;
       if (patch.shippingAmount !== undefined) dbPatch.shipping_amount = patch.shippingAmount;
@@ -724,7 +730,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         // bug the payment/commission cleanup above already fixes.
         const customer = customers.find((c) => c.id === inv.customerId);
         if (customer) {
-          const { total } = calcInvoiceTotals(inv.items, inv.taxRate, inv.discountMode, inv.discountValue, inv.shippingAmount);
+          const { total } = calcInvoiceTotals(inv.items, inv.taxRate, inv.discountMode, inv.discountValue, inv.shippingAmount, inv.taxInclusive);
           const outstanding = total - inv.paid;
           if (outstanding !== 0) {
             const { data } = await supabase.from("customers").update({ balance: customer.balance - outstanding }).eq("id", customer.id).select().single();

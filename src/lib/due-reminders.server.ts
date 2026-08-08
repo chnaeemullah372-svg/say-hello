@@ -51,6 +51,7 @@ type ReminderInvoiceRow = {
   number: string;
   items: unknown;
   tax_rate: number | null;
+  tax_inclusive: boolean | null;
   discount_mode: string | null;
   discount_value: number | null;
   shipping_amount: number | null;
@@ -133,7 +134,7 @@ async function runDueReminderCheckForTenant(tenantId: string, stats: ReminderChe
 
   const { data: invoices, error } = await supabaseAdmin
     .from("invoices")
-    .select("id, number, items, tax_rate, discount_mode, discount_value, shipping_amount, paid, due_date, customers(id, name, whatsapp, whatsapp2, referral_phone)")
+    .select("id, number, items, tax_rate, tax_inclusive, discount_mode, discount_value, shipping_amount, paid, due_date, customers(id, name, whatsapp, whatsapp2, referral_phone)")
     .eq("tenant_id", tenantId)
     .neq("status", "paid")
     .not("due_date", "is", null)
@@ -148,6 +149,7 @@ async function runDueReminderCheckForTenant(tenantId: string, stats: ReminderChe
       (inv.discount_mode as "rate" | "flat") ?? "rate",
       Number(inv.discount_value ?? 0),
       Number(inv.shipping_amount ?? 0),
+      Boolean(inv.tax_inclusive),
     );
     const balance = totals.total - Number(inv.paid ?? 0);
     if (balance <= 0 || !inv.due_date) { stats.skipped++; continue; }
