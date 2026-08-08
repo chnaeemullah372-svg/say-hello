@@ -15,6 +15,7 @@ import { useStore } from "@/lib/store";
 import { fmt, type Customer, type PartyType } from "@/lib/dummy-data";
 import { normalizeWhatsAppNumber } from "@/lib/phone";
 import { sendAndLogWhatsApp } from "@/lib/whatsapp";
+import { useStaffPermissions } from "@/lib/permissions";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/customers")({
@@ -41,6 +42,9 @@ const emptyForm = {
 
 function CustomersPage() {
   const { customers, addCustomer, updateCustomer } = useStore();
+  const { can } = useStaffPermissions();
+  const canCreate = can("customers", "create");
+  const canEdit = can("customers", "edit");
   const [q, setQ] = useState("");
   const [sortBy, setSortBy] = useState<"name" | "balance">("name");
   const [tab, setTab] = useState<Tab>("client");
@@ -156,9 +160,11 @@ function CustomersPage() {
         subtitle={`${visible.length} ${tab === "supplier" ? "suppliers" : tab === "both" ? "contacts" : "clients"} · ${fmt(outstanding)} outstanding`}
         action={
           <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setShowMore(false); setEditingId(null); } }}>
-            <DialogTrigger asChild>
-              <Button onClick={startAdd}><UserPlus className="mr-1.5 h-4 w-4" />New {tab === "supplier" ? "Supplier" : "Client"}</Button>
-            </DialogTrigger>
+            {canCreate && (
+              <DialogTrigger asChild>
+                <Button onClick={startAdd}><UserPlus className="mr-1.5 h-4 w-4" />New {tab === "supplier" ? "Supplier" : "Client"}</Button>
+              </DialogTrigger>
+            )}
             <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
               <DialogHeader><DialogTitle>{editingId ? "Edit contact" : "New contact"}</DialogTitle></DialogHeader>
               <div className="grid gap-3">
@@ -343,9 +349,11 @@ function CustomersPage() {
                     {c.address && <li className="flex items-start gap-2"><MapPin className="h-3 w-3 mt-0.5" /> {c.address}</li>}
                   </ul>
                 </div>
-                <Button variant="ghost" size="icon" className="shrink-0" onClick={() => startEdit(c)}>
-                  <Pencil className="h-4 w-4" />
-                </Button>
+                {canEdit && (
+                  <Button variant="ghost" size="icon" className="shrink-0" onClick={() => startEdit(c)}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
               <div className="mt-4 flex items-center justify-between border-t pt-3">
                 <span className="text-xs text-muted-foreground">{c.partyType === "supplier" ? "Payable" : "Outstanding"}</span>

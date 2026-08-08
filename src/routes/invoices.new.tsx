@@ -147,6 +147,24 @@ function CreateInvoice() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // For a brand-new invoice, default the tax rate from Settings -> Tax's
+  // first enabled tax (previously this screen's tax fields were entirely
+  // disconnected from Settings -> Tax, always starting at a hardcoded 0%).
+  useEffect(() => {
+    if (editingInvoice) return;
+    supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.tax").maybeSingle()
+      .then(({ data }) => {
+        const t = data?.setting_value as { taxList?: { pct: string; inclusive: boolean; enabled: boolean }[] } | undefined;
+        const defaultTax = t?.taxList?.find((row) => row.enabled);
+        if (defaultTax) {
+          setTaxEnabled(true);
+          setTaxInclusive(!!defaultTax.inclusive);
+          setTaxPct(Number(defaultTax.pct) || 0);
+        }
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Just the business name, for the Preview/Duplicate PDF header — the full
   // template-driven rendering (logo, bank details, custom fields, paper
   // size) lives on the saved-invoice view; this is a draft, so it's a
@@ -311,13 +329,15 @@ function CreateInvoice() {
         // increments the counter as one locked, atomic step so two staff
         // saving at the same moment can't both be handed the same number.
         let explicitNumber: string | undefined;
-        try {
-          const { data } = await supabase.rpc("next_document_number", {
-            p_prefix_key: "invoicePrefix",
-            p_next_key: "invoiceNext",
-          });
-          if (data) explicitNumber = data as string;
-        } catch { /* fall back to the DB's own numbering if the RPC isn't available */ }
+        if (user?.tenantId) {
+          try {
+            const { data } = await supabase.rpc("next_document_number", {
+              p_doc_type: "invoice",
+              p_tenant_id: user.tenantId,
+            });
+            if (data) explicitNumber = data as string;
+          } catch { /* fall back to the DB's own numbering if the RPC isn't available */ }
+        }
 
         const inv = await addInvoice({ ...payload, number: explicitNumber });
         invoiceId = inv.id;

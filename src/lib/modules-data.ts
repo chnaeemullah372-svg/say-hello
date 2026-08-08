@@ -78,10 +78,3 @@ export const teamSeed: TeamMember[] = [
   { id: "t3", name: "Amit Verma", email: "amit@prestige.store", role: "Cashier", status: "active", lastActive: "Yesterday" },
   { id: "t4", name: "Neha Iyer", email: "neha@prestige.store", role: "Accountant", status: "invited", lastActive: "—" },
 ];
-
-export const ROLE_PERMISSIONS: Record<string, string[]> = {
-  Admin: ["Full access", "Manage users", "View reports", "Delete records", "Change settings"],
-  Manager: ["Create invoices", "Manage inventory", "View reports", "Manage customers"],
-  Cashier: ["Create invoices", "Record payments", "View own reports"],
-  Staff: ["View assigned modules", "Create basic entries", "Update own work"],
-};

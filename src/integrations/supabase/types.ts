@@ -856,6 +856,7 @@ export type Database = {
           date: string
           id: string
           items: Json
+          number: string
           paid: number
           status: string
           supplier_id: string | null
@@ -870,6 +871,7 @@ export type Database = {
           date?: string
           id?: string
           items?: Json
+          number?: string
           paid?: number
           status?: string
           supplier_id?: string | null
@@ -884,6 +886,7 @@ export type Database = {
           date?: string
           id?: string
           items?: Json
+          number?: string
           paid?: number
           status?: string
           supplier_id?: string | null
@@ -1212,13 +1215,91 @@ export type Database = {
         }
         Relationships: []
       }
+      staff_permissions: {
+        Row: {
+          can_create: boolean
+          can_delete: boolean
+          can_edit: boolean
+          can_export: boolean
+          can_view: boolean
+          created_at: string
+          id: string
+          module: string
+          tenant_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          can_create?: boolean
+          can_delete?: boolean
+          can_edit?: boolean
+          can_export?: boolean
+          can_view?: boolean
+          created_at?: string
+          id?: string
+          module: string
+          tenant_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          can_create?: boolean
+          can_delete?: boolean
+          can_edit?: boolean
+          can_export?: boolean
+          can_view?: boolean
+          created_at?: string
+          id?: string
+          module?: string
+          tenant_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      settings_audit_log: {
+        Row: {
+          action: string
+          actor_user_id: string
+          after_value: Json | null
+          before_value: Json | null
+          created_at: string
+          id: string
+          module: string
+          reason: string | null
+          tenant_id: string
+        }
+        Insert: {
+          action: string
+          actor_user_id: string
+          after_value?: Json | null
+          before_value?: Json | null
+          created_at?: string
+          id?: string
+          module: string
+          reason?: string | null
+          tenant_id: string
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string
+          after_value?: Json | null
+          before_value?: Json | null
+          created_at?: string
+          id?: string
+          module?: string
+          reason?: string | null
+          tenant_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
       next_document_number: {
-        Args: { p_prefix_key: string; p_next_key: string }
+        Args: { p_doc_type: string; p_tenant_id: string }
         Returns: string
       }
       signup_create_business: {

@@ -46,7 +46,7 @@ export async function runSubscriptionBillingCheck(): Promise<{ billed: number; f
       try {
         let number: string | undefined;
         try {
-          const { data } = await supabaseAdmin.rpc("next_document_number", { p_prefix_key: "invoicePrefix", p_next_key: "invoiceNext" });
+          const { data } = await supabaseAdmin.rpc("next_document_number", { p_doc_type: "invoice", p_tenant_id: biz.id });
           if (data) number = data as string;
         } catch { /* fall back to the DB's own numbering if the RPC isn't available */ }
 

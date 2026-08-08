@@ -323,6 +323,21 @@ function purchaseFromRow(row: any): Purchase {
 export function StoreProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated, ready, user } = useAuth();
   const tenantId = user?.tenantId;
+
+  // Reads/increments this tenant's configured prefix+next-number for a
+  // document type as one atomic, locked step (see next_document_number()
+  // in the numbering migration) — returns undefined when that type has no
+  // custom numbering configured, so the caller falls back to the DB's own
+  // default sequence.
+  const nextDocNumber = async (docType: string): Promise<string | undefined> => {
+    if (!tenantId) return undefined;
+    try {
+      const { data } = await supabase.rpc("next_document_number", { p_doc_type: docType, p_tenant_id: tenantId });
+      return (data as string | null) ?? undefined;
+    } catch {
+      return undefined;
+    }
+  };
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -733,7 +748,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     addEstimate: async (e) => {
       const { data: userData } = await supabase.auth.getUser();
+      const number = await nextDocNumber("estimate");
       const { data, error } = await supabase.from("estimates").insert({
+        ...(number ? { number } : {}),
         customer_id: e.customerId || null,
         date: e.date,
         valid_until: e.validUntil || null,
@@ -780,7 +797,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     addSaleOrder: async (s) => {
       const { data: userData } = await supabase.auth.getUser();
+      const number = await nextDocNumber("saleOrder");
       const { data, error } = await supabase.from("sale_orders").insert({
+        ...(number ? { number } : {}),
         customer_id: s.customerId || null,
         date: s.date,
         delivery_date: s.deliveryDate || null,
@@ -827,7 +846,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     addPurchaseOrder: async (p) => {
       const { data: userData } = await supabase.auth.getUser();
+      const number = await nextDocNumber("purchaseOrder");
       const { data, error } = await supabase.from("purchase_orders").insert({
+        ...(number ? { number } : {}),
         supplier_id: p.supplierId || null,
         supplier_name: p.supplierName,
         date: p.date,
@@ -969,7 +990,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     addDeliveryNote: async (d) => {
       const { data: userData } = await supabase.auth.getUser();
+      const number = await nextDocNumber("deliveryNote");
       const { data, error } = await supabase.from("delivery_notes").insert({
+        ...(number ? { number } : {}),
         customer_id: d.customerId || null, date: d.date, items: d.items as unknown as import("@/integrations/supabase/types").Json,
         notes: d.notes || null, status: d.status, created_by: userData.user?.id,
       }).select().single();
@@ -997,7 +1020,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     addSaleReturn: async (s) => {
       const { data: userData } = await supabase.auth.getUser();
+      const number = await nextDocNumber("saleReturn");
       const { data, error } = await supabase.from("sale_returns").insert({
+        ...(number ? { number } : {}),
         customer_id: s.customerId || null, date: s.date, items: s.items as unknown as import("@/integrations/supabase/types").Json,
         total: s.total, notes: s.notes || null, status: s.status, created_by: userData.user?.id,
       }).select().single();
@@ -1026,7 +1051,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     addPurchaseReturn: async (p) => {
       const { data: userData } = await supabase.auth.getUser();
+      const number = await nextDocNumber("purchaseReturn");
       const { data, error } = await supabase.from("purchase_returns").insert({
+        ...(number ? { number } : {}),
         supplier_id: p.supplierId || null, date: p.date, items: p.items as unknown as import("@/integrations/supabase/types").Json,
         total: p.total, notes: p.notes || null, status: p.status, created_by: userData.user?.id,
       }).select().single();
@@ -1055,7 +1082,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     addProductionEntry: async (p) => {
       const { data: userData } = await supabase.auth.getUser();
+      const number = await nextDocNumber("production");
       const { data, error } = await supabase.from("production_entries").insert({
+        ...(number ? { number } : {}),
         product_name: p.productName, date: p.date, items: p.items as unknown as import("@/integrations/supabase/types").Json,
         quantity_produced: p.quantityProduced, notes: p.notes || null, status: p.status, created_by: userData.user?.id,
       }).select().single();
@@ -1171,7 +1200,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     addPurchase: async (p) => {
       const { data: userData } = await supabase.auth.getUser();
+      const number = await nextDocNumber("purchase");
       const { data, error } = await supabase.from("purchases").insert({
+        ...(number ? { number } : {}),
         supplier_id: p.supplierId || null, supplier_name: p.supplierName,
         items: p.items as unknown as import("@/integrations/supabase/types").Json,
         total: p.total, paid: p.paid, date: p.date, status: p.status, created_by: userData.user?.id,

@@ -241,9 +241,13 @@ function InvoiceView() {
         <header className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 border-b pb-6">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground">
-                <Sparkles className="h-5 w-5" />
-              </div>
+              {business.showLogo !== false && business.logoUrl ? (
+                <img src={business.logoUrl} alt="Logo" className="h-10 w-10 shrink-0 rounded-xl object-contain bg-muted" />
+              ) : (
+                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground">
+                  <Sparkles className="h-5 w-5" />
+                </div>
+              )}
               <div>
                 <div className="font-display text-xl font-bold">{business.businessName || business.legalName || "Your Business"}</div>
                 {business.gstin && <div className="text-[11px] uppercase tracking-widest text-muted-foreground">GSTIN {business.gstin}</div>}
@@ -409,6 +413,9 @@ function InvoiceView() {
           </div>
           <div className="text-right">
             <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{L("signature", "Authorized signature")}</div>
+            {business.showBusinessStamp !== false && business.stampUrl && (
+              <img src={business.stampUrl} alt="Stamp" className="ml-auto mt-2 h-16 w-16 object-contain" />
+            )}
             {tpl.showCompanyNameBelowSignature !== false && (
               <div className="mt-6 inline-block border-t px-8 pt-1 text-xs text-muted-foreground">{business.businessName || "Authorized signatory"}</div>
             )}
