@@ -14,6 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
 import { inviteTeamMember, getTeamLastActive } from "@/lib/team-actions";
+import { friendlyErrorMessage } from "@/lib/friendly-error";
 
 export const Route = createFileRoute("/team")({
   head: () => ({ meta: [
@@ -119,7 +120,7 @@ function TeamPage() {
       setInviteOpen(false);
       setInvite({ name: "", email: "", phone: "", role: "staff" });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not send invite");
+      toast.error(friendlyErrorMessage(err, "Could not send invite"));
     } finally {
       setInviting(false);
     }

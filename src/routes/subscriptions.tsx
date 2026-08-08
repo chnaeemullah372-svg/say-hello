@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useStore } from "@/lib/store";
 import { fmt } from "@/lib/dummy-data";
 import type { SubscriptionStatus } from "@/lib/dummy-data";
+import { friendlyErrorMessage } from "@/lib/friendly-error";
 import { toast } from "sonner";
 import { runSubscriptionBillingNow } from "@/lib/subscription-billing-actions";
 
@@ -65,7 +66,7 @@ function SubsPage() {
       else toast.info("No subscriptions are due for billing right now");
       if (stats.failed > 0) toast.error(`${stats.failed} could not be billed`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not run billing check");
+      toast.error(friendlyErrorMessage(err, "Could not run billing check"));
     } finally {
       setBillingNow(false);
     }
