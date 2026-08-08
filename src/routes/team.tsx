@@ -13,7 +13,7 @@ import { ROLE_PERMISSIONS } from "@/lib/modules-data";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
-import { inviteTeamMember, getTeamLastActive } from "@/lib/team-actions";
+import { inviteTeamMember, getTeamLastActive, createTeamMember } from "@/lib/team-actions";
 import { friendlyErrorMessage } from "@/lib/friendly-error";
 
 export const Route = createFileRoute("/team")({
@@ -36,18 +36,18 @@ const roleOptions: { value: Role; label: string }[] = [
 ];
 
 function TeamPage() {
-  const { user, refreshUser } = useAuth();
+  const { user } = useAuth();
   const [profiles, setProfiles] = useState<ProfileRow[]>([]);
   const [roles, setRoles] = useState<RoleRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [inviteOpen, setInviteOpen] = useState(false);
-  const [invite, setInvite] = useState({ name: "", email: "", phone: "", role: "staff" as Role });
+  const [inviteMode, setInviteMode] = useState<"email" | "password">("email");
+  const [invite, setInvite] = useState({ name: "", email: "", phone: "", password: "", role: "staff" as Role });
   const [inviting, setInviting] = useState(false);
   const [lastActive, setLastActive] = useState<Record<string, string | null>>({});
   const [lastActiveLoaded, setLastActiveLoaded] = useState(false);
 
   const roleByUser = useMemo(() => new Map(roles.map((r) => [r.user_id, r.role])), [roles]);
-  const hasAnyRole = roles.length > 0;
   const currentRole = user?.role;
   const isAdmin = currentRole === "admin";
 
@@ -83,20 +83,11 @@ function TeamPage() {
     return new Date(iso).toLocaleDateString();
   };
 
-  const claimAdmin = async () => {
-    if (!user) return;
-    const { error } = await supabase.from("user_roles").insert({ user_id: user.id, role: "admin" });
-    if (error) { toast.error(error.message); return; }
-    toast.success("Admin control enabled");
-    await refreshUser();
-    await load();
-  };
-
   const changeRole = async (userId: string, role: Role) => {
     if (!isAdmin) return toast.error("Only admins can change roles");
     const remove = await supabase.from("user_roles").delete().eq("user_id", userId);
     if (remove.error) { toast.error(remove.error.message); return; }
-    const add = await supabase.from("user_roles").insert({ user_id: userId, role });
+    const add = await supabase.from("user_roles").insert({ user_id: userId, role, tenant_id: user?.tenantId });
     if (add.error) { toast.error(add.error.message); return; }
     toast.success("Role updated");
     await load();
@@ -113,14 +104,21 @@ function TeamPage() {
 
   const saveInvite = async () => {
     if (!invite.email.trim()) return toast.error("Email is required");
+    if (inviteMode === "password" && invite.password.length < 6) return toast.error("Password must be at least 6 characters");
     setInviting(true);
     try {
-      await inviteTeamMember({ data: { email: invite.email.trim(), fullName: invite.name.trim(), phone: invite.phone.trim() } });
-      toast.success(`Invite sent to ${invite.email}. Once they sign in, set their role below — it defaults to Staff.`);
+      if (inviteMode === "email") {
+        await inviteTeamMember({ data: { email: invite.email.trim(), fullName: invite.name.trim(), phone: invite.phone.trim() } });
+        toast.success(`Invite sent to ${invite.email}. Once they sign in, set their role below — it defaults to Staff.`);
+      } else {
+        await createTeamMember({ data: { email: invite.email.trim(), password: invite.password, fullName: invite.name.trim(), phone: invite.phone.trim(), role: invite.role } });
+        toast.success(`${invite.name || invite.email} can now sign in with the password you set.`);
+      }
       setInviteOpen(false);
-      setInvite({ name: "", email: "", phone: "", role: "staff" });
+      setInvite({ name: "", email: "", phone: "", password: "", role: "staff" });
+      await load();
     } catch (err) {
-      toast.error(friendlyErrorMessage(err, "Could not send invite"));
+      toast.error(friendlyErrorMessage(err, inviteMode === "email" ? "Could not send invite" : "Could not create user"));
     } finally {
       setInviting(false);
     }
@@ -133,18 +131,6 @@ function TeamPage() {
         subtitle="Create admins, manage staff roles, block access and control module permissions"
         action={<Button onClick={() => setInviteOpen(true)}><UserPlus className="mr-1.5 h-4 w-4" />Invite Member</Button>}
       />
-
-      {!hasAnyRole && user && (
-        <Card className="border-gold/50 bg-gold/10">
-          <CardContent className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="font-display text-lg font-semibold">Set up first admin</div>
-              <p className="text-sm text-muted-foreground">No admin exists yet. Claim admin control for {user.email} to unlock full settings and staff management.</p>
-            </div>
-            <Button onClick={claimAdmin}><ShieldCheck className="mr-1.5 h-4 w-4" />Make me admin</Button>
-          </CardContent>
-        </Card>
-      )}
 
       <div className="grid gap-3 sm:grid-cols-3">
         <Card><CardContent className="p-4"><div className="text-xs uppercase tracking-wider text-muted-foreground">Total users</div><div className="font-display text-2xl font-bold">{profiles.length || (user ? 1 : 0)}</div></CardContent></Card>
@@ -231,14 +217,25 @@ function TeamPage() {
 
       <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Invite team member</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Add team member</DialogTitle></DialogHeader>
           <div className="grid gap-4 py-2">
+            <div className="grid grid-cols-2 gap-1.5 rounded-lg border bg-muted/40 p-1">
+              <button type="button" onClick={() => setInviteMode("email")} className={`rounded-md py-1.5 text-xs font-semibold transition ${inviteMode === "email" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-background"}`}>Email invite</button>
+              <button type="button" onClick={() => setInviteMode("password")} className={`rounded-md py-1.5 text-xs font-semibold transition ${inviteMode === "password" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-background"}`}>Set username &amp; password</button>
+            </div>
             <div className="grid gap-1.5"><Label>Name</Label><Input value={invite.name} onChange={(e) => setInvite({ ...invite, name: e.target.value })} placeholder="Staff name" /></div>
             <div className="grid gap-1.5"><Label>Email / Gmail</Label><Input type="email" value={invite.email} onChange={(e) => setInvite({ ...invite, email: e.target.value })} placeholder="staff@gmail.com" /></div>
             <div className="grid gap-1.5"><Label>Phone</Label><Input value={invite.phone} onChange={(e) => setInvite({ ...invite, phone: e.target.value })} placeholder="WhatsApp / contact number" /></div>
+            {inviteMode === "password" && (
+              <div className="grid gap-1.5">
+                <Label>Password</Label>
+                <Input type="text" value={invite.password} onChange={(e) => setInvite({ ...invite, password: e.target.value })} placeholder="At least 6 characters" />
+                <p className="text-[11px] text-muted-foreground">They can sign in immediately with this email and password — share it with them directly.</p>
+              </div>
+            )}
             <div className="grid gap-1.5"><Label>Role</Label><Select value={invite.role} onValueChange={(v) => setInvite({ ...invite, role: v as Role })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{roleOptions.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}</SelectContent></Select></div>
           </div>
-          <DialogFooter><Button variant="outline" onClick={() => setInviteOpen(false)}>Cancel</Button><Button onClick={saveInvite} disabled={inviting}>{inviting ? "Sending…" : "Send invite"}</Button></DialogFooter>
+          <DialogFooter><Button variant="outline" onClick={() => setInviteOpen(false)}>Cancel</Button><Button onClick={saveInvite} disabled={inviting}>{inviting ? "Saving…" : inviteMode === "email" ? "Send invite" : "Create user"}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

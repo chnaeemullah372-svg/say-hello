@@ -321,7 +321,8 @@ function purchaseFromRow(row: any): Purchase {
 }
 
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const { isAuthenticated, ready } = useAuth();
+  const { isAuthenticated, ready, user } = useAuth();
+  const tenantId = user?.tenantId;
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -465,6 +466,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         balance: c.balance ?? c.openingBalance ?? 0,
         payable_balance: c.payableBalance ?? 0,
         created_by: userData.user?.id,
+        tenant_id: tenantId,
       }).select().single();
       if (error || !data) throw new Error(error?.message || "Could not save customer");
       const nc = customerFromRow(data);
@@ -548,6 +550,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         image_url: p.imageUrl || null,
         warehouse: p.warehouse || null,
         created_by: userData.user?.id,
+        tenant_id: tenantId,
       }).select().single();
       if (error || !data) throw new Error(error?.message || "Could not save product");
       const np = productFromRow(data);
@@ -610,6 +613,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         commission_agent: i.commissionAgent || null,
         status: i.status,
         created_by: userData.user?.id,
+        tenant_id: tenantId,
       }).select().single();
       if (error || !data) throw new Error(error?.message || "Could not save invoice");
       const ni = invoiceFromRow(data);
@@ -626,6 +630,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         method: p.method,
         date: p.date,
         created_by: userData.user?.id,
+        tenant_id: tenantId,
       }).select().single();
       if (error || !data) throw new Error(error?.message || "Could not record payment");
       const np = paymentFromRow(data);
@@ -740,6 +745,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         notes: e.notes || null,
         status: e.status,
         created_by: userData.user?.id,
+        tenant_id: tenantId,
       }).select().single();
       if (error || !data) throw new Error(error?.message || "Could not save estimate");
       const ne = estimateFromRow(data);
@@ -786,6 +792,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         notes: s.notes || null,
         status: s.status,
         created_by: userData.user?.id,
+        tenant_id: tenantId,
       }).select().single();
       if (error || !data) throw new Error(error?.message || "Could not save sale order");
       const ns = saleOrderFromRow(data);
@@ -828,6 +835,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         total: p.total,
         status: p.status,
         created_by: userData.user?.id,
+        tenant_id: tenantId,
       }).select().single();
       if (error || !data) throw new Error(error?.message || "Could not save purchase order");
       const np = purchaseOrderFromRow(data);
@@ -865,6 +873,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         opening_date: a.openingDate,
         current_balance: a.openingBalance,
         created_by: userData.user?.id,
+        tenant_id: tenantId,
       }).select().single();
       if (error || !data) throw new Error(error?.message || "Could not save account");
       const na = accountFromRow(data);
@@ -901,6 +910,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         remarks: f.remarks || null,
         date: f.date,
         created_by: userData.user?.id,
+        tenant_id: tenantId,
       }).select().single();
       if (error || !data) throw new Error(error?.message || "Could not record transfer");
 
@@ -1078,6 +1088,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         customer_id: s.customerId || null, plan_name: s.planName, amount: s.amount,
         billing_cycle: s.billingCycle, status: s.status, next_billing_date: s.nextBillingDate || null,
         created_by: userData.user?.id,
+        tenant_id: tenantId,
       }).select().single();
       if (error || !data) throw new Error(error?.message || "Could not save subscription");
       const n = subscriptionFromRow(data);
@@ -1198,7 +1209,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     getCustomer: (id) => customers.find((c) => c.id === id),
     getInvoice: (id) => invoices.find((i) => i.id === id || i.number === id),
   }), [customers, products, invoices, payments, estimates, saleOrders, purchaseOrders, accounts, fundTransfers,
-      deliveryNotes, saleReturns, purchaseReturns, productionEntries, subscriptions, commissions, whatsappLogs, expenses, purchases, loading]);
+      deliveryNotes, saleReturns, purchaseReturns, productionEntries, subscriptions, commissions, whatsappLogs, expenses, purchases, loading, tenantId]);
 
   return <StoreCtx.Provider value={value}>{children}</StoreCtx.Provider>;
 }

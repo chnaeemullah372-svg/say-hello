@@ -16,6 +16,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useStore } from "@/lib/store";
+import { useAuth } from "@/lib/auth";
 import { fmt, getCurrencySymbol, type InvoiceItem, type Product } from "@/lib/dummy-data";
 import { normalizeWhatsAppNumber } from "@/lib/phone";
 import { supabase } from "@/integrations/supabase/client";
@@ -38,6 +39,7 @@ type DraftLine = InvoiceItem & { unit?: string; code?: string; warehouse?: strin
 function CreateInvoice() {
   const nav = useNavigate();
   const { customers, products, addCustomer, updateCustomer, addProduct, updateProduct, addInvoice, updateInvoice, invoices, addCommission, addPayment, accounts, updateAccount } = useStore();
+  const { user } = useAuth();
 
   const editId = useMemo(() => {
     if (typeof window === "undefined") return null;
@@ -269,7 +271,7 @@ function CreateInvoice() {
       } else if (a.url.startsWith("blob:")) {
         try {
           const blob = await fetch(a.url).then((r) => r.blob());
-          const path = `${Date.now()}-${a.name}`;
+          const path = `${user?.tenantId}/${Date.now()}-${a.name}`;
           const { error } = await supabase.storage.from("invoice-attachments").upload(path, blob, { contentType: a.type });
           if (!error) uploadedAttachments.push({ name: a.name, path, type: a.type });
         } catch { /* skip a file that failed to upload rather than blocking the whole save */ }

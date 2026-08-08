@@ -61,6 +61,26 @@ export function AppShell({ children }: { children: ReactNode }) {
     navigate({ to: "/login" });
   };
 
+  // A brand-new business sits here until the platform's Main Admin approves
+  // it — everything else in the app (customers, invoices, WhatsApp…) stays
+  // hidden until then. Platform admins skip this even for their own
+  // business, since they're the ones doing the approving.
+  if (!user?.isPlatformAdmin && user?.businessStatus !== "active") {
+    const message =
+      user?.businessStatus === "rejected" ? "This business account was not approved."
+      : user?.businessStatus === "suspended" ? "This business account has been suspended."
+      : "Your business account is awaiting approval. We'll notify you once it's active.";
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <div className="max-w-md text-center">
+          <h1 className="font-display text-xl font-semibold">{user?.businessName || "Your business"}</h1>
+          <p className="mt-3 text-sm text-muted-foreground">{message}</p>
+          <Button variant="outline" className="mt-6" onClick={handleLogout}>Sign out</Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <SidebarProvider>
       <AppSidebar />

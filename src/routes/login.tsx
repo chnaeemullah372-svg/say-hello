@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Sparkles, ShieldCheck, Zap, TrendingUp, AlertCircle, Mail, Lock, User } from "lucide-react";
+import { Sparkles, ShieldCheck, Zap, TrendingUp, AlertCircle, Mail, Lock, User, Building2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,7 @@ function LoginPage() {
   const { login, signup, isAuthenticated } = useAuth();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [name, setName] = useState("");
+  const [businessName, setBusinessName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -33,10 +34,14 @@ function LoginPage() {
     e.preventDefault();
     setError(null);
     setLoading(true);
-    const res = mode === "signin" ? await login(email, password) : await signup(name, email, password);
+    const res = mode === "signin" ? await login(email, password) : await signup(name, email, password, businessName);
     setLoading(false);
     if (!res.ok) { setError(res.error || "Login failed"); return; }
-    toast.success(mode === "signin" ? "Welcome back" : "Account created");
+    if (mode === "signin") {
+      toast.success("Welcome back");
+    } else {
+      toast.success("Account created — awaiting approval before you can sign in.");
+    }
     navigate({ to: "/" });
   };
 
@@ -93,8 +98,10 @@ function LoginPage() {
               <div className="font-display text-xl font-bold">CN</div>
             </div>
           </div>
-          <h2 className="font-display text-2xl font-bold">{mode === "signin" ? "Welcome back" : "Create admin account"}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Use your email and password to open your invoice workspace.</p>
+          <h2 className="font-display text-2xl font-bold">{mode === "signin" ? "Welcome back" : "Create your business account"}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {mode === "signin" ? "Use your email and password to open your invoice workspace." : "Sign up your business — you'll be its admin once we approve it."}
+          </p>
 
           <div className="mt-6 grid grid-cols-2 rounded-xl border bg-muted/40 p-1">
             <button type="button" onClick={() => { setMode("signin"); setError(null); }} className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${mode === "signin" ? "bg-background shadow-sm" : "text-muted-foreground"}`}>Sign in</button>
@@ -103,13 +110,22 @@ function LoginPage() {
 
           <form className="mt-6 space-y-4" onSubmit={submit}>
             {mode === "signup" && (
-              <div className="space-y-2">
-                <Label htmlFor="name">Full name</Label>
-                <div className="relative">
-                  <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input id="name" autoComplete="name" placeholder="Rajesh Kumar" className="pl-9" value={name} onChange={(e) => setName(e.target.value)} />
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="businessName">Business name</Label>
+                  <div className="relative">
+                    <Building2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input id="businessName" autoComplete="organization" placeholder="Rajesh Traders" className="pl-9" value={businessName} onChange={(e) => setBusinessName(e.target.value)} required />
+                  </div>
                 </div>
-              </div>
+                <div className="space-y-2">
+                  <Label htmlFor="name">Your full name</Label>
+                  <div className="relative">
+                    <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input id="name" autoComplete="name" placeholder="Rajesh Kumar" className="pl-9" value={name} onChange={(e) => setName(e.target.value)} />
+                  </div>
+                </div>
+              </>
             )}
             <div className="space-y-2">
               <Label htmlFor="email">Email / Gmail</Label>
@@ -140,7 +156,9 @@ function LoginPage() {
           </form>
 
           <div className="mt-6 rounded-xl border bg-muted/40 p-3 text-xs text-muted-foreground">
-            First real user becomes the initial admin. After that, manage roles from Team &amp; Access.
+            {mode === "signup"
+              ? "Signing up creates your own business, completely separate from every other business on CN Invoice. Your account will be reviewed before you can sign in."
+              : "You'll be the admin of your business. Manage staff roles from Team & Access."}
           </div>
 
           <p className="mt-6 text-center text-xs text-muted-foreground">

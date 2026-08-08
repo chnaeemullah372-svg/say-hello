@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Users, Package, FileText, PlusCircle, FileSpreadsheet,
   Warehouse, Wallet, BarChart3, Settings, Sparkles, Truck, PackageMinus, PackageX,
   ShoppingCart, ClipboardList, Receipt, Landmark, Repeat, ShieldCheck,
-  UserCircle2, Factory, MessageCircle,
+  UserCircle2, Factory, MessageCircle, Building2,
 } from "lucide-react";
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
@@ -49,6 +49,10 @@ const insightItems = [
   { title: "Statement", url: "/statement", icon: FileText },
   { title: "Team & Access", url: "/team", icon: ShieldCheck },
   { title: "Settings", url: "/settings", icon: Settings },
+];
+
+const platformItems = [
+  { title: "Platform Admin", url: "/platform-admin", icon: Building2 },
 ];
 
 function Group({ label, items, isActive }: { label: string; items: { title: string; url: string; icon: any; highlight?: boolean }[]; isActive: (u: string) => boolean }) {
@@ -106,6 +110,7 @@ export function AppSidebar() {
         <Group label="Stock & Suppliers" items={stockItems} isActive={isActive} />
         <Group label="Finance" items={financeItems} isActive={isActive} />
         <Group label="Insights" items={insightItems} isActive={isActive} />
+        {user?.isPlatformAdmin && <Group label="Platform" items={platformItems} isActive={isActive} />}
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border">
@@ -115,7 +120,7 @@ export function AppSidebar() {
           </div>
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-medium text-sidebar-foreground">{user?.name || "Guest"}</div>
-            <div className="truncate text-[11px] text-sidebar-foreground/60">{user?.role || "Not signed in"} · Prestige Store</div>
+            <div className="truncate text-[11px] text-sidebar-foreground/60">{user?.role || "Not signed in"}{user?.businessName ? ` · ${user.businessName}` : ""}</div>
           </div>
         </div>
       </SidebarFooter>

@@ -505,6 +505,7 @@ function SettingsPage() {
       setting_key: settingKey,
       setting_value: settings[section],
       updated_by: user?.id ?? null,
+      tenant_id: user?.tenantId,
     };
     const result = existing?.id
       ? await supabase.from("app_settings").update(payload).eq("id", existing.id)

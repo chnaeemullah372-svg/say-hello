@@ -97,16 +97,31 @@ async function buildReminderPdfBase64(
 
 export type ReminderCheckStats = { checked: number; sent: number; skipped: number; failed: number };
 
+// Every business runs this check independently — its own notification
+// settings, its own unpaid invoices, its own WhatsApp connection. One
+// business having reminders disabled (or no WhatsApp connected) never
+// affects any other business's run.
 export async function runDueReminderCheck(): Promise<ReminderCheckStats> {
   const stats: ReminderCheckStats = { checked: 0, sent: 0, skipped: 0, failed: 0 };
 
+  const { data: activeBusinesses, error: businessesError } = await supabaseAdmin
+    .from("businesses").select("id").eq("status", "active");
+  if (businessesError) throw businessesError;
+
+  for (const biz of activeBusinesses ?? []) {
+    await runDueReminderCheckForTenant(biz.id, stats);
+  }
+  return stats;
+}
+
+async function runDueReminderCheckForTenant(tenantId: string, stats: ReminderCheckStats): Promise<void> {
   const [{ data: notifRow }, { data: businessRow }] = await Promise.all([
-    supabaseAdmin.from("app_settings").select("setting_value").eq("setting_key", "settings.notifications").maybeSingle(),
-    supabaseAdmin.from("app_settings").select("setting_value").eq("setting_key", "settings.business").maybeSingle(),
+    supabaseAdmin.from("app_settings").select("setting_value").eq("tenant_id", tenantId).eq("setting_key", "settings.notifications").maybeSingle(),
+    supabaseAdmin.from("app_settings").select("setting_value").eq("tenant_id", tenantId).eq("setting_key", "settings.business").maybeSingle(),
   ]);
   const notif = (notifRow?.setting_value as Record<string, any>) ?? {};
-  if (!notif.outstandingReminderEnabled) return stats;
-  if (notif.outstandingReminderMode && notif.outstandingReminderMode !== "whatsapp") return stats;
+  if (!notif.outstandingReminderEnabled) return;
+  if (notif.outstandingReminderMode && notif.outstandingReminderMode !== "whatsapp") return;
 
   const business = (businessRow?.setting_value as Record<string, any>) ?? {};
   const businessName: string = business.businessName || business.legalName || "our store";
@@ -119,6 +134,7 @@ export async function runDueReminderCheck(): Promise<ReminderCheckStats> {
   const { data: invoices, error } = await supabaseAdmin
     .from("invoices")
     .select("id, number, items, tax_rate, discount_mode, discount_value, shipping_amount, paid, due_date, customers(id, name, whatsapp, whatsapp2, referral_phone)")
+    .eq("tenant_id", tenantId)
     .neq("status", "paid")
     .not("due_date", "is", null)
     .returns<ReminderInvoiceRow[]>();
@@ -144,7 +160,7 @@ export async function runDueReminderCheck(): Promise<ReminderCheckStats> {
     // it, so this run backs off instead of sending a second time.
     const { error: claimError } = await supabaseAdmin
       .from("payment_reminder_sends")
-      .insert({ invoice_id: inv.id, reminder_date: today, due_date_snapshot: inv.due_date, status: "pending" });
+      .insert({ invoice_id: inv.id, reminder_date: today, due_date_snapshot: inv.due_date, status: "pending", tenant_id: tenantId });
     if (claimError) { stats.skipped++; continue; }
 
     const customer = inv.customers;
@@ -165,7 +181,8 @@ export async function runDueReminderCheck(): Promise<ReminderCheckStats> {
       .replace(/#Balance/g, fmtMoney(balance));
 
     try {
-      const { whatsappEngine } = await import("@/lib/whatsapp-engine.server");
+      const { getEngineForTenant } = await import("@/lib/whatsapp-engine.server");
+      const engine = getEngineForTenant(tenantId);
       const pdfBase64 = await buildReminderPdfBase64(inv, balance, businessName).catch(() => null);
 
       let anyOk = false;
@@ -174,8 +191,8 @@ export async function runDueReminderCheck(): Promise<ReminderCheckStats> {
       for (const number of numbers) {
         try {
           const id = pdfBase64
-            ? await whatsappEngine.sendDocument(number, Buffer.from(pdfBase64, "base64"), `${inv.number}.pdf`, message)
-            : await whatsappEngine.sendText(number, message);
+            ? await engine.sendDocument(number, Buffer.from(pdfBase64, "base64"), `${inv.number}.pdf`, message)
+            : await engine.sendText(number, message);
           anyOk = true;
           lastMessageId = id;
         } catch (err) {
@@ -192,6 +209,7 @@ export async function runDueReminderCheck(): Promise<ReminderCheckStats> {
           message_text: message,
           status: anyOk ? "sent" : "failed",
           error_message: anyOk ? null : lastError,
+          tenant_id: tenantId,
         });
       }
 
@@ -206,6 +224,4 @@ export async function runDueReminderCheck(): Promise<ReminderCheckStats> {
       stats.failed++;
     }
   }
-
-  return stats;
 }

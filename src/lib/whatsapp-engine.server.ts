@@ -26,7 +26,7 @@ import fs from "fs";
 import path from "path";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
-const SESSION_DIR = path.join(process.cwd(), ".whatsapp-session");
+const SESSION_ROOT = path.join(process.cwd(), ".whatsapp-session");
 const silentLogger = pino({ level: "silent" });
 
 export type WAStatus = "disconnected" | "connecting" | "qr_ready" | "pairing" | "connected";
@@ -60,6 +60,8 @@ async function getWAVersion(): Promise<[number, number, number]> {
 }
 
 class WhatsAppEngine {
+  private tenantId: string;
+  private sessionDir: string;
   private sock: WASocket | null = null;
   private state: WAState = { status: "disconnected", qr: null, pairingCode: null, phoneNumber: null, lastError: null, connectedAt: null };
   private pairingTimer: NodeJS.Timeout | null = null;
@@ -67,21 +69,32 @@ class WhatsAppEngine {
   private brandCode: string | null = null;
   private badSessionRetried = false;
 
+  constructor(tenantId: string) {
+    this.tenantId = tenantId;
+    this.sessionDir = path.join(SESSION_ROOT, tenantId);
+  }
+
   getState(): WAState {
     return { ...this.state };
   }
 
   private async set(patch: Partial<WAState>) {
     this.state = { ...this.state, ...patch };
+    // upsert, not update: a business's first-ever connect attempt has no
+    // whatsapp_session row yet (one row per tenant now, not the single
+    // globally-seeded row this table used to have).
     await supabaseAdmin
       .from("whatsapp_session")
-      .update({
-        status: this.state.status,
-        phone_number: this.state.phoneNumber,
-        last_error: this.state.lastError,
-        connected_at: this.state.connectedAt,
-      })
-      .not("id", "is", null); // the table only ever has the one seeded row
+      .upsert(
+        {
+          tenant_id: this.tenantId,
+          status: this.state.status,
+          phone_number: this.state.phoneNumber,
+          last_error: this.state.lastError,
+          connected_at: this.state.connectedAt,
+        },
+        { onConflict: "tenant_id" },
+      );
   }
 
   private closeSocket() {
@@ -91,7 +104,7 @@ class WhatsAppEngine {
   }
 
   private wipeCreds() {
-    if (fs.existsSync(SESSION_DIR)) fs.rmSync(SESSION_DIR, { recursive: true, force: true });
+    if (fs.existsSync(this.sessionDir)) fs.rmSync(this.sessionDir, { recursive: true, force: true });
   }
 
   async connectQR() {
@@ -130,7 +143,7 @@ class WhatsAppEngine {
   }
 
   private async boot(usePairing: boolean, phone: string, pairingRetry = 0) {
-    const { state: authState, saveCreds } = await useMultiFileAuthState(SESSION_DIR);
+    const { state: authState, saveCreds } = await useMultiFileAuthState(this.sessionDir);
     const version = await getWAVersion();
 
     const sock = makeWASocket({
@@ -218,7 +231,7 @@ class WhatsAppEngine {
   private async persistDeliveryStatus(waMessageId: string, baileysStatus: number) {
     const status = baileysStatus >= 4 ? "read" : baileysStatus === 3 ? "delivered" : baileysStatus === 2 ? "sent" : null;
     if (!status) return;
-    await supabaseAdmin.from("whatsapp_logs").update({ status }).eq("wa_message_id", waMessageId);
+    await supabaseAdmin.from("whatsapp_logs").update({ status }).eq("wa_message_id", waMessageId).eq("tenant_id", this.tenantId);
   }
 
   private requireConnected(): WASocket {
@@ -251,8 +264,21 @@ class WhatsAppEngine {
   }
 }
 
-// Module-level singleton — one live socket for the whole server process.
-// Only ONE instance of this server may run at a time (no horizontal
-// scaling / multiple PM2 instances), or two sockets will fight over the
-// same linked-device session and WhatsApp will force-close one of them.
-export const whatsappEngine = new WhatsAppEngine();
+// One engine instance per business, lazily created and cached for the life
+// of the server process — each holds its own live socket, its own on-disk
+// credential folder (.whatsapp-session/<tenantId>/), and its own row in
+// whatsapp_session. Only ONE instance of this server process may run at a
+// time (no horizontal scaling / multiple PM2 instances), or two sockets for
+// the SAME tenant would fight over the same linked-device session and
+// WhatsApp would force-close one of them — different tenants don't
+// conflict with each other, only concurrent processes for the same tenant.
+const engines = new Map<string, WhatsAppEngine>();
+
+export function getEngineForTenant(tenantId: string): WhatsAppEngine {
+  let engine = engines.get(tenantId);
+  if (!engine) {
+    engine = new WhatsAppEngine(tenantId);
+    engines.set(tenantId, engine);
+  }
+  return engine;
+}

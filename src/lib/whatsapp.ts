@@ -39,6 +39,7 @@ export async function sendAndLogWhatsApp(params: {
   if (numbers.length === 0) return { ok: false, error: "No WhatsApp number on file for this customer" };
 
   const { data: userData } = await supabase.auth.getUser();
+  const { data: profile } = await supabase.from("profiles").select("tenant_id").eq("user_id", userData.user?.id ?? "").maybeSingle();
   let lastError: string | undefined;
   let anyOk = false;
 
@@ -57,6 +58,7 @@ export async function sendAndLogWhatsApp(params: {
       status: result.ok ? "sent" : "failed",
       error_message: result.error || null,
       created_by: userData.user?.id,
+      tenant_id: profile?.tenant_id,
     });
   }
 
