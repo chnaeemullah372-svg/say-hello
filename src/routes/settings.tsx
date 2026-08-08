@@ -7,6 +7,8 @@ import {
   Boxes,
   Building2,
   ChevronRight,
+  Check,
+  Copy,
   DatabaseBackup,
   FileBarChart,
   FileCog,
@@ -64,6 +66,7 @@ import {
   connectWhatsAppPhone,
   disconnectWhatsApp,
   resetWhatsAppSession,
+  setWhatsAppBrandCode,
   type WAStateUI,
   type WAStatus,
 } from "@/lib/whatsapp-actions";
@@ -1313,7 +1316,9 @@ function WhatsAppPanel({ data, set, isAdmin }: PanelProps & { isAdmin: boolean }
   const [busy, setBusy] = useState(false);
   const [disconnectOpen, setDisconnectOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
-  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [brandInput, setBrandInput] = useState(data.pairingBrandCode ?? "");
+  const [brandSaving, setBrandSaving] = useState(false);
+  const [codeCopied, setCodeCopied] = useState(false);
 
   const refresh = async () => {
     try {
@@ -1326,20 +1331,44 @@ function WhatsAppPanel({ data, set, isAdmin }: PanelProps & { isAdmin: boolean }
     }
   };
 
+  // Polls on a plain interval the whole time this panel is open — NOT
+  // gated on the previous status/qr/pairingCode staying the same, which
+  // was the bug: two polls in a row that both come back "still
+  // connecting" have identical values, so a dependency-array effect keyed
+  // on those values never re-fires and polling silently stops while the
+  // badge is stuck showing "Connecting…" forever. An unconditional
+  // interval (same pattern the reference bot's own connect screen uses)
+  // has no such gap.
   useEffect(() => {
     if (!isAdmin) return;
     refresh();
+    const id = setInterval(refresh, 2500);
+    return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin]);
 
-  useEffect(() => {
-    if (pollRef.current) { clearTimeout(pollRef.current); pollRef.current = null; }
-    if (wa && (wa.status === "connecting" || wa.status === "qr_ready" || wa.status === "pairing")) {
-      pollRef.current = setTimeout(refresh, 3000);
+  const saveBrandCode = async () => {
+    const brand = brandInput.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
+    if (brand.length !== 8) return toast.error("Pairing code name must be exactly 8 letters/numbers");
+    setBrandSaving(true);
+    try {
+      await setWhatsAppBrandCode({ data: { brandCode: brand } });
+      set("pairingBrandCode", brand);
+      setBrandInput(brand);
+      toast.success("Pairing code name saved");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not save pairing code name");
+    } finally {
+      setBrandSaving(false);
     }
-    return () => { if (pollRef.current) clearTimeout(pollRef.current); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wa?.status, wa?.qr, wa?.pairingCode]);
+  };
+
+  const copyPairingCode = () => {
+    if (!wa?.pairingCode) return;
+    navigator.clipboard?.writeText(wa.pairingCode.replace(/[^A-Z0-9]/gi, ""));
+    setCodeCopied(true);
+    setTimeout(() => setCodeCopied(false), 1500);
+  };
 
   const runAction = async (fn: () => Promise<WAStateUI>) => {
     setBusy(true);
@@ -1423,17 +1452,21 @@ function WhatsAppPanel({ data, set, isAdmin }: PanelProps & { isAdmin: boolean }
                 )
               ) : (
                 <div className="space-y-3">
-                  <Grid>
-                    <TextField label="WhatsApp number to connect" value={phoneInput} onChange={setPhoneInput} placeholder="923001234567" />
-                    <TextField label="Custom pairing-code name (optional, 8 characters)" value={data.pairingBrandCode ?? ""} onChange={(v) => set("pairingBrandCode", v.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8))} placeholder="PRESTIGE" />
-                  </Grid>
+                  <TextField label="WhatsApp number to connect" value={phoneInput} onChange={setPhoneInput} placeholder="923001234567" />
                   <Button type="button" onClick={connectPhone} disabled={busy}>{busy ? "Getting pairing code…" : "Get pairing code"}</Button>
                   {wa?.pairingCode && (
-                    <div className="rounded-lg bg-primary p-4 text-center text-primary-foreground">
-                      <div className="text-xs font-semibold uppercase tracking-wider opacity-80">Your pairing code</div>
+                    <button
+                      type="button"
+                      onClick={copyPairingCode}
+                      className="w-full rounded-lg bg-primary p-4 text-center text-primary-foreground transition hover:bg-primary/90"
+                    >
+                      <div className="flex items-center justify-center gap-1.5 text-xs font-semibold uppercase tracking-wider opacity-80">
+                        Your pairing code — tap to copy
+                        {codeCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                      </div>
                       <div className="mt-1 font-display text-3xl font-bold tracking-[0.3em]">{wa.pairingCode}</div>
                       <div className="mt-2 text-xs opacity-80">On that phone: WhatsApp → Linked Devices → Link with phone number → enter this code.</div>
-                    </div>
+                    </button>
                   )}
                 </div>
               )}
@@ -1441,6 +1474,30 @@ function WhatsAppPanel({ data, set, isAdmin }: PanelProps & { isAdmin: boolean }
           )}
 
           {wa?.lastError && <div className="mt-3 text-sm text-destructive">{wa.lastError}</div>}
+        </div>
+      )}
+
+      {isAdmin && wa?.status !== "connected" && (
+        <div className="rounded-lg border bg-card p-4">
+          <div className="mb-1 font-semibold">Pairing code branding</div>
+          <p className="mb-3 text-xs text-muted-foreground">
+            Set this once, separately from connecting — it's what the pairing code spells instead of a random 8 characters,
+            e.g. your business name. Used automatically the next time you connect by phone number.
+          </p>
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="grid gap-1.5">
+              <Label>Pairing code name (exactly 8 letters/numbers)</Label>
+              <Input
+                value={brandInput}
+                onChange={(e) => setBrandInput(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8))}
+                placeholder="HASANALI"
+                className="w-48"
+              />
+            </div>
+            <Button type="button" variant="outline" onClick={saveBrandCode} disabled={brandSaving}>
+              {brandSaving ? "Saving…" : "Save Pairing Code"}
+            </Button>
+          </div>
         </div>
       )}
 
