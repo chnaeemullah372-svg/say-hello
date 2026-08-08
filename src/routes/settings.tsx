@@ -654,14 +654,14 @@ function AuditTrail({ module, refreshKey }: { module: string; refreshKey: number
       .limit(10)
       .then(async ({ data }) => {
         const entries = data ?? [];
-        const actorIds = [...new Set(entries.map((e) => e.actor_user_id))];
+        const actorIds = [...new Set(entries.map((e) => e.actor_user_id).filter((id): id is string => !!id))];
         const { data: profileRows } = actorIds.length
           ? await supabase.from("profiles").select("user_id, full_name, email").in("user_id", actorIds)
           : { data: [] as { user_id: string; full_name: string | null; email: string | null }[] };
         const nameByUser = new Map((profileRows ?? []).map((p) => [p.user_id, p.full_name || p.email || "Team member"]));
         setRows(entries.map((e) => ({
           id: e.id, action: e.action, created_at: e.created_at,
-          actor: e.actor_user_id === user?.id ? "You" : (nameByUser.get(e.actor_user_id) ?? "Team member"),
+          actor: !e.actor_user_id ? "Deleted user" : e.actor_user_id === user?.id ? "You" : (nameByUser.get(e.actor_user_id) ?? "Team member"),
         })));
         setLoading(false);
       });

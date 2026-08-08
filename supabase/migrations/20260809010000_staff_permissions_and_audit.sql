@@ -52,7 +52,10 @@ USING (tenant_id = private.current_tenant_id() AND public.has_role(auth.uid(), '
 CREATE TABLE public.settings_audit_log (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id UUID NOT NULL REFERENCES public.businesses(id) ON DELETE CASCADE,
-  actor_user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE SET NULL,
+  -- Nullable, not NOT NULL: ON DELETE SET NULL needs somewhere to put
+  -- NULL if the actor's account is later deleted — the audit row must
+  -- outlive the user it recorded, not be blocked or cascaded away.
+  actor_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   module TEXT NOT NULL,
   action TEXT NOT NULL,
   before_value JSONB,

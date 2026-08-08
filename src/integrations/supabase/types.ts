@@ -1260,7 +1260,7 @@ export type Database = {
       settings_audit_log: {
         Row: {
           action: string
-          actor_user_id: string
+          actor_user_id: string | null
           after_value: Json | null
           before_value: Json | null
           created_at: string
@@ -1271,7 +1271,7 @@ export type Database = {
         }
         Insert: {
           action: string
-          actor_user_id: string
+          actor_user_id?: string | null
           after_value?: Json | null
           before_value?: Json | null
           created_at?: string
@@ -1282,7 +1282,7 @@ export type Database = {
         }
         Update: {
           action?: string
-          actor_user_id?: string
+          actor_user_id?: string | null
           after_value?: Json | null
           before_value?: Json | null
           created_at?: string
