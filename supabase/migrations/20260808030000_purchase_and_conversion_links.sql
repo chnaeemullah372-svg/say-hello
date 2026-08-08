@@ -12,20 +12,25 @@
 -- 3. Purchase Orders had no way to record which purchase bill they were
 --    received into, so there was no "Convert to Purchase Bill" step at
 --    all — marking a PO "Received" was a dead status flip.
+--
+-- This file is safe to run more than once (every statement below either
+-- checks "if not exists" first or drops-then-recreates), in case an
+-- earlier attempt partially ran before failing.
 
-CREATE SEQUENCE public.purchase_seq START 1;
+CREATE SEQUENCE IF NOT EXISTS public.purchase_seq START 1;
 
-ALTER TABLE public.purchases ADD COLUMN number TEXT NOT NULL DEFAULT '';
+ALTER TABLE public.purchases ADD COLUMN IF NOT EXISTS number TEXT NOT NULL DEFAULT '';
+DROP TRIGGER IF EXISTS purchases_number ON public.purchases;
 CREATE TRIGGER purchases_number BEFORE INSERT ON public.purchases FOR EACH ROW EXECUTE FUNCTION public.assign_doc_number('PURCH', 'purchase_seq');
 
-ALTER TABLE public.estimates ADD COLUMN invoice_id UUID REFERENCES public.invoices(id) ON DELETE SET NULL;
-ALTER TABLE public.sale_orders ADD COLUMN invoice_id UUID REFERENCES public.invoices(id) ON DELETE SET NULL;
-ALTER TABLE public.purchase_orders ADD COLUMN bill_id UUID REFERENCES public.purchases(id) ON DELETE SET NULL;
+ALTER TABLE public.estimates ADD COLUMN IF NOT EXISTS invoice_id UUID REFERENCES public.invoices(id) ON DELETE SET NULL;
+ALTER TABLE public.sale_orders ADD COLUMN IF NOT EXISTS invoice_id UUID REFERENCES public.invoices(id) ON DELETE SET NULL;
+ALTER TABLE public.purchase_orders ADD COLUMN IF NOT EXISTS bill_id UUID REFERENCES public.purchases(id) ON DELETE SET NULL;
 
 -- Expenses had no way to say which cash/bank account paid for them at
 -- all, so recording one could never actually debit an account — Fund
 -- Management's balances only ever reflected the Payments ledger.
-ALTER TABLE public.expenses ADD COLUMN account_id UUID REFERENCES public.accounts(id) ON DELETE SET NULL;
+ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS account_id UUID REFERENCES public.accounts(id) ON DELETE SET NULL;
 
 -- Security fix: every one of these tables let ANY signed-in, non-blocked
 -- user insert/update/DELETE any row, regardless of role — the Team &
@@ -47,6 +52,10 @@ BEGIN
   LOOP
     EXECUTE format('DROP POLICY IF EXISTS "Authenticated can manage %1$s" ON public.%1$s;', t);
     EXECUTE format('DROP POLICY IF EXISTS "auth manage %1$s" ON public.%1$s;', t);
+    EXECUTE format('DROP POLICY IF EXISTS "Staff can view %1$s" ON public.%1$s;', t);
+    EXECUTE format('DROP POLICY IF EXISTS "Staff can insert %1$s" ON public.%1$s;', t);
+    EXECUTE format('DROP POLICY IF EXISTS "Staff can update %1$s" ON public.%1$s;', t);
+    EXECUTE format('DROP POLICY IF EXISTS "Admins and managers can delete %1$s" ON public.%1$s;', t);
     EXECUTE format('CREATE POLICY "Staff can view %1$s" ON public.%1$s FOR SELECT TO authenticated USING (public.is_staff(auth.uid()));', t);
     EXECUTE format('CREATE POLICY "Staff can insert %1$s" ON public.%1$s FOR INSERT TO authenticated WITH CHECK (public.is_staff(auth.uid()));', t);
     EXECUTE format('CREATE POLICY "Staff can update %1$s" ON public.%1$s FOR UPDATE TO authenticated USING (public.is_staff(auth.uid())) WITH CHECK (public.is_staff(auth.uid()));', t);
