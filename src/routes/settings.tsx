@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
+  ArrowLeft,
   ArrowLeftRight,
   Banknote,
   Bell,
@@ -35,6 +36,7 @@ import {
   ReceiptText,
   RefreshCw,
   Save,
+  Search,
   Send,
   ShieldCheck,
   Smartphone,
@@ -445,12 +447,46 @@ const categories: Category[] = [
 function SettingsPage() {
   const { user } = useAuth();
   const { theme, toggle } = useTheme();
-  const [active, setActive] = useState<ActiveKey>("business");
+  // Starts on the list (like a mobile Settings app's home screen), not a
+  // preselected section — a category push-navigates into its own screen,
+  // matching the reference app's drill-down list instead of a permanent
+  // desktop-style split view.
+  const [active, setActive] = useState<ActiveKey | null>(null);
+  const [query, setQuery] = useState("");
   const [settings, setSettings] = useState<SettingsState>(defaults);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<SectionKey | null>(null);
 
-  const activeCategory = useMemo(() => categories.find((c) => c.key === active) ?? categories[0], [active]);
+  const activeCategory = useMemo(() => categories.find((c) => c.key === active), [active]);
+
+  // Blueprint's "Searchable" principle: typing a keyword like "tax" or
+  // "staff" should jump straight to the relevant setting instead of making
+  // someone scan every group by eye.
+  const filteredCategories = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return categories;
+    return categories.filter((c) => c.title.toLowerCase().includes(q) || c.subtitle.toLowerCase().includes(q));
+  }, [query]);
+
+  // A couple of rows show their live state right on the list (like Zoho's
+  // "Currency: USD" rows) instead of a static description for everything —
+  // cheap to fetch, and it turns the list into a glance-able dashboard
+  // instead of a plain menu.
+  const [waRowStatus, setWaRowStatus] = useState<string | null>(null);
+  useEffect(() => {
+    if (user?.role !== "admin") return;
+    supabase.from("whatsapp_session").select("status").maybeSingle()
+      .then(({ data }) => setWaRowStatus((data?.status as string) ?? "disconnected"));
+  }, [user?.role]);
+
+  const rowBadge = (key: ActiveKey): { label: string; tone: string } | null => {
+    if (key === "whatsapp" && user?.role === "admin" && waRowStatus) {
+      return waRowStatus === "connected"
+        ? { label: "Connected", tone: "border-accent/40 bg-accent/10 text-accent" }
+        : { label: "Not connected", tone: "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400" };
+    }
+    return null;
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -514,7 +550,7 @@ function SettingsPage() {
       toast.error(result.error.message);
       return;
     }
-    toast.success(`${activeCategory.title} saved`);
+    toast.success(`${activeCategory?.title ?? "Settings"} saved`);
     if (section === "tax" && settings.tax.symbol) setCurrencySymbol(settings.tax.symbol);
     // Best-effort — a settings save should never fail because the audit
     // insert had a hiccup, so this is fire-and-forget rather than awaited.
@@ -525,6 +561,59 @@ function SettingsPage() {
       }).then(() => setAuditRefresh((n) => n + 1));
     }
   };
+
+  if (active && activeCategory) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-3 rounded-lg border bg-card p-4">
+          <Button variant="ghost" size="icon" className="shrink-0" onClick={() => setActive(null)} aria-label="Back to all settings">
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <div className={`grid h-12 w-12 shrink-0 place-items-center rounded-lg ring-1 ${activeCategory.tone}`}>
+            <activeCategory.icon className="h-6 w-6" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h1 className="font-display text-xl font-bold leading-tight">{activeCategory.title}</h1>
+            <p className="text-sm text-muted-foreground">{activeCategory.subtitle}</p>
+          </div>
+          {active !== "accounts" && active !== "fundManagement" && active !== "import" && (
+            <Button onClick={() => saveSection(active as SectionKey)} disabled={saving === active}>
+              {saving === active ? <RefreshCw className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}
+              Save
+            </Button>
+          )}
+        </div>
+
+        {active === "business" && <BusinessPanel data={settings.business} set={(k, v) => setField("business", k, v)} />}
+        {active === "invoice" && <InvoicePanel data={settings.invoice} set={(k, v) => setField("invoice", k, v)} />}
+        {active === "tax" && <TaxPanel data={settings.tax} set={(k, v) => setField("tax", k, v)} />}
+        {active === "terms" && <TermsPanel data={settings.terms} set={(k, v) => setField("terms", k, v)} />}
+        {active === "accounts" && <AccountsPanel />}
+        {active === "fundManagement" && <FundManagementPanel />}
+        {active === "import" && <ImportLinkPanel />}
+        {active === "numbering" && <NumberingPanel data={settings.numbering} set={(k, v) => setField("numbering", k, v)} />}
+        {active === "print" && <PrintPanel data={settings.print} set={(k, v) => setField("print", k, v)} />}
+        {active === "renameFields" && <RenameFieldsPanel data={settings.renameFields} set={(k, v) => setField("renameFields", k, v)} />}
+        {active === "customFields" && <CustomFieldsPanel data={settings.customFields} set={(v) => setField("customFields", "fields", v)} />}
+        {active === "templateSettings" && <TemplateSettingsPanel data={settings.templateSettings} set={(k, v) => setField("templateSettings", k, v)} />}
+        {active === "items" && <ItemsPanel data={settings.items} set={(k, v) => setField("items", k, v)} />}
+        {active === "payment" && <PaymentPanel data={settings.payment} set={(k, v) => setField("payment", k, v)} />}
+        {active === "bank" && <BankPanel data={settings.bank} set={(k, v) => setField("bank", k, v)} />}
+        {active === "users" && <UsersPanel data={settings.users} set={(k, v) => setField("users", k, v)} />}
+        {active === "notifications" && <NotificationsPanel data={settings.notifications} set={(k, v) => setField("notifications", k, v)} />}
+        {active === "gmail" && <GmailPanel data={settings.gmail} set={(k, v) => setField("gmail", k, v)} />}
+        {active === "whatsapp" && <WhatsAppPanel data={settings.whatsapp} set={(k, v) => setField("whatsapp", k, v)} isAdmin={user?.role === "admin"} />}
+        {active === "backup" && <BackupPanel data={settings.backup} set={(k, v) => setField("backup", k, v)} />}
+        {active === "homeScreen" && <HomeScreenPanel data={settings.homeScreen} set={(k, v) => setField("homeScreen", k, v)} />}
+        {active === "appearance" && <AppearancePanel data={settings.appearance} set={(k, v) => setField("appearance", k, v)} theme={theme} toggleTheme={toggle} />}
+        {active === "security" && <SecurityPanel data={settings.security} set={(k, v) => setField("security", k, v)} />}
+
+        {active !== "accounts" && active !== "fundManagement" && active !== "import" && (
+          <AuditTrail module={active} refreshKey={auditRefresh} />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
@@ -538,101 +627,91 @@ function SettingsPage() {
         }
       />
 
+      <div className="flex items-center gap-3 rounded-lg border bg-card p-4">
+        {settings.business.logoUrl ? (
+          <img src={settings.business.logoUrl as string} alt="Logo" className="h-12 w-12 shrink-0 rounded-lg object-contain bg-muted" />
+        ) : (
+          <div className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+            <Store className="h-6 w-6" />
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <div className="truncate font-display text-lg font-bold">{(settings.business.businessName as string) || "Your Business"}</div>
+          <div className="text-xs capitalize text-muted-foreground">Signed in as {user?.role ?? "staff"}</div>
+        </div>
+      </div>
+
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard icon={FileText} label="Invoice controls" value="42+" />
         <StatCard icon={UserCog} label="Admin access" value={user?.role ?? "staff"} />
-        <StatCard icon={MessageCircle} label="WhatsApp" value="Ready" />
+        <StatCard icon={MessageCircle} label="WhatsApp" value={waRowStatus === "connected" ? "Connected" : "Ready"} />
         <StatCard icon={Mail} label="Gmail" value="Secure" />
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
-        <Card className="xl:sticky xl:top-20 xl:self-start">
-          <CardContent className="p-3">
-            <div className="mb-2 flex items-center justify-between px-2 py-1">
-              <div>
-                <div className="font-display text-base font-semibold">All settings</div>
-                <div className="text-xs text-muted-foreground">Tap any option to edit</div>
-              </div>
-              {loading && <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />}
+      <Card>
+        <CardContent className="p-3">
+          <div className="mb-3 flex items-center justify-between gap-2 px-1 py-1">
+            <div>
+              <div className="font-display text-base font-semibold">All settings</div>
+              <div className="text-xs text-muted-foreground">Tap any option to open it</div>
             </div>
-            <div className="space-y-4">
-              {SETTINGS_GROUPS.map((group) => (
-                <div key={group}>
-                  <div className="mb-1.5 px-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{group}</div>
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-1">
-                    {categories.filter((c) => c.group === group).map((category) => (
-                      <button
-                        key={category.key}
-                        type="button"
-                        onClick={() => setActive(category.key)}
-                        className={`group flex min-h-[88px] items-center gap-3.5 rounded-lg border p-3.5 text-left transition hover:bg-muted/60 xl:min-h-0 ${active === category.key ? "border-primary bg-primary/5 shadow-sm" : "bg-card"}`}
-                      >
-                        <span className={`grid h-12 w-12 shrink-0 place-items-center rounded-lg ring-1 ${category.tone}`}>
-                          <category.icon className="h-6 w-6" />
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="flex items-center gap-1.5">
-                            <span className="truncate text-sm font-semibold leading-tight">{category.title}</span>
-                            {category.badge && <Badge variant="secondary" className="hidden px-1.5 py-0 text-[10px] sm:inline-flex">{category.badge}</Badge>}
-                          </span>
-                          <span className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-muted-foreground">{category.subtitle}</span>
-                        </span>
-                        <ChevronRight className="hidden h-5 w-5 shrink-0 text-muted-foreground xl:block" />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="min-w-0 space-y-4">
-          <div className="flex items-center gap-3 rounded-lg border bg-card p-4">
-            <div className={`grid h-12 w-12 shrink-0 place-items-center rounded-lg ring-1 ${activeCategory.tone}`}>
-              <activeCategory.icon className="h-6 w-6" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <h1 className="font-display text-xl font-bold leading-tight">{activeCategory.title}</h1>
-              <p className="text-sm text-muted-foreground">{activeCategory.subtitle}</p>
-            </div>
-            {active !== "accounts" && active !== "fundManagement" && active !== "import" && (
-              <Button onClick={() => saveSection(active as SectionKey)} disabled={saving === active}>
-                {saving === active ? <RefreshCw className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}
-                Save
-              </Button>
-            )}
+            {loading && <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />}
           </div>
-
-          {active === "business" && <BusinessPanel data={settings.business} set={(k, v) => setField("business", k, v)} />}
-          {active === "invoice" && <InvoicePanel data={settings.invoice} set={(k, v) => setField("invoice", k, v)} />}
-          {active === "tax" && <TaxPanel data={settings.tax} set={(k, v) => setField("tax", k, v)} />}
-          {active === "terms" && <TermsPanel data={settings.terms} set={(k, v) => setField("terms", k, v)} />}
-          {active === "accounts" && <AccountsPanel />}
-          {active === "fundManagement" && <FundManagementPanel />}
-          {active === "import" && <ImportLinkPanel />}
-          {active === "numbering" && <NumberingPanel data={settings.numbering} set={(k, v) => setField("numbering", k, v)} />}
-          {active === "print" && <PrintPanel data={settings.print} set={(k, v) => setField("print", k, v)} />}
-          {active === "renameFields" && <RenameFieldsPanel data={settings.renameFields} set={(k, v) => setField("renameFields", k, v)} />}
-          {active === "customFields" && <CustomFieldsPanel data={settings.customFields} set={(v) => setField("customFields", "fields", v)} />}
-          {active === "templateSettings" && <TemplateSettingsPanel data={settings.templateSettings} set={(k, v) => setField("templateSettings", k, v)} />}
-          {active === "items" && <ItemsPanel data={settings.items} set={(k, v) => setField("items", k, v)} />}
-          {active === "payment" && <PaymentPanel data={settings.payment} set={(k, v) => setField("payment", k, v)} />}
-          {active === "bank" && <BankPanel data={settings.bank} set={(k, v) => setField("bank", k, v)} />}
-          {active === "users" && <UsersPanel data={settings.users} set={(k, v) => setField("users", k, v)} />}
-          {active === "notifications" && <NotificationsPanel data={settings.notifications} set={(k, v) => setField("notifications", k, v)} />}
-          {active === "gmail" && <GmailPanel data={settings.gmail} set={(k, v) => setField("gmail", k, v)} />}
-          {active === "whatsapp" && <WhatsAppPanel data={settings.whatsapp} set={(k, v) => setField("whatsapp", k, v)} isAdmin={user?.role === "admin"} />}
-          {active === "backup" && <BackupPanel data={settings.backup} set={(k, v) => setField("backup", k, v)} />}
-          {active === "homeScreen" && <HomeScreenPanel data={settings.homeScreen} set={(k, v) => setField("homeScreen", k, v)} />}
-          {active === "appearance" && <AppearancePanel data={settings.appearance} set={(k, v) => setField("appearance", k, v)} theme={theme} toggleTheme={toggle} />}
-          {active === "security" && <SecurityPanel data={settings.security} set={(k, v) => setField("security", k, v)} />}
-
-          {active !== "accounts" && active !== "fundManagement" && active !== "import" && (
-            <AuditTrail module={active} refreshKey={auditRefresh} />
+          <div className="relative mb-4">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              className="h-11 pl-10"
+              placeholder="Search settings — try “tax”, “staff”, “reminder”…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+          {filteredCategories.length === 0 ? (
+            <div className="py-10 text-center text-sm text-muted-foreground">No settings match "{query}".</div>
+          ) : (
+            <div className="space-y-4">
+              {SETTINGS_GROUPS.map((group) => {
+                const items = filteredCategories.filter((c) => c.group === group);
+                if (!items.length) return null;
+                return (
+                  <div key={group}>
+                    <div className="sticky top-16 z-10 mb-1.5 bg-card px-1 py-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{group}</div>
+                    <div className="space-y-1.5">
+                      {items.map((category) => {
+                        const badge = rowBadge(category.key);
+                        return (
+                          <button
+                            key={category.key}
+                            type="button"
+                            onClick={() => setActive(category.key)}
+                            className="group flex w-full items-center gap-3.5 rounded-lg border bg-card p-3.5 text-left transition hover:border-primary/40 hover:bg-muted/60"
+                          >
+                            <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-lg ring-1 ${category.tone}`}>
+                              <category.icon className="h-5 w-5" />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="flex items-center gap-1.5">
+                                <span className="truncate text-sm font-semibold leading-tight">{category.title}</span>
+                                {badge ? (
+                                  <Badge variant="outline" className={`px-1.5 py-0 text-[10px] ${badge.tone}`}>{badge.label}</Badge>
+                                ) : category.badge ? (
+                                  <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">{category.badge}</Badge>
+                                ) : null}
+                              </span>
+                              <span className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-muted-foreground">{category.subtitle}</span>
+                            </span>
+                            <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition group-hover:translate-x-0.5" />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
