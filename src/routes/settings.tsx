@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ArrowLeftRight,
   Banknote,
@@ -18,6 +18,7 @@ import {
   LayoutDashboard,
   ListChecks,
   LockKeyhole,
+  LogOut,
   Mail,
   MessageCircle,
   MonitorSmartphone,
@@ -26,11 +27,13 @@ import {
   Percent,
   Plus,
   Printer,
+  QrCode,
   ReceiptText,
   RefreshCw,
   Save,
   Send,
   ShieldCheck,
+  Smartphone,
   Stamp,
   Store,
   Trash2,
@@ -38,6 +41,7 @@ import {
   UserCog,
   Users,
   WalletCards,
+  Wrench,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
@@ -53,7 +57,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { useStore } from "@/lib/store";
-import { shoibLogin, shoibConnectPhone, shoibStatus, type ShoibWAState } from "@/lib/shoib";
+import * as XLSX from "xlsx";
+import {
+  getWhatsAppStatus,
+  connectWhatsAppQR,
+  connectWhatsAppPhone,
+  disconnectWhatsApp,
+  resetWhatsAppSession,
+  type WAStateUI,
+  type WAStatus,
+} from "@/lib/whatsapp-actions";
+import { runDueReminderCheckNow } from "@/lib/due-reminders-actions";
 import { setCurrencySymbol, type AccountType } from "@/lib/dummy-data";
 import { CURRENCIES } from "@/lib/currencies";
 import { useTheme } from "@/lib/theme";
@@ -62,7 +76,7 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/settings")({
   head: () => ({
     meta: [
-      { title: "Settings — UniPay Invoice Control" },
+      { title: "Settings — CN Invoice" },
       {
         name: "description",
         content:
@@ -75,6 +89,7 @@ export const Route = createFileRoute("/settings")({
 
 type SectionKey = keyof SettingsState;
 type ActiveKey = SectionKey | "accounts" | "fundManagement" | "import";
+type SettingsGroup = "Company Information" | "General Settings" | "Template Settings" | "Communication";
 type Category = {
   key: ActiveKey;
   title: string;
@@ -82,7 +97,9 @@ type Category = {
   icon: typeof Store;
   badge?: string;
   tone: string;
+  group: SettingsGroup;
 };
+const SETTINGS_GROUPS: SettingsGroup[] = ["Company Information", "General Settings", "Template Settings", "Communication"];
 
 type SettingsState = {
   business: Record<string, string | boolean>;
@@ -115,6 +132,21 @@ type CustomFieldDef = {
   alignment: "vertical" | "horizontal";
   placement: "top" | "bottom" | "total" | "end";
   inCalculation: boolean;
+};
+
+// Exported so pages that only need one section (e.g. the invoice view's
+// Template Settings toggles) can merge server data over the same defaults
+// shown here, instead of treating "no row saved yet" as everything-off.
+export const templateSettingsDefaults: Record<string, boolean> = {
+  showBankInEstimate: true, showAmountInWords: true, showBalanceInWords: true,
+  showNotesInLedger: true, enableAdjustmentInLedger: true, showCompanyNameBelowSignature: true,
+  showOldBalance: true, showAllPaymentDetails: true, showNotesInPdf: true,
+  showTermsInFullRow: true, autoSaveOnSharePrint: true, enablePaidStamp: true,
+  showTimeInDocuments: true, disableProductIfZeroStock: true, showAgentNameInInvoice: true,
+  enableWarehouseManagement: true, showHeaderAllPages: false, showAttachmentsInPdf: false,
+  showImageColumn: false, hideQuantityColumn: false, hideSrNoColumn: true,
+  hideHsnColumn: false, hideRateColumn: false, hideDiscountColumn: false,
+  hideTaxColumn: false, showSubtotal: false,
 };
 
 const defaults: SettingsState = {
@@ -284,8 +316,9 @@ const defaults: SettingsState = {
     ownerEmail: "owner@prestige.store",
     reminderTime: "10:00",
     outstandingReminderEnabled: false,
-    outstandingReminderDays: "7",
+    outstandingReminderInterval: "7",
     outstandingReminderMode: "whatsapp",
+    outstandingReminderReferral: false,
     outstandingReminderTemplate:
       "Dear #CompanyName, this is a reminder that payment of #InvoiceNumber (of #Balance) is due today. It might be busy with your work, but it would be appreciated if you could look into this. Please let me know if you have any queries.",
   },
@@ -308,6 +341,7 @@ const defaults: SettingsState = {
     shoibPassword: "",
     shoibToken: "",
     connectionStatus: "disconnected",
+    pairingBrandCode: "",
     invoiceMessage:
       "Hello {customer}, your invoice {invoice_no} of {amount} is ready. Please find the copy attached.",
     reminderMessage:
@@ -372,44 +406,41 @@ const defaults: SettingsState = {
     purchaseOrderNo: "Purchase Order No.", saleOrderNo: "Sale Order No.", saleReturnNo: "Sale Return No.",
     receiptNo: "Receipt No", deliveryNoteNo: "Delivery Note No.",
   },
-  templateSettings: {
-    showBankInEstimate: true, showAmountInWords: true, showBalanceInWords: true,
-    showNotesInLedger: true, enableAdjustmentInLedger: true, showCompanyNameBelowSignature: true,
-    showOldBalance: true, showAllPaymentDetails: true, showNotesInPdf: true,
-    showTermsInFullRow: true, autoSaveOnSharePrint: true, enablePaidStamp: true,
-    showTimeInDocuments: true, disableProductIfZeroStock: true, showAgentNameInInvoice: true,
-    enableWarehouseManagement: true, showHeaderAllPages: false, showAttachmentsInPdf: false,
-    showImageColumn: false, hideQuantityColumn: false, hideSrNoColumn: true,
-    hideHsnColumn: false, hideRateColumn: false, hideDiscountColumn: false,
-    hideTaxColumn: false, showSubtotal: false,
-  },
+  templateSettings: templateSettingsDefaults,
   customFields: { fields: [] },
 };
 
 const categories: Category[] = [
-  { key: "business", title: "Business Profile", subtitle: "Logo, GST, address", icon: Store, badge: "Main", tone: "text-primary bg-primary/10 ring-primary/20" },
-  { key: "invoice", title: "Invoice Setup", subtitle: "Columns, terms, QR", icon: ReceiptText, badge: "A-Z", tone: "text-sapphire bg-sapphire/10 ring-sapphire/20" },
-  { key: "tax", title: "Tax / GST / TDS", subtitle: "Rates and sections", icon: Percent, badge: "TDS", tone: "text-coral bg-coral/10 ring-coral/20" },
-  { key: "terms", title: "Terms & Condition", subtitle: "Per-document terms text", icon: FileSignature, tone: "text-jade bg-jade/10 ring-jade/20" },
-  { key: "accounts", title: "Accounts & Categories", subtitle: "Payment accounts & expense categories", icon: Landmark, tone: "text-orchid bg-orchid/10 ring-orchid/20" },
-  { key: "fundManagement", title: "Fund Management", subtitle: "Transfer money between accounts", icon: ArrowLeftRight, tone: "text-aqua bg-aqua/10 ring-aqua/20" },
-  { key: "whatsapp", title: "WhatsApp", subtitle: "Connect your account, message templates", icon: MessageCircle, tone: "text-jade bg-jade/10 ring-jade/20" },
-  { key: "numbering", title: "Prefix & Localization", subtitle: "Prefixes, country, currency, formats", icon: Hash, tone: "text-amber bg-amber/10 ring-amber/20" },
-  { key: "print", title: "Page & Print", subtitle: "A4, thermal, PDF", icon: Printer, tone: "text-jade bg-jade/10 ring-jade/20" },
-  { key: "renameFields", title: "Rename Field Name", subtitle: "Change field labels on invoices/documents", icon: PenLine, tone: "text-sapphire bg-sapphire/10 ring-sapphire/20" },
-  { key: "customFields", title: "Add Custom Fields", subtitle: "Add extra fields to documents", icon: Plus, tone: "text-jade bg-jade/10 ring-jade/20" },
-  { key: "templateSettings", title: "Template Settings", subtitle: "Show or hide fields and totals", icon: FileText, tone: "text-coral bg-coral/10 ring-coral/20" },
-  { key: "items", title: "Items & Stock", subtitle: "Products, units, alerts", icon: Boxes, tone: "text-orchid bg-orchid/10 ring-orchid/20" },
-  { key: "payment", title: "Payment", subtitle: "Cash, UPI, due", icon: WalletCards, tone: "text-aqua bg-aqua/10 ring-aqua/20" },
-  { key: "bank", title: "Bank / UPI", subtitle: "Invoice bank details", icon: Landmark, tone: "text-primary bg-primary/10 ring-primary/20" },
-  { key: "users", title: "Admin & Users", subtitle: "Roles and access", icon: ShieldCheck, badge: "Admin", tone: "text-coral bg-coral/10 ring-coral/20" },
-  { key: "notifications", title: "Alerts", subtitle: "Reminders and reports", icon: Bell, tone: "text-amber bg-amber/10 ring-amber/20" },
-  { key: "gmail", title: "Gmail / Email", subtitle: "SMTP templates", icon: Mail, badge: "Secret", tone: "text-sapphire bg-sapphire/10 ring-sapphire/20" },
-  { key: "backup", title: "Backup / Export", subtitle: "CSV, Excel, restore", icon: DatabaseBackup, tone: "text-orchid bg-orchid/10 ring-orchid/20" },
-  { key: "homeScreen", title: "Home Screen", subtitle: "Dashboard widgets, monthly or all-time", icon: LayoutDashboard, tone: "text-sapphire bg-sapphire/10 ring-sapphire/20" },
-  { key: "import", title: "Import", subtitle: "Bulk-add clients and products from Excel", icon: Upload, tone: "text-jade bg-jade/10 ring-jade/20" },
-  { key: "appearance", title: "Appearance", subtitle: "Language and theme", icon: Palette, tone: "text-aqua bg-aqua/10 ring-aqua/20" },
-  { key: "security", title: "Security", subtitle: "Login and audit", icon: LockKeyhole, tone: "text-primary bg-primary/10 ring-primary/20" },
+  // Company Information
+  { key: "business", title: "Business Profile", subtitle: "Business details shown on documents: logo, GST, address and company info.", icon: Store, badge: "Main", tone: "text-primary bg-primary/10 ring-primary/20", group: "Company Information" },
+  { key: "bank", title: "Bank / UPI", subtitle: "Bank and UPI details shown on invoices so customers know where to pay.", icon: Landmark, tone: "text-primary bg-primary/10 ring-primary/20", group: "Company Information" },
+  { key: "tax", title: "Tax / GST / TDS", subtitle: "Set taxes and discounts for bills. Apply item-wise or on the full bill.", icon: Percent, badge: "TDS", tone: "text-coral bg-coral/10 ring-coral/20", group: "Company Information" },
+  { key: "terms", title: "Terms & Condition", subtitle: "Terms shown on documents. Set different text for invoices, estimates, purchases, etc.", icon: FileSignature, tone: "text-jade bg-jade/10 ring-jade/20", group: "Company Information" },
+  { key: "accounts", title: "Accounts & Categories", subtitle: "Create accounts for payments and expenses. Helps organize and track your money.", icon: Landmark, tone: "text-orchid bg-orchid/10 ring-orchid/20", group: "Company Information" },
+  { key: "fundManagement", title: "Fund Management", subtitle: "Transfer money between payment accounts. Keeps proper records of fund movement.", icon: ArrowLeftRight, tone: "text-aqua bg-aqua/10 ring-aqua/20", group: "Company Information" },
+  { key: "items", title: "Items & Stock", subtitle: "Products, units, low-stock alerts and warehouse tracking.", icon: Boxes, tone: "text-orchid bg-orchid/10 ring-orchid/20", group: "Company Information" },
+  { key: "payment", title: "Payment", subtitle: "Cash, UPI and due-payment defaults used when recording payments.", icon: WalletCards, tone: "text-aqua bg-aqua/10 ring-aqua/20", group: "Company Information" },
+  { key: "users", title: "Admin & Users", subtitle: "Add and manage staff members. Control what each person can access.", icon: ShieldCheck, badge: "Admin", tone: "text-coral bg-coral/10 ring-coral/20", group: "Company Information" },
+
+  // General Settings
+  { key: "numbering", title: "Prefix & Localization", subtitle: "Set invoice, estimate and other document numbers. Choose country, number & date format, currency.", icon: Hash, tone: "text-amber bg-amber/10 ring-amber/20", group: "General Settings" },
+  { key: "homeScreen", title: "Home Screen", subtitle: "Customize what you see on the home screen. Set widgets to show monthly or all-time data.", icon: LayoutDashboard, tone: "text-sapphire bg-sapphire/10 ring-sapphire/20", group: "General Settings" },
+  { key: "backup", title: "Backup / Export", subtitle: "Keep your data safe with a backup. Restore it anytime when needed.", icon: DatabaseBackup, tone: "text-orchid bg-orchid/10 ring-orchid/20", group: "General Settings" },
+  { key: "import", title: "Import", subtitle: "Import clients and products from Excel. Add data quickly into the app.", icon: Upload, tone: "text-jade bg-jade/10 ring-jade/20", group: "General Settings" },
+  { key: "notifications", title: "Alerts", subtitle: "Reminder message settings for unpaid bills and scheduled reports.", icon: Bell, tone: "text-amber bg-amber/10 ring-amber/20", group: "General Settings" },
+  { key: "print", title: "Page & Print", subtitle: "Set document printing preferences. Choose A4/A3 or thermal printer and paper size.", icon: Printer, tone: "text-jade bg-jade/10 ring-jade/20", group: "General Settings" },
+  { key: "appearance", title: "Appearance", subtitle: "Choose your preferred app language and theme.", icon: Palette, tone: "text-aqua bg-aqua/10 ring-aqua/20", group: "General Settings" },
+  { key: "security", title: "Security", subtitle: "Login methods, session timeout and audit log.", icon: LockKeyhole, tone: "text-primary bg-primary/10 ring-primary/20", group: "General Settings" },
+
+  // Template Settings
+  { key: "invoice", title: "Invoice Setup", subtitle: "Choose which columns, terms and QR code appear on your invoices.", icon: ReceiptText, badge: "A-Z", tone: "text-sapphire bg-sapphire/10 ring-sapphire/20", group: "Template Settings" },
+  { key: "renameFields", title: "Rename Field Name", subtitle: "Change field labels on invoices/documents. Use names that suit your business.", icon: PenLine, tone: "text-sapphire bg-sapphire/10 ring-sapphire/20", group: "Template Settings" },
+  { key: "customFields", title: "Add Custom Fields", subtitle: "Add extra fields to documents. Store more details if needed.", icon: Plus, tone: "text-jade bg-jade/10 ring-jade/20", group: "Template Settings" },
+  { key: "templateSettings", title: "Template Settings", subtitle: "Control what appears on invoices/documents. Show or hide fields and totals.", icon: FileText, tone: "text-coral bg-coral/10 ring-coral/20", group: "Template Settings" },
+
+  // Communication
+  { key: "whatsapp", title: "WhatsApp", subtitle: "Connect your account and set message templates.", icon: MessageCircle, tone: "text-jade bg-jade/10 ring-jade/20", group: "Communication" },
+  { key: "gmail", title: "Gmail / Email", subtitle: "SMTP connection and email templates.", icon: Mail, badge: "Secret", tone: "text-sapphire bg-sapphire/10 ring-sapphire/20", group: "Communication" },
 ];
 
 function SettingsPage() {
@@ -489,7 +520,7 @@ function SettingsPage() {
     <div className="space-y-5">
       <PageHeader
         title="Settings"
-        subtitle="UniPay-style complete control panel for invoice, tax, print, users, Gmail, WhatsApp and backup"
+        subtitle="Complete control panel for invoice, tax, print, users, Gmail, WhatsApp and backup"
         action={
           <Button asChild variant="outline">
             <Link to="/team"><ShieldCheck className="mr-1.5 h-4 w-4" />Admin Control</Link>
@@ -514,26 +545,33 @@ function SettingsPage() {
               </div>
               {loading && <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />}
             </div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-1">
-              {categories.map((category) => (
-                <button
-                  key={category.key}
-                  type="button"
-                  onClick={() => setActive(category.key)}
-                  className={`group flex min-h-[82px] items-center gap-3 rounded-lg border p-3 text-left transition hover:bg-muted/60 xl:min-h-0 ${active === category.key ? "border-primary bg-primary/5 shadow-sm" : "bg-card"}`}
-                >
-                  <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg ring-1 ${category.tone}`}>
-                    <category.icon className="h-5 w-5" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-1.5">
-                      <span className="truncate text-sm font-semibold leading-tight">{category.title}</span>
-                      {category.badge && <Badge variant="secondary" className="hidden px-1.5 py-0 text-[10px] sm:inline-flex">{category.badge}</Badge>}
-                    </span>
-                    <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{category.subtitle}</span>
-                  </span>
-                  <ChevronRight className="hidden h-4 w-4 text-muted-foreground xl:block" />
-                </button>
+            <div className="space-y-4">
+              {SETTINGS_GROUPS.map((group) => (
+                <div key={group}>
+                  <div className="mb-1.5 px-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{group}</div>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-1">
+                    {categories.filter((c) => c.group === group).map((category) => (
+                      <button
+                        key={category.key}
+                        type="button"
+                        onClick={() => setActive(category.key)}
+                        className={`group flex min-h-[88px] items-center gap-3.5 rounded-lg border p-3.5 text-left transition hover:bg-muted/60 xl:min-h-0 ${active === category.key ? "border-primary bg-primary/5 shadow-sm" : "bg-card"}`}
+                      >
+                        <span className={`grid h-12 w-12 shrink-0 place-items-center rounded-lg ring-1 ${category.tone}`}>
+                          <category.icon className="h-6 w-6" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center gap-1.5">
+                            <span className="truncate text-sm font-semibold leading-tight">{category.title}</span>
+                            {category.badge && <Badge variant="secondary" className="hidden px-1.5 py-0 text-[10px] sm:inline-flex">{category.badge}</Badge>}
+                          </span>
+                          <span className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-muted-foreground">{category.subtitle}</span>
+                        </span>
+                        <ChevronRight className="hidden h-5 w-5 shrink-0 text-muted-foreground xl:block" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           </CardContent>
@@ -868,7 +906,7 @@ function PrintPanel({ data, set }: PanelProps) {
     <Panel>
       <PanelHeader icon={Printer} title="Page layout and print" subtitle="A4, A5, thermal print, PDF margins and watermarks." />
       <Grid>
-        <SelectField label="Paper size" value={data.paper} onChange={(v) => set("paper", v)} options={["a4", "a5", "letter", "legal", "thermal-80mm", "thermal-58mm"]} />
+        <SelectField label="Paper size" value={data.paper} onChange={(v) => set("paper", v)} options={["a4", "a5", "a3", "letter", "legal", "thermal-80mm", "thermal-58mm"]} />
         <SelectField label="Orientation" value={data.orientation} onChange={(v) => set("orientation", v)} options={["portrait", "landscape"]} />
         <TextField label="Top margin (mm)" value={data.marginTop} onChange={(v) => set("marginTop", v)} type="number" />
         <TextField label="Right margin (mm)" value={data.marginRight} onChange={(v) => set("marginRight", v)} type="number" />
@@ -908,7 +946,7 @@ function PrintPanel({ data, set }: PanelProps) {
             <TextField label="Maximum character in single line" value={data.maxCharsPerLine} onChange={(v) => set("maxCharsPerLine", v)} type="number" />
           </Grid>
         ) : (
-          <SelectField label="Print Size" value={data.paper.toUpperCase()} onChange={(v) => set("paper", v.toLowerCase())} options={["A4", "A5", "LETTER", "LEGAL"]} />
+          <SelectField label="Print Size" value={data.paper.toUpperCase()} onChange={(v) => set("paper", v.toLowerCase())} options={["A4", "A5", "A3", "LETTER", "LEGAL"]} />
         )}
       </SettingBlock>
     </Panel>
@@ -1158,6 +1196,22 @@ function UsersPanel({ data, set }: PanelProps) {
 }
 
 function NotificationsPanel({ data, set }: PanelProps) {
+  const [checking, setChecking] = useState(false);
+  const [lastResult, setLastResult] = useState<{ checked: number; sent: number; skipped: number; failed: number } | null>(null);
+
+  const runCheckNow = async () => {
+    setChecking(true);
+    try {
+      const stats = await runDueReminderCheckNow();
+      setLastResult(stats);
+      toast.success(`Checked ${stats.checked} invoice(s) — ${stats.sent} sent, ${stats.skipped} skipped, ${stats.failed} failed`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not run the reminder check");
+    } finally {
+      setChecking(false);
+    }
+  };
+
   return (
     <Panel>
       <PanelHeader icon={Bell} title="Notifications and reminders" subtitle="Invoice, payment, stock and report alerts." />
@@ -1175,11 +1229,37 @@ function NotificationsPanel({ data, set }: PanelProps) {
       </ToggleGrid>
       <SettingBlock title="Outstanding Amount Reminder" icon={Bell}>
         <ToggleField label="Enable reminder" checked={data.outstandingReminderEnabled} onChange={(v) => set("outstandingReminderEnabled", v)} />
+        <p className="text-xs text-muted-foreground">
+          Runs automatically once a day. Every unpaid/partial invoice is checked against its <strong>current</strong> due date and balance each time —
+          editing a due date or clearing a payment takes effect on the very next run, with nothing to reset by hand.
+        </p>
         <Grid>
-          <TextField label="Remind after (days overdue)" value={data.outstandingReminderDays} onChange={(v) => set("outstandingReminderDays", v)} type="number" />
+          <SelectField
+            label="Repeat every"
+            value={data.outstandingReminderInterval}
+            onChange={(v) => set("outstandingReminderInterval", v)}
+            options={["7", "15", "alternate", "daily"]}
+            optionLabels={{ "7": "7 days", "15": "15 days", alternate: "Alternate days", daily: "Daily" }}
+          />
           <SelectField label="Message mode" value={data.outstandingReminderMode} onChange={(v) => set("outstandingReminderMode", v)} options={["whatsapp", "sms"]} />
         </Grid>
+        <ToggleField
+          label="Also send to referral number"
+          checked={data.outstandingReminderReferral}
+          onChange={(v) => set("outstandingReminderReferral", v)}
+        />
         <TextAreaField label="Reminder message template (use #CompanyName, #InvoiceNumber, #Balance)" value={data.outstandingReminderTemplate} onChange={(v) => set("outstandingReminderTemplate", v)} />
+        <div className="flex flex-wrap items-center gap-3">
+          <Button type="button" variant="outline" onClick={runCheckNow} disabled={checking}>
+            <RefreshCw className={`mr-1.5 h-4 w-4 ${checking ? "animate-spin" : ""}`} />
+            {checking ? "Checking…" : "Run check now"}
+          </Button>
+          {lastResult && (
+            <span className="text-xs text-muted-foreground">
+              Last run: {lastResult.checked} checked, {lastResult.sent} sent, {lastResult.skipped} skipped, {lastResult.failed} failed
+            </span>
+          )}
+        </div>
       </SettingBlock>
     </Panel>
   );
@@ -1218,80 +1298,174 @@ function WhatsAppPanel({ data, set, isAdmin }: PanelProps & { isAdmin: boolean }
     ["orderCompletedMode", "orderCompletedMessage", "Completed"],
     ["orderCancelledMode", "orderCancelledMessage", "Cancelled"],
   ];
-  const [connecting, setConnecting] = useState(false);
-  const [live, setLive] = useState<ShoibWAState | null>(null);
-  const [connectError, setConnectError] = useState<string | null>(null);
 
-  const connect = async () => {
-    if (!data.shoibUsername || !data.shoibPassword) return toast.error("Enter the Shoib account username & password first");
-    if (!data.number) return toast.error("Enter the WhatsApp number to connect first");
-    setConnecting(true);
-    setConnectError(null);
+  const statusLabel: Record<WAStatus, string> = {
+    disconnected: "Not connected",
+    connecting: "Connecting…",
+    qr_ready: "Scan the QR code",
+    pairing: "Enter the pairing code",
+    connected: "Connected",
+  };
+
+  const [wa, setWa] = useState<WAStateUI | null>(null);
+  const [mode, setMode] = useState<"qr" | "phone">("qr");
+  const [phoneInput, setPhoneInput] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [disconnectOpen, setDisconnectOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const refresh = async () => {
     try {
-      const { token } = await shoibLogin(data.shoibApiBase, data.shoibUsername, data.shoibPassword);
-      set("shoibToken", token);
-      await shoibConnectPhone(data.shoibApiBase, token, data.number.replace(/\D/g, ""));
-      const poll = async (attempt = 0) => {
-        const st = await shoibStatus(data.shoibApiBase, token);
-        setLive(st);
-        if (st.status === "connected") {
-          set("connectionStatus", "connected");
-          toast.success("WhatsApp connected! Remember to hit Save to keep this.");
-          setConnecting(false);
-          return;
-        }
-        if (st.lastError) {
-          setConnectError(st.lastError);
-          setConnecting(false);
-          return;
-        }
-        if (attempt < 60) setTimeout(() => poll(attempt + 1), 2000);
-        else { setConnecting(false); setConnectError("Timed out waiting for connection"); }
-      };
-      poll();
+      const state = await getWhatsAppStatus();
+      setWa(state);
+      return state;
     } catch (err) {
-      setConnectError(err instanceof Error ? err.message : "Could not connect");
-      setConnecting(false);
+      toast.error(err instanceof Error ? err.message : "Could not read WhatsApp status");
+      return null;
     }
+  };
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin]);
+
+  useEffect(() => {
+    if (pollRef.current) { clearTimeout(pollRef.current); pollRef.current = null; }
+    if (wa && (wa.status === "connecting" || wa.status === "qr_ready" || wa.status === "pairing")) {
+      pollRef.current = setTimeout(refresh, 3000);
+    }
+    return () => { if (pollRef.current) clearTimeout(pollRef.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wa?.status, wa?.qr, wa?.pairingCode]);
+
+  const runAction = async (fn: () => Promise<WAStateUI>) => {
+    setBusy(true);
+    try {
+      const state = await fn();
+      setWa(state);
+      return state;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "WhatsApp action failed");
+      return null;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const connectQR = () => runAction(() => connectWhatsAppQR());
+  const connectPhone = () => {
+    if (!phoneInput.trim()) { toast.error("Enter the WhatsApp number to connect first"); return; }
+    return runAction(() => connectWhatsAppPhone({ data: { phone: phoneInput, brandCode: data.pairingBrandCode || undefined } }));
+  };
+  const doDisconnect = async () => {
+    const state = await runAction(() => disconnectWhatsApp());
+    if (state) setDisconnectOpen(false);
+  };
+  const doReset = async () => {
+    const state = await runAction(() => resetWhatsAppSession());
+    if (state) { setResetOpen(false); setMode("qr"); }
   };
 
   return (
     <Panel>
-      <PanelHeader icon={MessageCircle} title="WhatsApp" subtitle="Connects via your own Shoib WhatsApp gateway using a phone-number pairing code — the same method as the Shoib app." />
+      <PanelHeader icon={MessageCircle} title="WhatsApp" subtitle="Link this app's own WhatsApp number to send invoices and reminders directly — no third-party gateway." />
       {!isAdmin && (
         <div className="rounded-lg border border-amber/40 bg-amber/10 p-3 text-xs">
-          Connection settings and the pairing action are locked to Admin only. You can still see and use the message templates below.
+          Connection settings and linking are locked to Admin only. You can still see and use the message templates below.
         </div>
       )}
-      <fieldset disabled={!isAdmin} className={!isAdmin ? "opacity-60" : undefined}>
-        <Grid>
-          <TextField label="WhatsApp display name" value={data.displayName} onChange={(v) => set("displayName", v)} />
-          <TextField label="WhatsApp number to connect" value={data.number} onChange={(v) => set("number", v)} placeholder="923001234567" />
-          <TextField label="Shoib API base URL" value={data.shoibApiBase} onChange={(v) => set("shoibApiBase", v)} />
-          <TextField label="Shoib account username" value={data.shoibUsername} onChange={(v) => set("shoibUsername", v)} />
-          <TextField label="Shoib account password" value={data.shoibPassword} onChange={(v) => set("shoibPassword", v)} type="password" />
-        </Grid>
-
-        <div className="mt-3 rounded-lg border bg-card p-4">
+      {isAdmin && (
+        <div className="rounded-lg border bg-card p-4">
           <div className="mb-3 flex items-center justify-between">
             <span className="font-semibold">Connection</span>
-            <Badge variant="outline" className={data.connectionStatus === "connected" ? "border-accent/40 text-accent" : "border-muted-foreground/30 text-muted-foreground"}>
-              {data.connectionStatus === "connected" ? "Connected" : "Not connected"}
+            <Badge variant="outline" className={wa?.status === "connected" ? "border-accent/40 text-accent" : "border-muted-foreground/30 text-muted-foreground"}>
+              {wa ? statusLabel[wa.status] : "Checking…"}
             </Badge>
           </div>
-          <Button type="button" onClick={connect} disabled={connecting}>
-            {connecting ? "Getting pairing code…" : "Get Pairing Code"}
-          </Button>
-          {live?.pairingCode && (
-            <div className="mt-4 rounded-lg bg-primary p-4 text-center text-primary-foreground">
-              <div className="text-xs font-semibold uppercase tracking-wider opacity-80">Your pairing code</div>
-              <div className="mt-1 font-display text-3xl font-bold tracking-[0.3em]">{live.pairingCode}</div>
-              <div className="mt-2 text-xs opacity-80">On the phone with this number: WhatsApp → Linked Devices → Link with phone number → enter this code.</div>
+
+          {wa?.status === "connected" ? (
+            <div className="space-y-3">
+              <div className="rounded-lg bg-accent/10 p-3 text-sm">
+                Linked to <span className="font-semibold">{wa.phoneNumber ?? "this device"}</span>
+                {wa.connectedAt && <span className="text-muted-foreground"> — since {new Date(wa.connectedAt).toLocaleString()}</span>}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="outline" onClick={() => setDisconnectOpen(true)} disabled={busy}>
+                  <LogOut className="mr-1.5 h-4 w-4" />Disconnect
+                </Button>
+                <Button type="button" variant="destructive" onClick={() => setResetOpen(true)} disabled={busy}>
+                  <Wrench className="mr-1.5 h-4 w-4" />Auto-fix / Reset
+                </Button>
+              </div>
             </div>
+          ) : (
+            <fieldset disabled={busy} className={busy ? "opacity-70" : undefined}>
+              <div className="mb-3 inline-flex rounded-lg border bg-muted/40 p-1">
+                <button type="button" onClick={() => setMode("qr")} className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${mode === "qr" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>
+                  <QrCode className="mr-1 inline h-3.5 w-3.5" />QR code
+                </button>
+                <button type="button" onClick={() => setMode("phone")} className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${mode === "phone" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>
+                  <Smartphone className="mr-1 inline h-3.5 w-3.5" />Phone number
+                </button>
+              </div>
+
+              {mode === "qr" ? (
+                wa?.qrDataUrl ? (
+                  <div className="flex flex-col items-center gap-2 rounded-lg border bg-white p-4">
+                    <img src={wa.qrDataUrl} alt="WhatsApp QR code" className="h-56 w-56" />
+                    <div className="text-xs text-muted-foreground">WhatsApp → Linked Devices → Link a Device → scan this</div>
+                  </div>
+                ) : (
+                  <Button type="button" onClick={connectQR} disabled={busy}>{busy ? "Starting…" : "Show QR code"}</Button>
+                )
+              ) : (
+                <div className="space-y-3">
+                  <Grid>
+                    <TextField label="WhatsApp number to connect" value={phoneInput} onChange={setPhoneInput} placeholder="923001234567" />
+                    <TextField label="Custom pairing-code name (optional, 8 characters)" value={data.pairingBrandCode ?? ""} onChange={(v) => set("pairingBrandCode", v.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8))} placeholder="PRESTIGE" />
+                  </Grid>
+                  <Button type="button" onClick={connectPhone} disabled={busy}>{busy ? "Getting pairing code…" : "Get pairing code"}</Button>
+                  {wa?.pairingCode && (
+                    <div className="rounded-lg bg-primary p-4 text-center text-primary-foreground">
+                      <div className="text-xs font-semibold uppercase tracking-wider opacity-80">Your pairing code</div>
+                      <div className="mt-1 font-display text-3xl font-bold tracking-[0.3em]">{wa.pairingCode}</div>
+                      <div className="mt-2 text-xs opacity-80">On that phone: WhatsApp → Linked Devices → Link with phone number → enter this code.</div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </fieldset>
           )}
-          {connectError && <div className="mt-3 text-sm text-destructive">{connectError}</div>}
+
+          {wa?.lastError && <div className="mt-3 text-sm text-destructive">{wa.lastError}</div>}
         </div>
-      </fieldset>
+      )}
+
+      <Dialog open={disconnectOpen} onOpenChange={setDisconnectOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Disconnect WhatsApp?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">Invoices and reminders will stop sending on WhatsApp until you link a number again. The linked-device session stays saved, so reconnecting won't need a new QR or pairing code.</p>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDisconnectOpen(false)} disabled={busy}>Cancel</Button>
+            <Button variant="destructive" disabled={busy} onClick={doDisconnect}>{busy ? "Disconnecting…" : "Disconnect"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={resetOpen} onOpenChange={setResetOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Reset WhatsApp session?</DialogTitle></DialogHeader>
+          <p className="text-sm text-destructive">This wipes the saved linked-device session completely and starts a fresh QR code. Use this only if the connection is stuck or broken and Disconnect didn't help.</p>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setResetOpen(false)} disabled={busy}>Cancel</Button>
+            <Button variant="destructive" disabled={busy} onClick={doReset}>{busy ? "Resetting…" : "Reset session"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <SettingBlock title="Message templates" icon={MessageCircle}>
         <TextAreaField label="Invoice message" value={data.invoiceMessage} onChange={(v) => set("invoiceMessage", v)} />
         <TextAreaField label="Payment reminder message" value={data.reminderMessage} onChange={(v) => set("reminderMessage", v)} />
@@ -1326,7 +1500,114 @@ function WhatsAppPanel({ data, set, isAdmin }: PanelProps & { isAdmin: boolean }
   );
 }
 
+// Every collection the app stores, with the store methods needed to back
+// it up, restore it, or wipe it. Kept in one place so Download/Export/
+// Import/Reset all agree on exactly what "all business data" means.
+function useBackupCollections() {
+  const store = useStore();
+  return [
+    { key: "customers", label: "Customers", rows: store.customers, add: store.addCustomer, del: store.deleteCustomer },
+    { key: "products", label: "Products", rows: store.products, add: store.addProduct, del: store.deleteProduct },
+    { key: "invoices", label: "Invoices", rows: store.invoices, add: store.addInvoice, del: store.deleteInvoice },
+    { key: "payments", label: "Payments", rows: store.payments, add: store.addPayment, del: store.deletePayment },
+    { key: "estimates", label: "Estimates", rows: store.estimates, add: store.addEstimate, del: store.deleteEstimate },
+    { key: "saleOrders", label: "Sale Orders", rows: store.saleOrders, add: store.addSaleOrder, del: store.deleteSaleOrder },
+    { key: "purchaseOrders", label: "Purchase Orders", rows: store.purchaseOrders, add: store.addPurchaseOrder, del: store.deletePurchaseOrder },
+    { key: "accounts", label: "Accounts", rows: store.accounts, add: store.addAccount, del: store.deleteAccount },
+    { key: "fundTransfers", label: "Fund Transfers", rows: store.fundTransfers, add: store.addFundTransfer, del: store.deleteFundTransfer },
+    { key: "deliveryNotes", label: "Delivery Notes", rows: store.deliveryNotes, add: store.addDeliveryNote, del: store.deleteDeliveryNote },
+    { key: "saleReturns", label: "Sale Returns", rows: store.saleReturns, add: store.addSaleReturn, del: store.deleteSaleReturn },
+    { key: "purchaseReturns", label: "Purchase Returns", rows: store.purchaseReturns, add: store.addPurchaseReturn, del: store.deletePurchaseReturn },
+    { key: "productionEntries", label: "Production Entries", rows: store.productionEntries, add: store.addProductionEntry, del: store.deleteProductionEntry },
+    { key: "subscriptions", label: "Subscriptions", rows: store.subscriptions, add: store.addSubscription, del: store.deleteSubscription },
+    { key: "commissions", label: "Commissions", rows: store.commissions, add: store.addCommission, del: store.deleteCommission },
+    { key: "whatsappLogs", label: "WhatsApp Logs", rows: store.whatsappLogs, add: null, del: store.deleteWhatsappLog },
+    { key: "expenses", label: "Expenses", rows: store.expenses, add: store.addExpense, del: store.deleteExpense },
+    { key: "purchases", label: "Purchases", rows: store.purchases, add: store.addPurchase, del: store.deletePurchase },
+  ] as const;
+}
+
 function BackupPanel({ data, set }: PanelProps) {
+  const collections = useBackupCollections();
+  const [importing, setImporting] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetConfirmText, setResetConfirmText] = useState("");
+  const [resetting, setResetting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const downloadBackup = () => {
+    const payload: Record<string, unknown> = {
+      app: "CN Invoice",
+      exportedAt: new Date().toISOString(),
+    };
+    for (const c of collections) payload[c.key] = c.rows;
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    set("lastBackup", new Date().toLocaleString());
+    toast.success("Backup downloaded");
+  };
+
+  const exportExcel = () => {
+    const wb = XLSX.utils.book_new();
+    for (const c of collections) {
+      const ws = XLSX.utils.json_to_sheet(c.rows as unknown as Record<string, unknown>[]);
+      XLSX.utils.book_append_sheet(wb, ws, c.label.slice(0, 31));
+    }
+    XLSX.writeFile(wb, `export-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    toast.success("Excel file downloaded");
+  };
+
+  const importBackup = async (file: File) => {
+    setImporting(true);
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text) as Record<string, any[]>;
+      let added = 0;
+      let skippedCollections = 0;
+      for (const c of collections) {
+        const rows = parsed[c.key];
+        if (!Array.isArray(rows) || rows.length === 0) continue;
+        if (!c.add) { skippedCollections++; continue; }
+        for (const row of rows) {
+          try {
+            await c.add(row as any);
+            added++;
+          } catch { /* skip a row that fails to import rather than aborting the whole restore */ }
+        }
+      }
+      toast.success(`Restored ${added} record${added === 1 ? "" : "s"} from backup${skippedCollections ? ` (${skippedCollections} collection(s) skipped)` : ""}`);
+    } catch {
+      toast.error("Could not read that backup file — is it a valid export from this app?");
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const resetData = async () => {
+    setResetting(true);
+    try {
+      let deleted = 0;
+      for (const c of collections) {
+        for (const row of c.rows as { id: string }[]) {
+          try {
+            await c.del(row.id);
+            deleted++;
+          } catch { /* skip a row that fails to delete rather than aborting the whole reset */ }
+        }
+      }
+      toast.success(`Deleted ${deleted} record${deleted === 1 ? "" : "s"}`);
+      setResetOpen(false);
+      setResetConfirmText("");
+    } finally {
+      setResetting(false);
+    }
+  };
+
   return (
     <Panel>
       <PanelHeader icon={DatabaseBackup} title="Backup, import and export" subtitle="Business data safety tools." />
@@ -1340,11 +1621,43 @@ function BackupPanel({ data, set }: PanelProps) {
         <ToggleField label="Include images" checked={data.includeImages} onChange={(v) => set("includeImages", v)} />
       </ToggleGrid>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <ActionButton icon={DatabaseBackup} label="Download backup" />
-        <ActionButton icon={Upload} label="Import backup" />
-        <ActionButton icon={FileBarChart} label="Export Excel" />
-        <ActionButton icon={Trash2} label="Reset data" danger />
+        <ActionButton icon={DatabaseBackup} label="Download backup" onClick={downloadBackup} />
+        <ActionButton icon={Upload} label={importing ? "Importing…" : "Import backup"} onClick={() => fileInputRef.current?.click()} disabled={importing} />
+        <ActionButton icon={FileBarChart} label="Export Excel" onClick={exportExcel} />
+        <ActionButton icon={Trash2} label="Reset data" danger onClick={() => setResetOpen(true)} />
       </div>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="application/json"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) importBackup(file);
+          e.target.value = "";
+        }}
+      />
+
+      <Dialog open={resetOpen} onOpenChange={(v) => { setResetOpen(v); if (!v) setResetConfirmText(""); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Reset all data?</DialogTitle></DialogHeader>
+          <div className="space-y-3 text-sm">
+            <p className="text-destructive">
+              This permanently deletes every customer, product, invoice, payment and other business record — there is no undo. Download a backup first if you're not sure.
+            </p>
+            <div className="grid gap-1.5">
+              <Label>Type DELETE to confirm</Label>
+              <Input value={resetConfirmText} onChange={(e) => setResetConfirmText(e.target.value)} placeholder="DELETE" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setResetOpen(false)}>Cancel</Button>
+            <Button variant="destructive" disabled={resetConfirmText !== "DELETE" || resetting} onClick={resetData}>
+              {resetting ? "Deleting…" : "Delete everything"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Panel>
   );
 }
@@ -1490,14 +1803,14 @@ function TextAreaField({ label, value, onChange }: { label: string; value: strin
   );
 }
 
-function SelectField({ label, value, onChange, options }: { label: string; value: string | boolean; onChange: (value: string) => void; options: string[] }) {
+function SelectField({ label, value, onChange, options, optionLabels }: { label: string; value: string | boolean; onChange: (value: string) => void; options: string[]; optionLabels?: Record<string, string> }) {
   return (
     <div className="grid gap-1.5">
       <Label>{label}</Label>
       <Select value={String(value)} onValueChange={onChange}>
         <SelectTrigger><SelectValue /></SelectTrigger>
         <SelectContent>
-          {options.map((option) => <SelectItem key={option} value={option}>{humanize(option)}</SelectItem>)}
+          {options.map((option) => <SelectItem key={option} value={option}>{optionLabels?.[option] ?? humanize(option)}</SelectItem>)}
         </SelectContent>
       </Select>
     </div>
@@ -1543,8 +1856,8 @@ function StatCard({ icon: Icon, label, value }: { icon: typeof Store; label: str
   );
 }
 
-function ActionButton({ icon: Icon, label, danger }: { icon: typeof Store; label: string; danger?: boolean }) {
-  return <Button variant={danger ? "destructive" : "outline"} onClick={() => toast.info(`${label} action ready`)}><Icon className="mr-1.5 h-4 w-4" />{label}</Button>;
+function ActionButton({ icon: Icon, label, danger, onClick, disabled }: { icon: typeof Store; label: string; danger?: boolean; onClick?: () => void; disabled?: boolean }) {
+  return <Button variant={danger ? "destructive" : "outline"} onClick={onClick ?? (() => toast.info(`${label} action ready`))} disabled={disabled}><Icon className="mr-1.5 h-4 w-4" />{label}</Button>;
 }
 
 function humanize(value: string) {

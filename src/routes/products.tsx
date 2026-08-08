@@ -23,7 +23,7 @@ import { toast } from "sonner";
 
 export const Route = createFileRoute("/products")({
   head: () => ({ meta: [
-    { title: "Product / Service — Prestige Invoice" },
+    { title: "Product / Service — CN Invoice" },
     { name: "description", content: "Manage your catalog of products, services and composite items with full pricing and stock." },
   ]}),
   component: ProductsPage,

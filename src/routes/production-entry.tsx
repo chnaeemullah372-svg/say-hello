@@ -16,7 +16,7 @@ import { toast } from "sonner";
 
 export const Route = createFileRoute("/production-entry")({
   head: () => ({ meta: [
-    { title: "Production Entry — Prestige Invoice" },
+    { title: "Production Entry — CN Invoice" },
     { name: "description", content: "Track manufacturing runs and raw materials consumed." },
   ]}),
   component: ProductionEntryPage,

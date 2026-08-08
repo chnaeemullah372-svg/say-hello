@@ -21,15 +21,19 @@ type Store = {
   subscriptions: Subscription[];
   commissions: Commission[];
   whatsappLogs: WhatsAppLog[];
+  deleteWhatsappLog: (id: string) => Promise<void>;
   expenses: Expense[];
   purchases: Purchase[];
   loading: boolean;
   addCustomer: (c: Omit<Customer, "id" | "balance"> & { balance?: number }) => Promise<Customer>;
   updateCustomer: (id: string, patch: Partial<Customer>) => Promise<void>;
+  deleteCustomer: (id: string) => Promise<void>;
   addProduct: (p: Omit<Product, "id">) => Promise<Product>;
   updateProduct: (id: string, patch: Partial<Product>) => Promise<void>;
+  deleteProduct: (id: string) => Promise<void>;
   addInvoice: (i: Omit<Invoice, "id" | "number"> & { number?: string }) => Promise<Invoice>;
   addPayment: (p: Omit<Payment, "id">) => Promise<Payment>;
+  deletePayment: (id: string) => Promise<void>;
   updateInvoice: (id: string, patch: Partial<Invoice>) => Promise<void>;
   deleteInvoice: (id: string) => Promise<void>;
   addEstimate: (e: Omit<Estimate, "id" | "number">) => Promise<Estimate>;
@@ -45,6 +49,7 @@ type Store = {
   updateAccount: (id: string, patch: Partial<Account>) => Promise<void>;
   deleteAccount: (id: string) => Promise<void>;
   addFundTransfer: (f: Omit<FundTransfer, "id">) => Promise<FundTransfer>;
+  deleteFundTransfer: (id: string) => Promise<void>;
   addDeliveryNote: (d: Omit<DeliveryNote, "id" | "number">) => Promise<DeliveryNote>;
   updateDeliveryNote: (id: string, patch: Partial<DeliveryNote>) => Promise<void>;
   deleteDeliveryNote: (id: string) => Promise<void>;
@@ -87,6 +92,7 @@ function customerFromRow(row: any): Customer {
     phone: row.phone ?? "",
     phone2: row.phone2 ?? undefined,
     whatsapp: row.whatsapp ?? undefined,
+    whatsapp2: row.whatsapp2 ?? undefined,
     email: row.email ?? undefined,
     website: row.website ?? undefined,
     region: row.region ?? undefined,
@@ -422,6 +428,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         phone: c.phone || null,
         phone2: c.phone2 || null,
         whatsapp: c.whatsapp || null,
+        whatsapp2: c.whatsapp2 || null,
         email: c.email || null,
         website: c.website || null,
         region: c.region || null,
@@ -469,6 +476,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (patch.phone !== undefined) dbPatch.phone = patch.phone || null;
       if (patch.phone2 !== undefined) dbPatch.phone2 = patch.phone2 || null;
       if (patch.whatsapp !== undefined) dbPatch.whatsapp = patch.whatsapp || null;
+      if (patch.whatsapp2 !== undefined) dbPatch.whatsapp2 = patch.whatsapp2 || null;
       if (patch.email !== undefined) dbPatch.email = patch.email || null;
       if (patch.website !== undefined) dbPatch.website = patch.website || null;
       if (patch.region !== undefined) dbPatch.region = patch.region || null;
@@ -506,6 +514,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const updated = customerFromRow(data);
         setCustomers((prev) => prev.map((c) => (c.id === id ? updated : c)));
       }
+    },
+
+    deleteCustomer: async (id) => {
+      const { error } = await supabase.from("customers").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      setCustomers((prev) => prev.filter((c) => c.id !== id));
     },
 
     addProduct: async (p) => {
@@ -565,6 +579,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
     },
 
+    deleteProduct: async (id) => {
+      const { error } = await supabase.from("products").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      setProducts((prev) => prev.filter((p) => p.id !== id));
+    },
+
     addInvoice: async (i) => {
       const { data: userData } = await supabase.auth.getUser();
       const { data, error } = await supabase.from("invoices").insert({
@@ -609,6 +629,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return np;
     },
 
+    deletePayment: async (id) => {
+      const { error } = await supabase.from("payments").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      setPayments((prev) => prev.filter((p) => p.id !== id));
+    },
+
     updateInvoice: async (id, patch) => {
       const dbPatch: Record<string, unknown> = {};
       if (patch.customerId !== undefined) dbPatch.customer_id = patch.customerId || null;
@@ -636,6 +662,39 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
 
     deleteInvoice: async (id) => {
+      // Deleting an invoice used to leave its Payment and Commission
+      // records behind as orphans, and never reversed the account-balance
+      // credit a payment made when it was recorded — so a deleted invoice
+      // could still be showing money collected/owed on the Payments and
+      // Fund Management pages. Reverse those side effects first.
+      const inv = invoices.find((i) => i.id === id);
+      if (inv) {
+        const relatedPayments = payments.filter((p) => p.invoiceNumber === inv.number);
+        for (const p of relatedPayments) {
+          const account = accounts.find((a) => a.accountType === "payment" && a.name === p.method);
+          if (account) {
+            await supabase.from("accounts").update({ current_balance: account.currentBalance - p.amount }).eq("id", account.id);
+          }
+          await supabase.from("payments").delete().eq("id", p.id);
+        }
+        if (relatedPayments.length) {
+          const deletedIds = new Set(relatedPayments.map((p) => p.id));
+          setPayments((prev) => prev.filter((p) => !deletedIds.has(p.id)));
+          setAccounts((prev) => prev.map((a) => {
+            const reversed = relatedPayments
+              .filter((p) => a.accountType === "payment" && a.name === p.method)
+              .reduce((s, p) => s + p.amount, 0);
+            return reversed ? { ...a, currentBalance: a.currentBalance - reversed } : a;
+          }));
+        }
+
+        const relatedCommissionIds = commissions.filter((c) => c.invoiceId === id).map((c) => c.id);
+        if (relatedCommissionIds.length) {
+          await supabase.from("commissions").delete().in("id", relatedCommissionIds);
+          setCommissions((prev) => prev.filter((c) => !relatedCommissionIds.includes(c.id)));
+        }
+      }
+
       const { error } = await supabase.from("invoices").delete().eq("id", id);
       if (error) throw new Error(error.message);
       setInvoices((prev) => prev.filter((i) => i.id !== id));
@@ -830,6 +889,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (d2) setAccounts((prev) => prev.map((a) => (a.id === to.id ? accountFromRow(d2) : a)));
       }
       return nf;
+    },
+
+    deleteFundTransfer: async (id) => {
+      const transfer = fundTransfers.find((f) => f.id === id);
+      if (transfer) {
+        const from = accounts.find((a) => a.id === transfer.fromAccountId);
+        const to = accounts.find((a) => a.id === transfer.toAccountId);
+        if (from) {
+          const { data: d1 } = await supabase.from("accounts").update({ current_balance: from.currentBalance + transfer.amount } as any).eq("id", from.id).select().single();
+          if (d1) setAccounts((prev) => prev.map((a) => (a.id === from.id ? accountFromRow(d1) : a)));
+        }
+        if (to) {
+          const { data: d2 } = await supabase.from("accounts").update({ current_balance: to.currentBalance - transfer.amount } as any).eq("id", to.id).select().single();
+          if (d2) setAccounts((prev) => prev.map((a) => (a.id === to.id ? accountFromRow(d2) : a)));
+        }
+      }
+      const { error } = await supabase.from("fund_transfers").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      setFundTransfers((prev) => prev.filter((f) => f.id !== id));
     },
 
     addDeliveryNote: async (d) => {
@@ -1061,6 +1139,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase.from("purchases").delete().eq("id", id);
       if (error) throw new Error(error.message);
       setPurchases((prev) => prev.filter((x) => x.id !== id));
+    },
+
+    deleteWhatsappLog: async (id) => {
+      const { error } = await supabase.from("whatsapp_logs").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      setWhatsappLogs((prev) => prev.filter((x) => x.id !== id));
     },
 
     getCustomer: (id) => customers.find((c) => c.id === id),

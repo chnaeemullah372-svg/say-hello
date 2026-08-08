@@ -31,3 +31,7 @@ dist-ssr
 *.sln
 *.sw?
 .env
+
+# WhatsApp session credentials — must persist across deploys on the server,
+# but never belongs in git (it's a live login, not app config).
+.whatsapp-session/

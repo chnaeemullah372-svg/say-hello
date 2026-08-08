@@ -5,7 +5,7 @@ import type { PurchaseOrder } from "@/lib/dummy-data";
 
 export const Route = createFileRoute("/purchase-orders")({
   head: () => ({ meta: [
-    { title: "Purchase Orders — Prestige Invoice" },
+    { title: "Purchase Orders — CN Invoice" },
     { name: "description", content: "Create and track digital purchase orders." },
   ]}),
   component: POPage,

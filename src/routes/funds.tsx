@@ -16,7 +16,7 @@ import { toast } from "sonner";
 
 export const Route = createFileRoute("/funds")({
   head: () => ({ meta: [
-    { title: "Fund Management — Prestige Invoice" },
+    { title: "Fund Management — CN Invoice" },
     { name: "description", content: "Manage bank, cash and wallet balances with transfers." },
   ]}),
   component: FundsPage,

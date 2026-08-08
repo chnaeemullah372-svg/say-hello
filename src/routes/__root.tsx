@@ -7,10 +7,9 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import appCss from "../styles.css?url";
-import { reportLovableError } from "../lib/lovable-error-reporting";
 import { getRuntimeSupabaseConfig } from "../lib/runtime-supabase-config";
 import { ThemeProvider } from "@/lib/theme";
 import { StoreProvider } from "@/lib/store";
@@ -43,9 +42,6 @@ function NotFoundComponent() {
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
-  useEffect(() => {
-    reportLovableError(error, { boundary: "tanstack_root_error_component" });
-  }, [error]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -77,16 +73,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Dashboard — Prestige Invoice" },
+      { title: "Dashboard — CN Invoice" },
       { name: "description", content: "Business overview: sales, purchases, payments, expenses and orders in one place." },
-      { property: "og:title", content: "Dashboard — Prestige Invoice" },
+      { property: "og:title", content: "Dashboard — CN Invoice" },
       { property: "og:description", content: "Business overview: sales, purchases, payments, expenses and orders in one place." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "Dashboard — Prestige Invoice" },
+      { name: "twitter:title", content: "Dashboard — CN Invoice" },
       { name: "twitter:description", content: "Business overview: sales, purchases, payments, expenses and orders in one place." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/bdb759f0-febe-477f-bd86-9e967c1e1135/id-preview-b6dc80f0--74c00902-3fff-448b-8e3d-26119eb600ce.lovable.app-1783689544520.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/bdb759f0-febe-477f-bd86-9e967c1e1135/id-preview-b6dc80f0--74c00902-3fff-448b-8e3d-26119eb600ce.lovable.app-1783689544520.png" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
@@ -108,6 +102,15 @@ function RootShell({ children }: { children: ReactNode }) {
   // app — see src/lib/runtime-supabase-config.ts for why this exists at
   // all. Must render before the app bundle hydrates.
   const runtimeConfigScript = `window.__RUNTIME_SUPABASE_CONFIG__ = ${JSON.stringify(getRuntimeSupabaseConfig())};`;
+
+  // Starts the once-a-day due-reminder heartbeat exactly once per server
+  // process, on the first request it handles after boot — this file only
+  // ever renders server-side, so window is never defined here in
+  // production, but the guard keeps it explicit and matches this
+  // codebase's .server.ts-import convention (see reminder-scheduler.server.ts).
+  if (typeof window === "undefined") {
+    void import("@/lib/reminder-scheduler.server").then((m) => m.ensureReminderSchedulerStarted());
+  }
   return (
     <html lang="en">
       <head>

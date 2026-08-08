@@ -22,7 +22,7 @@ import { StatusPill } from "@/components/StatusPill";
 
 export const Route = createFileRoute("/invoices/")({
   head: () => ({ meta: [
-    { title: "Invoices — Prestige Invoice" },
+    { title: "Invoices — CN Invoice" },
     { name: "description", content: "All your invoices — search by number, customer name, phone or reference." },
   ]}),
   component: InvoiceList,
@@ -51,7 +51,7 @@ function InvoiceList() {
   const enriched = useMemo(
     () => invoices.map((i) => ({
       ...i,
-      ...calcInvoiceTotals(i.items, i.taxRate, i.discountMode, i.discountValue),
+      ...calcInvoiceTotals(i.items, i.taxRate, i.discountMode, i.discountValue, i.shippingAmount),
       customer: customers.find((c) => c.id === i.customerId),
     })),
     [invoices, customers],
@@ -113,7 +113,7 @@ function InvoiceList() {
         }
       />
 
-      {/* UniPay-style top search bar */}
+      {/* Top search bar */}
       <Card className="border-border/70">
         <CardContent className="p-3 sm:p-4">
           <div className="relative">

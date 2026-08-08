@@ -1,19 +1,22 @@
 import { createFileRoute, Link, useParams } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Printer, ArrowLeft, Sparkles, Download, MessageCircle } from "lucide-react";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useStore } from "@/lib/store";
-import { calcInvoiceTotals, fmt } from "@/lib/dummy-data";
+import { calcInvoiceTotals, fmt, getCurrencySymbol } from "@/lib/dummy-data";
 import { numberToWords } from "@/lib/numberToWords";
 import { StatusPill } from "@/components/StatusPill";
 import { supabase } from "@/integrations/supabase/client";
 import { sendAndLogWhatsApp } from "@/lib/whatsapp";
+import { templateSettingsDefaults } from "@/routes/settings";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/invoices/$id")({
   head: () => ({ meta: [
-    { title: "Invoice — Prestige Invoice" },
+    { title: "Invoice — CN Invoice" },
     { name: "description", content: "Print-ready invoice view." },
   ]}),
   component: InvoiceView,
@@ -29,9 +32,12 @@ function InvoiceView() {
   const [business, setBusiness] = useState<Record<string, any>>({});
   const [bank, setBank] = useState<Record<string, any>>({});
   const [labels, setLabels] = useState<Record<string, string>>({});
-  const [tpl, setTpl] = useState<Record<string, boolean>>({});
+  const [tpl, setTpl] = useState<Record<string, boolean>>(templateSettingsDefaults);
   const [customFields, setCustomFields] = useState<{ id: string; fieldName: string; placement: string }[]>([]);
   const [printSettings, setPrintSettings] = useState<Record<string, any>>({});
+  const [numbering, setNumbering] = useState<Record<string, any>>({});
+  const [waSettings, setWaSettings] = useState<Record<string, any>>({});
+  const autoSentRef = useRef(false);
 
   useEffect(() => {
     if (typeof window !== "undefined" && window.location.search.includes("print=1")) {
@@ -44,14 +50,18 @@ function InvoiceView() {
       supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.templateSettings").maybeSingle(),
       supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.customFields").maybeSingle(),
       supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.print").maybeSingle(),
-    ]).then(([b, bk, rf, ts, cf, pr]) => {
+      supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.numbering").maybeSingle(),
+      supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.whatsapp").maybeSingle(),
+    ]).then(([b, bk, rf, ts, cf, pr, nb, wa]) => {
       if (b.data?.setting_value) setBusiness(b.data.setting_value as Record<string, any>);
       if (bk.data?.setting_value) setBank(bk.data.setting_value as Record<string, any>);
       if (rf.data?.setting_value) setLabels(rf.data.setting_value as Record<string, string>);
-      if (ts.data?.setting_value) setTpl(ts.data.setting_value as Record<string, boolean>);
+      if (ts.data?.setting_value) setTpl({ ...templateSettingsDefaults, ...(ts.data.setting_value as Record<string, boolean>) });
       const fields = (cf.data?.setting_value as { fields?: any[] } | null)?.fields;
       if (fields) setCustomFields(fields);
       if (pr.data?.setting_value) setPrintSettings(pr.data.setting_value as Record<string, any>);
+      if (nb.data?.setting_value) setNumbering(nb.data.setting_value as Record<string, any>);
+      if (wa.data?.setting_value) setWaSettings(wa.data.setting_value as Record<string, any>);
     });
   }, []);
 
@@ -60,7 +70,7 @@ function InvoiceView() {
   // @page rule at all, so the browser just used its own default (often
   // Letter, not the A4/A5/thermal size configured in the app).
   const PAGE_SIZE: Record<string, string> = {
-    a4: "A4", a5: "A5", letter: "letter", legal: "legal",
+    a4: "A4", a5: "A5", a3: "A3", letter: "letter", legal: "legal",
     "thermal-80mm": "80mm 297mm", "thermal-58mm": "58mm 297mm",
   };
   const pageCss = `@page { size: ${PAGE_SIZE[printSettings.paper] ?? "A4"} ${printSettings.orientation === "landscape" ? "landscape" : "portrait"}; margin: ${printSettings.marginTop ?? 12}mm ${printSettings.marginRight ?? 10}mm ${printSettings.marginBottom ?? 12}mm ${printSettings.marginLeft ?? 10}mm; }`;
@@ -71,26 +81,73 @@ function InvoiceView() {
 
   const customer = inv ? customers.find((c) => c.id === inv.customerId) : undefined;
 
+  // jsPDF's default font can't render most non-ASCII currency glyphs (₹
+  // came out as a garbled superscript-1) — fall back to a plain-ASCII
+  // label in the PDF only; the on-screen/print view is unaffected. Shared
+  // by "Download PDF" and the WhatsApp document attachment below so both
+  // produce the exact same file.
+  const buildPdfDoc = () => {
+    if (!inv) return null;
+    const totals = calcInvoiceTotals(inv.items, inv.taxRate, inv.discountMode, inv.discountValue, inv.shippingAmount);
+    const balance = totals.total - inv.paid;
+    const pdfSymbol = /^[\x00-\x7F]*$/.test(getCurrencySymbol()) ? getCurrencySymbol() : "Rs";
+    const pdfFmt = (n: number) => `${pdfSymbol} ${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text(business.businessName || business.legalName || "Your Business", 14, 16);
+    doc.setFontSize(10);
+    doc.text(`Invoice ${inv.number}`, 14, 23);
+    doc.text(`Date: ${inv.date}`, 140, 16);
+    doc.text(`Due: ${inv.dueDate || "-"}`, 140, 21);
+    doc.text(`Bill To: ${customer?.name || ""}`, 14, 30);
+    autoTable(doc, {
+      startY: 36,
+      head: [["Description", "Qty", "Rate", "Disc", "Tax", "Amount"]],
+      body: inv.items.map((it) => [
+        it.name,
+        String(it.qty),
+        pdfFmt(it.rate),
+        `${it.discount}%`,
+        `${inv.taxRate}%`,
+        pdfFmt(it.qty * it.rate * (1 - it.discount / 100)),
+      ]),
+      styles: { fontSize: 9 },
+    });
+    const finalY = (doc as any).lastAutoTable.finalY + 8;
+    doc.setFontSize(10);
+    doc.text(`Discount: - ${pdfFmt(totals.discount)}`, 140, finalY);
+    doc.text(`Tax: ${pdfFmt(totals.tax)}`, 140, finalY + 5);
+    doc.text(`Shipping: ${pdfFmt(inv.shippingAmount ?? 0)}`, 140, finalY + 10);
+    doc.setFontSize(12);
+    doc.text(`Total: ${pdfFmt(totals.total)}`, 140, finalY + 18);
+    doc.text(`Balance due: ${pdfFmt(Math.max(0, balance))}`, 140, finalY + 25);
+    return doc;
+  };
+
+  // Sends the invoice PDF (plus the templated text) to the customer's
+  // primary and, if set, secondary WhatsApp number. Used both by the manual
+  // "Send WhatsApp" button/prompt and by the auto-send effect below when
+  // Settings -> WhatsApp -> "Send invoice on WhatsApp" is on.
   const sendWhatsApp = async () => {
-    if (!inv || !customer?.whatsapp) return;
+    if (!inv || !customer || (!customer.whatsapp && !customer.whatsapp2)) return;
     setWaSending(true);
     try {
-      const { data } = await supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.whatsapp").maybeSingle();
-      const wa = (data?.setting_value as Record<string, string>) ?? {};
-      const message = (wa.invoiceMessage || "Hello {customer}, your invoice {invoice_no} of {amount} is ready.")
+      const totals = calcInvoiceTotals(inv.items, inv.taxRate, inv.discountMode, inv.discountValue, inv.shippingAmount);
+      const message = (waSettings.invoiceMessage || "Hello {customer}, your invoice {invoice_no} of {amount} is ready.")
         .replace("{customer}", customer.name)
         .replace("{invoice_no}", inv.number)
-        .replace("{amount}", fmt(calcInvoiceTotals(inv.items, inv.taxRate, inv.discountMode, inv.discountValue).total));
+        .replace("{amount}", fmt(totals.total));
+      const doc = buildPdfDoc();
+      const pdfBase64 = doc?.output("datauristring").split(",")[1];
       const result = await sendAndLogWhatsApp({
-        apiBase: wa.shoibApiBase || "https://hatelecom.xyz/api",
-        token: wa.shoibToken || "",
         customerId: customer.id,
         customerName: customer.name,
-        toNumber: customer.whatsapp,
+        toNumbers: [customer.whatsapp, customer.whatsapp2],
         message,
         messageType: "invoice",
         referenceId: inv.id,
         referenceNumber: inv.number,
+        document: pdfBase64 ? { pdfBase64, fileName: `${inv.number}.pdf` } : undefined,
       });
       if (result.ok) toast.success(`Sent to ${customer.name} on WhatsApp`);
       else toast.error(result.error || "Could not send WhatsApp message");
@@ -100,9 +157,35 @@ function InvoiceView() {
     }
   };
 
+  // Fires once, right after a fresh invoice is created (invoices.new.tsx
+  // navigates here with ?new=1), when Settings -> WhatsApp -> "Send invoice
+  // on WhatsApp" is on — no confirmation prompt, matching what that toggle
+  // says it does.
+  useEffect(() => {
+    if (autoSentRef.current) return;
+    if (!inv || !customer) return;
+    if (!waSettings.sendInvoice) return;
+    if (!customer.whatsapp && !customer.whatsapp2) return;
+    if (typeof window === "undefined" || !window.location.search.includes("new=1")) return;
+    autoSentRef.current = true;
+    void sendWhatsApp();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inv, customer, waSettings.sendInvoice]);
+
   if (!inv) return <div className="p-10 text-center text-muted-foreground">Invoice not found. <Link to="/invoices" className="text-accent underline">Back to invoices</Link></div>;
-  const totals = calcInvoiceTotals(inv.items, inv.taxRate, inv.discountMode, inv.discountValue);
+  const totals = calcInvoiceTotals(inv.items, inv.taxRate, inv.discountMode, inv.discountValue, inv.shippingAmount);
   const balance = totals.total - inv.paid;
+
+  // "Download PDF" used to just call window.print() — identical to the
+  // Print button, and on most setups that opens the browser's print
+  // dialog rather than actually downloading a file. This builds and saves
+  // a real .pdf using the same library already used for Products exports.
+  const downloadPdf = () => {
+    const doc = buildPdfDoc();
+    if (!doc) return;
+    doc.save(`${inv.number}.pdf`);
+    toast.success("PDF downloaded");
+  };
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -112,7 +195,7 @@ function InvoiceView() {
           <AlertDialogHeader>
             <AlertDialogTitle>Send this invoice on WhatsApp?</AlertDialogTitle>
             <AlertDialogDescription>
-              Send {inv.number} to {customer?.name} at {customer?.whatsapp} via WhatsApp now?
+              Send {inv.number} to {customer?.name} at {[customer?.whatsapp, customer?.whatsapp2].filter(Boolean).join(" and ")} via WhatsApp now?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -126,11 +209,21 @@ function InvoiceView() {
       <div className="no-print mb-4 flex flex-wrap items-center justify-between gap-2">
         <Button asChild variant="ghost" size="sm"><Link to="/invoices"><ArrowLeft className="mr-1.5 h-4 w-4" />Back</Link></Button>
         <div className="flex gap-2">
-          {customer?.whatsapp && (
+          {(customer?.whatsapp || customer?.whatsapp2) && (
             <Button variant="outline" onClick={() => setWaPrompt(true)}><MessageCircle className="mr-1.5 h-4 w-4" />Send WhatsApp</Button>
           )}
-          <Button variant="outline" onClick={() => window.print()}><Download className="mr-1.5 h-4 w-4" />Download PDF</Button>
-          <Button onClick={() => { if (customer?.whatsapp) setWaPrompt(true); window.print(); }}><Printer className="mr-1.5 h-4 w-4" />Print</Button>
+          <Button variant="outline" onClick={downloadPdf}><Download className="mr-1.5 h-4 w-4" />Download PDF</Button>
+          <Button
+            onClick={() => {
+              if (customer?.whatsapp || customer?.whatsapp2) {
+                if (waSettings.sendInvoice) void sendWhatsApp();
+                else setWaPrompt(true);
+              }
+              window.print();
+            }}
+          >
+            <Printer className="mr-1.5 h-4 w-4" />Print
+          </Button>
         </div>
       </div>
 
@@ -250,7 +343,10 @@ function InvoiceView() {
               <dd className="font-display text-lg font-bold">{fmt(Math.max(0, balance))}</dd>
             </div>
             {tpl.showAmountInWords && (
-              <div className="pt-1 text-[11px] italic text-muted-foreground">{L("amountInWords", "Amount in words")}: {numberToWords(Math.round(totals.total))} only</div>
+              <div className="pt-1 text-[11px] italic text-muted-foreground">
+                {L("amountInWords", "Amount in words")}: {numbering.currencyMajorUnit ? `${numbering.currencyMajorUnit} ` : ""}
+                {numberToWords(Math.round(totals.total))} {numbering.suffix || "only"}
+              </div>
             )}
           </dl>
         </section>

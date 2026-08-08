@@ -5,7 +5,7 @@ import type { Purchase } from "@/lib/dummy-data";
 
 export const Route = createFileRoute("/purchases")({
   head: () => ({ meta: [
-    { title: "Purchases — Prestige Invoice" },
+    { title: "Purchases — CN Invoice" },
     { name: "description", content: "Record purchase bills received from suppliers." },
   ]}),
   component: PurchasesPage,

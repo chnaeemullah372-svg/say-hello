@@ -14,7 +14,7 @@ import { toast } from "sonner";
 
 export const Route = createFileRoute("/expenses")({
   head: () => ({ meta: [
-    { title: "Expenses — Prestige Invoice" },
+    { title: "Expenses — CN Invoice" },
     { name: "description", content: "Record and categorise business expenses." },
   ]}),
   component: ExpensesPage,

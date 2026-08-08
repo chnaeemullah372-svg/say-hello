@@ -95,7 +95,7 @@ export function AppSidebar() {
             <Sparkles className="h-4 w-4" />
           </div>
           <div className="min-w-0 group-data-[collapsible=icon]:hidden">
-            <div className="font-display text-base font-bold leading-tight text-sidebar-foreground">Prestige</div>
+            <div className="font-display text-base font-bold leading-tight text-sidebar-foreground">CN</div>
             <div className="text-[10px] uppercase tracking-widest text-sidebar-foreground/60">Invoice Suite</div>
           </div>
         </Link>

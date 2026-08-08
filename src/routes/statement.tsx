@@ -12,7 +12,7 @@ import { calcInvoiceTotals, fmt } from "@/lib/dummy-data";
 
 export const Route = createFileRoute("/statement")({
   head: () => ({ meta: [
-    { title: "Statement — Prestige Invoice" },
+    { title: "Statement — CN Invoice" },
     { name: "description", content: "A running ledger of every invoice and payment for one client, like a bank statement." },
   ]}),
   component: StatementPage,
@@ -39,7 +39,7 @@ function StatementPage() {
     const allRows: Row[] = [
       ...custInvoices.map((i) => ({
         date: i.date, kind: "invoice" as const, label: `Invoice ${i.number}`,
-        debit: calcInvoiceTotals(i.items, i.taxRate, i.discountMode, i.discountValue).total, credit: 0,
+        debit: calcInvoiceTotals(i.items, i.taxRate, i.discountMode, i.discountValue, i.shippingAmount).total, credit: 0,
       })),
       ...custPayments.map((p) => ({
         date: p.date, kind: "payment" as const, label: `Payment received (${p.method}) — ${p.invoiceNumber}`,

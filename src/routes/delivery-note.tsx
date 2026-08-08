@@ -5,7 +5,7 @@ import type { DeliveryNote } from "@/lib/dummy-data";
 
 export const Route = createFileRoute("/delivery-note")({
   head: () => ({ meta: [
-    { title: "Delivery Note — Prestige Invoice" },
+    { title: "Delivery Note — CN Invoice" },
     { name: "description", content: "Track goods dispatched to customers." },
   ]}),
   component: DeliveryNotePage,

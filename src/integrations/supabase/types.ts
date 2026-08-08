@@ -156,6 +156,7 @@ export type Database = {
           upi_id: string | null
           website: string | null
           whatsapp: string | null
+          whatsapp2: string | null
         }
         Insert: {
           address?: string | null
@@ -199,6 +200,7 @@ export type Database = {
           upi_id?: string | null
           website?: string | null
           whatsapp?: string | null
+          whatsapp2?: string | null
         }
         Update: {
           address?: string | null
@@ -242,6 +244,7 @@ export type Database = {
           upi_id?: string | null
           website?: string | null
           whatsapp?: string | null
+          whatsapp2?: string | null
         }
         Relationships: []
       }
@@ -483,6 +486,47 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_reminder_sends: {
+        Row: {
+          created_at: string
+          due_date_snapshot: string
+          error_message: string | null
+          id: string
+          invoice_id: string
+          reminder_date: string
+          status: string
+          wa_message_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          due_date_snapshot: string
+          error_message?: string | null
+          id?: string
+          invoice_id: string
+          reminder_date: string
+          status?: string
+          wa_message_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          due_date_snapshot?: string
+          error_message?: string | null
+          id?: string
+          invoice_id?: string
+          reminder_date?: string
+          status?: string
+          wa_message_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_reminder_sends_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
             referencedColumns: ["id"]
           },
         ]
@@ -968,6 +1012,7 @@ export type Database = {
           reference_id: string | null
           reference_number: string | null
           status: string
+          wa_message_id: string | null
           whatsapp_number: string
         }
         Insert: {
@@ -982,6 +1027,7 @@ export type Database = {
           reference_id?: string | null
           reference_number?: string | null
           status?: string
+          wa_message_id?: string | null
           whatsapp_number: string
         }
         Update: {
@@ -996,7 +1042,38 @@ export type Database = {
           reference_id?: string | null
           reference_number?: string | null
           status?: string
+          wa_message_id?: string | null
           whatsapp_number?: string
+        }
+        Relationships: []
+      }
+      whatsapp_session: {
+        Row: {
+          connected_at: string | null
+          id: string
+          last_error: string | null
+          pairing_brand_code: string
+          phone_number: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          connected_at?: string | null
+          id?: string
+          last_error?: string | null
+          pairing_brand_code?: string
+          phone_number?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          connected_at?: string | null
+          id?: string
+          last_error?: string | null
+          pairing_brand_code?: string
+          phone_number?: string | null
+          status?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -1005,7 +1082,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      next_document_number: {
+        Args: { p_prefix_key: string; p_next_key: string }
+        Returns: string
+      }
     }
     Enums: {
       app_role: "admin" | "manager" | "cashier" | "staff"
