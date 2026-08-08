@@ -160,14 +160,23 @@ function InvoiceView() {
   // Fires once, right after a fresh invoice is created (invoices.new.tsx
   // navigates here with ?new=1), when Settings -> WhatsApp -> "Send invoice
   // on WhatsApp" is on — no confirmation prompt, matching what that toggle
-  // says it does.
+  // says it does. Also fires unconditionally when the create screen's own
+  // "Send" button was tapped (?send=1) — that tap already is the user's
+  // confirmation, same as Print never asking before it opens the print
+  // dialog.
   useEffect(() => {
     if (autoSentRef.current) return;
     if (!inv || !customer) return;
-    if (!waSettings.sendInvoice) return;
-    if (!customer.whatsapp && !customer.whatsapp2) return;
-    if (typeof window === "undefined" || !window.location.search.includes("new=1")) return;
+    if (typeof window === "undefined") return;
+    const search = window.location.search;
+    const explicitSend = search.includes("send=1");
+    const autoSendOnCreate = waSettings.sendInvoice && search.includes("new=1");
+    if (!explicitSend && !autoSendOnCreate) return;
     autoSentRef.current = true;
+    if (!customer.whatsapp && !customer.whatsapp2) {
+      if (explicitSend) toast.error(`${customer.name} has no WhatsApp number on file`);
+      return;
+    }
     void sendWhatsApp();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inv, customer, waSettings.sendInvoice]);

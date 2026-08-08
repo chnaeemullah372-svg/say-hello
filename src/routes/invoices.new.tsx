@@ -2,15 +2,19 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Plus, Trash2, Send, Save, Printer, Eye, Calendar,
-  Barcode, Package, MoreVertical, ArrowLeft, PencilLine, ChevronDown, ChevronUp,
+  Barcode, Package, MoreVertical, ArrowLeft, PencilLine, ChevronDown, ChevronUp, AlertTriangle,
+  Coins, FileOutput, ShoppingCart,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useStore } from "@/lib/store";
 import { fmt, getCurrencySymbol, type InvoiceItem, type Product } from "@/lib/dummy-data";
 import { normalizeWhatsAppNumber } from "@/lib/phone";
@@ -62,12 +66,13 @@ function CreateInvoice() {
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState("Cash");
+  const [advanceApplied, setAdvanceApplied] = useState(0);
   const [commissionOpen, setCommissionOpen] = useState(false);
   const [commissionPct, setCommissionPct] = useState(0);
   const [commissionAgent, setCommissionAgent] = useState("");
 
   // Meta
-  const [period, setPeriod] = useState("0");
+  const [period, setPeriod] = useState("none");
   const [reference, setReference] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(new Date());
   const [dueDate, setDueDate] = useState<string>("");
@@ -81,10 +86,18 @@ function CreateInvoice() {
   // Dialogs
   const [custOpen, setCustOpen] = useState(false);
   const [addCustOpen, setAddCustOpen] = useState(false);
-  const [previewOpen, setPreviewOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [itemDlgOpen, setItemDlgOpen] = useState(false);
-  const emptyNewCust = { name: "", phone: "", whatsapp: "", email: "", address: "", referralName: "", referralPhone: "", referralEmail: "", referralAddress: "" };
+  const emptyNewCust = {
+    name: "", contactPerson: "", phone: "", phone2: "", whatsapp: "", whatsapp2: "", email: "", website: "", region: "",
+    gstin: "", businessId: "", panNo: "",
+    address: "", pinCode: "", city: "", state: "", country: "",
+    shippingSameAsBilling: true, shippingPinCode: "", shippingCity: "", shippingState: "", shippingCountry: "",
+    referralName: "", referralPhone: "", referralEmail: "", referralAddress: "",
+    maxCreditLimit: 0, paymentTerms: "No Due Date",
+    openingBalance: 0, openingDate: new Date().toISOString().slice(0, 10),
+    bankName: "", payableTo: "", bankAccountNo: "", ifscCode: "", upiId: "",
+  };
   const [newCust, setNewCust] = useState(emptyNewCust);
   const [newCustMore, setNewCustMore] = useState(false);
   const [isEditingClient, setIsEditingClient] = useState(false);
@@ -132,7 +145,26 @@ function CreateInvoice() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Just the business name, for the Preview/Duplicate PDF header — the full
+  // template-driven rendering (logo, bank details, custom fields, paper
+  // size) lives on the saved-invoice view; this is a draft, so it's a
+  // lighter document by design.
+  const [businessName, setBusinessName] = useState("Your Business");
+  useEffect(() => {
+    supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.business").maybeSingle()
+      .then(({ data }) => {
+        const b = (data?.setting_value as Record<string, string>) ?? {};
+        if (b.businessName || b.legalName) setBusinessName(b.businessName || b.legalName);
+      });
+  }, []);
+
   const customer = customers.find((c) => c.id === customerId);
+
+  // A negative balance means the customer has already paid us more than
+  // they owe (an advance/credit) — that's what this band lets them draw
+  // down against a new invoice instead of collecting a second payment.
+  const availableAdvance = customer && customer.balance < 0 ? -customer.balance : 0;
+  useEffect(() => { setAdvanceApplied(0); }, [customerId]);
 
   const baseAmount = useMemo(
     () => items.reduce((s, it) => s + it.qty * it.rate * (1 - it.discount / 100), 0),
@@ -144,6 +176,66 @@ function CreateInvoice() {
   const total = taxable + taxAmount + shippingAmount;
   const commissionAmount = (total * commissionPct) / 100;
   const balance = Math.max(0, total - paymentAmount);
+
+  const toggleAdvance = () => {
+    if (advanceApplied > 0) {
+      setPaymentAmount((p) => Math.max(0, p - advanceApplied));
+      setAdvanceApplied(0);
+      return;
+    }
+    const amt = Math.min(availableAdvance, total);
+    if (amt <= 0) return;
+    setAdvanceApplied(amt);
+    setPaymentAmount((p) => p + amt);
+  };
+
+  // Shared by Preview (open in a new tab) and Duplicate PDF (download) — a
+  // real rendered document from the CURRENT draft, not the placeholder
+  // bullet-list this used to be. Draft-only, so it never touches the DB.
+  const buildDraftPdfDoc = async () => {
+    const { default: jsPDF } = await import("jspdf");
+    const autoTableModule = await import("jspdf-autotable");
+    const autoTable = autoTableModule.default;
+    const symbol = /^[\x00-\x7F]*$/.test(getCurrencySymbol()) ? getCurrencySymbol() : "Rs";
+    const money = (n: number) => `${symbol} ${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text(businessName, 14, 16);
+    doc.setFontSize(10);
+    doc.text(editingInvoice ? editingInvoice.number : "Draft", 14, 23);
+    doc.text(`Date: ${invoiceDate.toISOString().slice(0, 10)}`, 140, 16);
+    doc.text(`Due: ${dueDate || "-"}`, 140, 21);
+    doc.text(`Bill To: ${customer?.name || ""}`, 14, 30);
+    autoTable(doc, {
+      startY: 36,
+      head: [["Description", "Qty", "Rate", "Disc", "Amount"]],
+      body: items.map((it) => [it.name, String(it.qty), money(it.rate), `${it.discount}%`, money(it.qty * it.rate * (1 - it.discount / 100))]),
+      styles: { fontSize: 9 },
+    });
+    const finalY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+    doc.setFontSize(10);
+    doc.text(`Discount: - ${money(discountAmount)}`, 140, finalY);
+    doc.text(`Tax: ${money(taxAmount)}`, 140, finalY + 5);
+    doc.text(`Shipping: ${money(shippingAmount)}`, 140, finalY + 10);
+    doc.setFontSize(12);
+    doc.text(`Total: ${money(total)}`, 140, finalY + 18);
+    doc.text(`Balance due: ${money(balance)}`, 140, finalY + 25);
+    return doc;
+  };
+
+  const previewPdf = async () => {
+    if (!items.length) return toast.error("Add at least one item first");
+    const doc = await buildDraftPdfDoc();
+    window.open(doc.output("bloburl"), "_blank");
+  };
+
+  const duplicatePdf = async () => {
+    if (!items.length) return toast.error("Add at least one item first");
+    const doc = await buildDraftPdfDoc();
+    doc.save(`${editingInvoice ? editingInvoice.number : "invoice-draft"}.pdf`);
+    toast.success("PDF downloaded");
+  };
 
   const openNewItem = () => { setEditingIndex(null); setItemDlgOpen(true); };
   const openEditItem = (i: number) => { setEditingIndex(i); setItemDlgOpen(true); };
@@ -159,7 +251,7 @@ function CreateInvoice() {
 
   const removeLine = (i: number) => setItems((p) => p.filter((_, idx) => idx !== i));
 
-  const save = async (opts: { print?: boolean } = {}) => {
+  const save = async (opts: { print?: boolean; send?: boolean } = {}) => {
     if (!customerId) return toast.error("Please select a client (Bill To)");
     if (!items.length) return toast.error("Add at least one item");
     if (saving) return;
@@ -242,17 +334,32 @@ function CreateInvoice() {
       // An initial payment taken while creating the invoice now creates a
       // real Payments record too (previously it only touched the invoice's
       // own `paid` field, so the Payments ledger never agreed with it).
+      // Any amount drawn from the client's advance/credit is split out —
+      // that money was already received earlier, so it settles the
+      // invoice's balance without going into a payment-method account a
+      // second time; only genuinely new cash does that.
       if (paymentAmount > 0 && isNew) {
-        addPayment({ invoiceNumber, customerName: customer?.name ?? "", amount: paymentAmount, method: paymentMethod, date: invoiceDate.toISOString().slice(0, 10) })
-          .catch(() => toast.error("Invoice saved, but the payment record could not be created"));
-        const account = accounts.find((a) => a.accountType === "payment" && a.name === paymentMethod);
-        if (account) {
-          updateAccount(account.id, { currentBalance: account.currentBalance + paymentAmount })
-            .catch(() => toast.error("Payment saved, but the account balance could not be updated"));
+        const freshAmount = Math.max(0, paymentAmount - advanceApplied);
+        if (advanceApplied > 0) {
+          addPayment({ invoiceNumber, customerName: customer?.name ?? "", amount: advanceApplied, method: "Advance Adjustment", date: invoiceDate.toISOString().slice(0, 10) })
+            .catch(() => toast.error("Invoice saved, but the advance-payment record could not be created"));
+          if (customer) {
+            updateCustomer(customer.id, { balance: customer.balance + advanceApplied })
+              .catch(() => toast.error("Invoice saved, but the client's advance balance could not be updated"));
+          }
+        }
+        if (freshAmount > 0) {
+          addPayment({ invoiceNumber, customerName: customer?.name ?? "", amount: freshAmount, method: paymentMethod, date: invoiceDate.toISOString().slice(0, 10) })
+            .catch(() => toast.error("Invoice saved, but the payment record could not be created"));
+          const account = accounts.find((a) => a.accountType === "payment" && a.name === paymentMethod);
+          if (account) {
+            updateAccount(account.id, { currentBalance: account.currentBalance + freshAmount })
+              .catch(() => toast.error("Payment saved, but the account balance could not be updated"));
+          }
         }
       }
 
-      setTimeout(() => nav({ to: "/invoices/$id", params: { id: invoiceId }, search: { new: 1, ...(opts.print ? { print: 1 } : {}) } as any }), 150);
+      setTimeout(() => nav({ to: "/invoices/$id", params: { id: invoiceId }, search: { new: 1, ...(opts.print ? { print: 1 } : {}), ...(opts.send ? { send: 1 } : {}) } as any }), 150);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not save invoice");
       setSaving(false);
@@ -279,15 +386,30 @@ function CreateInvoice() {
         >
           Tax &amp; Discount
         </button>
-        <button className="grid h-9 w-9 place-items-center rounded-full hover:bg-white/10" aria-label="More">
-          <MoreVertical className="h-5 w-5" />
-        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="grid h-9 w-9 place-items-center rounded-full hover:bg-white/10" aria-label="More">
+              <MoreVertical className="h-5 w-5" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => { toast.info("Currency is set in Settings → Tax / GST / TDS"); nav({ to: "/settings" }); }}>
+              <Coins className="mr-2 h-4 w-4" />Change Currency
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={duplicatePdf}>
+              <FileOutput className="mr-2 h-4 w-4" />Duplicate PDF
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => { toast.info("Add this invoice's items as a new purchase order"); nav({ to: "/purchase-orders" }); }}>
+              <ShoppingCart className="mr-2 h-4 w-4" />Generate Purchase Order
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <div className="mx-auto max-w-2xl bg-background">
         {/* Business name banner */}
         <div className="border-b bg-card py-2 text-center">
-          <div className="font-display text-sm font-semibold tracking-[0.25em] text-muted-foreground">PRESTIGE INVOICE</div>
+          <div className="font-display text-sm font-semibold tracking-[0.25em] text-muted-foreground">CN INVOICE</div>
         </div>
 
         {/* Invoice # + date */}
@@ -312,20 +434,22 @@ function CreateInvoice() {
             <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Due Period</div>
             <Select value={period} onValueChange={(v) => {
               setPeriod(v);
-              if (v === "0") setDueDate("");
+              if (v === "none") setDueDate("");
+              else if (v === "custom") { /* leave dueDate as-is — user picks it directly below */ }
               else setDueDate(new Date(Date.now() + Number(v) * 86400000).toISOString().slice(0, 10));
             }}>
               <SelectTrigger className="mt-1 h-8 border-0 bg-transparent px-0 shadow-none focus:ring-0">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="0">No Due Date</SelectItem>
+                <SelectItem value="none">No Due Date</SelectItem>
+                <SelectItem value="0">Same Day</SelectItem>
                 <SelectItem value="7">7 Days</SelectItem>
-                <SelectItem value="15">15 Days</SelectItem>
+                <SelectItem value="14">14 Days</SelectItem>
                 <SelectItem value="30">30 Days</SelectItem>
-                <SelectItem value="45">45 Days</SelectItem>
                 <SelectItem value="60">60 Days</SelectItem>
                 <SelectItem value="90">90 Days</SelectItem>
+                <SelectItem value="custom">Custom Date</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -389,28 +513,48 @@ function CreateInvoice() {
                     onClick={() => {
                       setNewCust({
                         name: customer.name ?? "",
+                        contactPerson: customer.contactPerson ?? "",
                         phone: customer.phone ?? "",
+                        phone2: customer.phone2 ?? "",
                         whatsapp: customer.whatsapp ?? "",
+                        whatsapp2: customer.whatsapp2 ?? "",
                         email: customer.email ?? "",
+                        website: customer.website ?? "",
+                        region: customer.region ?? "",
+                        gstin: customer.gstin ?? "",
+                        businessId: customer.businessId ?? "",
+                        panNo: customer.panNo ?? "",
                         address: customer.address ?? "",
+                        pinCode: customer.pinCode ?? "",
+                        city: customer.city ?? "",
+                        state: customer.state ?? "",
+                        country: customer.country ?? "",
+                        shippingSameAsBilling: customer.shippingSameAsBilling ?? true,
+                        shippingPinCode: customer.shippingPinCode ?? "",
+                        shippingCity: customer.shippingCity ?? "",
+                        shippingState: customer.shippingState ?? "",
+                        shippingCountry: customer.shippingCountry ?? "",
                         referralName: customer.referralName ?? "",
                         referralPhone: customer.referralPhone ?? "",
                         referralEmail: customer.referralEmail ?? "",
                         referralAddress: customer.referralAddress ?? "",
+                        maxCreditLimit: customer.maxCreditLimit ?? 0,
+                        paymentTerms: customer.paymentTerms ?? "No Due Date",
+                        openingBalance: customer.openingBalance ?? 0,
+                        openingDate: customer.openingDate ?? new Date().toISOString().slice(0, 10),
+                        bankName: customer.bankName ?? "",
+                        payableTo: customer.payableTo ?? "",
+                        bankAccountNo: customer.bankAccountNo ?? "",
+                        ifscCode: customer.ifscCode ?? "",
+                        upiId: customer.upiId ?? "",
                       });
+                      setNewCustMore(true);
                       setIsEditingClient(true);
                       setAddCustOpen(true);
                     }}
                     className="rounded-md bg-accent/25 px-2.5 py-1 text-[11px] font-semibold text-accent-foreground"
                   >
                     Edit Client
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCustOpen(true)}
-                    className="rounded-md bg-destructive/15 px-2.5 py-1 text-[11px] font-semibold text-destructive"
-                  >
-                    Change client
                   </button>
                 </div>
               </div>
@@ -589,6 +733,25 @@ function CreateInvoice() {
           <span className="text-sm font-bold uppercase tracking-widest">Total</span>
           <span className="font-display text-lg font-bold tabular-nums">{fmt(total)}</span>
         </div>
+
+        {/* Adjust Payment from Advance Amount — only shown when the client
+            actually has credit on file (a negative balance = they've paid
+            us more than they owe). */}
+        {availableAdvance > 0 && (
+          <button
+            type="button"
+            onClick={toggleAdvance}
+            className="flex w-full items-center justify-between border-b bg-accent/15 px-4 py-2.5 text-left text-accent-foreground"
+          >
+            <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest">
+              <Plus className={`h-3.5 w-3.5 transition ${advanceApplied > 0 ? "rotate-45" : ""}`} />
+              Adjust Payment from Advance Amount
+            </span>
+            <span className="font-semibold tabular-nums">
+              {advanceApplied > 0 ? `- ${fmt(advanceApplied)}` : fmt(availableAdvance)}
+            </span>
+          </button>
+        )}
 
         {/* Payment */}
         <div className="border-b bg-card">
@@ -780,13 +943,14 @@ function CreateInvoice() {
         <div className="mx-auto grid max-w-2xl grid-cols-4">
           {[
             { icon: Save, label: saving ? "Saving…" : "Save", onClick: () => save() },
-            { icon: Send, label: "Send", onClick: () => toast.info("Send: backend pending") },
+            { icon: Send, label: "Send", onClick: () => save({ send: true }) },
             { icon: Printer, label: "Print", onClick: () => save({ print: true }) },
             // Preview must never write anything — it used to call the same
             // save() path as the Save button, so tapping it actually
             // created a real invoice (consuming a number) instead of just
-            // showing what would be saved.
-            { icon: Eye, label: "Preview", onClick: () => setPreviewOpen(true) },
+            // showing what would be saved. It now renders the actual PDF
+            // from the current draft instead of a plain bullet-point recap.
+            { icon: Eye, label: "Preview", onClick: previewPdf },
           ].map((a) => (
             <button
               key={a.label}
@@ -801,40 +965,6 @@ function CreateInvoice() {
           ))}
         </div>
       </div>
-
-      {/* Preview — a read-only look at what Save would create, no writes */}
-      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
-          <DialogHeader><DialogTitle>Invoice preview</DialogTitle></DialogHeader>
-          <div className="space-y-4 text-sm">
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Bill To</div>
-              <div className="font-semibold">{customer?.name || "No client selected"}</div>
-            </div>
-            <div className="divide-y rounded-lg border">
-              {items.length === 0 && <div className="px-3 py-4 text-center text-xs text-muted-foreground">No items added yet</div>}
-              {items.map((it, i) => (
-                <div key={i} className="flex items-center justify-between gap-3 px-3 py-2">
-                  <div className="min-w-0 flex-1 truncate">{it.name || "Untitled"} <span className="text-muted-foreground">× {it.qty}</span></div>
-                  <div className="shrink-0 font-medium tabular-nums">{fmt(it.qty * it.rate * (1 - it.discount / 100))}</div>
-                </div>
-              ))}
-            </div>
-            <div className="space-y-1 rounded-lg border p-3">
-              <div className="flex justify-between"><span className="text-muted-foreground">Base amount</span><span className="tabular-nums">{fmt(baseAmount)}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Discount</span><span className="tabular-nums">- {fmt(discountAmount)}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Tax</span><span className="tabular-nums">{fmt(taxAmount)}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Shipping</span><span className="tabular-nums">{fmt(shippingAmount)}</span></div>
-              <div className="mt-1 flex justify-between border-t pt-1 font-display text-base font-bold"><span>Total</span><span className="tabular-nums">{fmt(total)}</span></div>
-            </div>
-            {notes && <div><div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Notes</div><div>{notes}</div></div>}
-            {terms && <div><div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Terms</div><div className="whitespace-pre-wrap text-xs text-muted-foreground">{terms}</div></div>}
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setPreviewOpen(false)}>Close</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Client picker */}
       <Dialog open={shipAddrOpen} onOpenChange={setShipAddrOpen}>
@@ -884,8 +1014,18 @@ function CreateInvoice() {
           <DialogHeader><DialogTitle>{isEditingClient ? "Edit client" : "Quick add client"}</DialogTitle></DialogHeader>
           <div className="grid gap-3">
             <div className="grid gap-1.5"><Label>Customer Name</Label><Input autoFocus value={newCust.name} onChange={(e) => setNewCust({ ...newCust, name: e.target.value })} placeholder="Full name" /></div>
-            <div className="grid gap-1.5"><Label>Customer Contact Number</Label><Input value={newCust.phone} onChange={(e) => setNewCust({ ...newCust, phone: e.target.value })} placeholder="+92 300 …" /></div>
-            <div className="grid gap-1.5"><Label>Customer WhatsApp Number</Label><Input value={newCust.whatsapp} onChange={(e) => setNewCust({ ...newCust, whatsapp: e.target.value })} placeholder="+92 300 …" /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-1.5"><Label>Contact Person</Label><Input value={newCust.contactPerson} onChange={(e) => setNewCust({ ...newCust, contactPerson: e.target.value })} /></div>
+              <div className="grid gap-1.5"><Label>Customer Contact Number</Label><Input value={newCust.phone} onChange={(e) => setNewCust({ ...newCust, phone: e.target.value })} placeholder="+92 300 …" /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-1.5"><Label>Contact Number 2</Label><Input value={newCust.phone2} onChange={(e) => setNewCust({ ...newCust, phone2: e.target.value })} /></div>
+              <div className="grid gap-1.5"><Label>Customer WhatsApp Number</Label><Input value={newCust.whatsapp} onChange={(e) => setNewCust({ ...newCust, whatsapp: e.target.value })} placeholder="+92 300 …" /></div>
+            </div>
+            <div className="grid gap-1.5">
+              <Label>WhatsApp 2 (optional)</Label>
+              <Input value={newCust.whatsapp2} onChange={(e) => setNewCust({ ...newCust, whatsapp2: e.target.value })} placeholder="+92 300 … — invoices and reminders also go here" />
+            </div>
             <div className="grid gap-1.5"><Label>Referral Name <span className="text-xs text-muted-foreground">(optional)</span></Label><Input value={newCust.referralName} onChange={(e) => setNewCust({ ...newCust, referralName: e.target.value })} placeholder="Who referred them" /></div>
             <div className="grid gap-1.5"><Label>Referral Contact Number <span className="text-xs text-muted-foreground">(optional)</span></Label><Input value={newCust.referralPhone} onChange={(e) => setNewCust({ ...newCust, referralPhone: e.target.value })} placeholder="+92 300 …" /></div>
 
@@ -896,12 +1036,85 @@ function CreateInvoice() {
 
             {newCustMore && (
               <div className="grid gap-3 rounded-md border bg-muted/30 p-3">
-                <div className="grid gap-1.5"><Label>Customer Email</Label><Input type="email" value={newCust.email} onChange={(e) => setNewCust({ ...newCust, email: e.target.value })} placeholder="name@gmail.com" /></div>
-                <div className="grid gap-1.5"><Label>Customer Address</Label><Textarea rows={2} value={newCust.address} onChange={(e) => setNewCust({ ...newCust, address: e.target.value })} placeholder="Street, City" /></div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="grid gap-1.5"><Label>Customer Email</Label><Input type="email" value={newCust.email} onChange={(e) => setNewCust({ ...newCust, email: e.target.value })} placeholder="name@gmail.com" /></div>
+                  <div className="grid gap-1.5"><Label>Website</Label><Input value={newCust.website} onChange={(e) => setNewCust({ ...newCust, website: e.target.value })} placeholder="https://…" /></div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="grid gap-1.5"><Label>GSTIN / Tax ID</Label><Input value={newCust.gstin} onChange={(e) => setNewCust({ ...newCust, gstin: e.target.value })} /></div>
+                  <div className="grid gap-1.5"><Label>Business ID</Label><Input value={newCust.businessId} onChange={(e) => setNewCust({ ...newCust, businessId: e.target.value })} /></div>
+                </div>
+                <div className="grid gap-1.5"><Label>PAN No</Label><Input value={newCust.panNo} onChange={(e) => setNewCust({ ...newCust, panNo: e.target.value })} /></div>
+                <div className="grid gap-1.5"><Label>Region</Label><Input value={newCust.region} onChange={(e) => setNewCust({ ...newCust, region: e.target.value })} /></div>
+
+                <div className="border-t pt-3 grid gap-3">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Billing address</div>
+                  <Textarea rows={2} value={newCust.address} onChange={(e) => setNewCust({ ...newCust, address: e.target.value })} placeholder="Street address" />
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input value={newCust.city} onChange={(e) => setNewCust({ ...newCust, city: e.target.value })} placeholder="City" />
+                    <Input value={newCust.state} onChange={(e) => setNewCust({ ...newCust, state: e.target.value })} placeholder="State" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input value={newCust.pinCode} onChange={(e) => setNewCust({ ...newCust, pinCode: e.target.value })} placeholder="Pin code" />
+                    <Input value={newCust.country} onChange={(e) => setNewCust({ ...newCust, country: e.target.value })} placeholder="Country" />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <Checkbox id="inv-ship-same" checked={newCust.shippingSameAsBilling} onCheckedChange={(v) => setNewCust({ ...newCust, shippingSameAsBilling: !!v })} />
+                  <Label htmlFor="inv-ship-same" className="text-sm font-normal">Shipping address same as billing</Label>
+                </div>
+                {!newCust.shippingSameAsBilling && (
+                  <div className="grid gap-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <Input value={newCust.shippingCity} onChange={(e) => setNewCust({ ...newCust, shippingCity: e.target.value })} placeholder="Shipping city" />
+                      <Input value={newCust.shippingState} onChange={(e) => setNewCust({ ...newCust, shippingState: e.target.value })} placeholder="Shipping state" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Input value={newCust.shippingPinCode} onChange={(e) => setNewCust({ ...newCust, shippingPinCode: e.target.value })} placeholder="Shipping pin code" />
+                      <Input value={newCust.shippingCountry} onChange={(e) => setNewCust({ ...newCust, shippingCountry: e.target.value })} placeholder="Shipping country" />
+                    </div>
+                  </div>
+                )}
+
                 <div className="border-t pt-3 grid gap-3">
                   <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Referral details</div>
                   <div className="grid gap-1.5"><Label>Referral Email</Label><Input type="email" value={newCust.referralEmail} onChange={(e) => setNewCust({ ...newCust, referralEmail: e.target.value })} placeholder="referral@gmail.com" /></div>
                   <div className="grid gap-1.5"><Label>Referral Address</Label><Textarea rows={2} value={newCust.referralAddress} onChange={(e) => setNewCust({ ...newCust, referralAddress: e.target.value })} placeholder="Street, City" /></div>
+                </div>
+
+                <div className="border-t pt-3 grid gap-3">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Credit &amp; opening balance</div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="grid gap-1.5"><Label className="text-xs font-normal text-muted-foreground">Max Credit Limit</Label><Input type="number" value={newCust.maxCreditLimit} onChange={(e) => setNewCust({ ...newCust, maxCreditLimit: +e.target.value || 0 })} /></div>
+                    <div className="grid gap-1.5">
+                      <Label className="text-xs font-normal text-muted-foreground">Payment Terms</Label>
+                      <select
+                        value={newCust.paymentTerms}
+                        onChange={(e) => setNewCust({ ...newCust, paymentTerms: e.target.value })}
+                        className="h-9 rounded-md border bg-background px-3 text-sm"
+                      >
+                        {["No Due Date", "Due on Receipt", "Net 7", "Net 15", "Net 30", "Net 45", "Net 60"].map((v) => <option key={v} value={v}>{v}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="grid gap-1.5"><Label className="text-xs font-normal text-muted-foreground">Opening Balance</Label><Input type="number" value={newCust.openingBalance} onChange={(e) => setNewCust({ ...newCust, openingBalance: +e.target.value || 0 })} /></div>
+                    <div className="grid gap-1.5"><Label className="text-xs font-normal text-muted-foreground">Opening Date</Label><Input type="date" value={newCust.openingDate} onChange={(e) => setNewCust({ ...newCust, openingDate: e.target.value })} /></div>
+                  </div>
+                </div>
+
+                <div className="border-t pt-3 grid gap-3">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Bank details (optional)</div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input value={newCust.bankName} onChange={(e) => setNewCust({ ...newCust, bankName: e.target.value })} placeholder="Bank name" />
+                    <Input value={newCust.payableTo} onChange={(e) => setNewCust({ ...newCust, payableTo: e.target.value })} placeholder="Payable to" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input value={newCust.bankAccountNo} onChange={(e) => setNewCust({ ...newCust, bankAccountNo: e.target.value })} placeholder="Account number" />
+                    <Input value={newCust.ifscCode} onChange={(e) => setNewCust({ ...newCust, ifscCode: e.target.value })} placeholder="IFSC code" />
+                  </div>
+                  <Input value={newCust.upiId} onChange={(e) => setNewCust({ ...newCust, upiId: e.target.value })} placeholder="UPI ID" />
                 </div>
               </div>
             )}
@@ -911,7 +1124,11 @@ function CreateInvoice() {
             <Button variant="ghost" onClick={() => setAddCustOpen(false)}>Cancel</Button>
             <Button onClick={async () => {
               if (!newCust.name) return toast.error("Name required");
-              const payload = { ...newCust, whatsapp: newCust.whatsapp ? normalizeWhatsAppNumber(newCust.whatsapp) : "" };
+              const payload = {
+                ...newCust,
+                whatsapp: newCust.whatsapp ? normalizeWhatsAppNumber(newCust.whatsapp) : "",
+                whatsapp2: newCust.whatsapp2 ? normalizeWhatsAppNumber(newCust.whatsapp2) : "",
+              };
               try {
                 if (isEditingClient) {
                   await updateCustomer(customerId, payload);
@@ -976,7 +1193,14 @@ function ItemDialog({
   const [search, setSearch] = useState(false);
   const [addedCount, setAddedCount] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
   const nameRef = useRef<HTMLInputElement | null>(null);
+
+  const isDirty = name.trim() !== (initial?.name ?? "").trim() || qty !== (initial?.qty ?? 1) || rate !== (initial?.rate ?? 0) || description.trim() !== (initial?.description ?? "");
+  const requestClose = () => {
+    if (isDirty) setExitConfirmOpen(true);
+    else onOpenChange(false);
+  };
 
   const picked = products.find((p) => p.id === productId);
   const results = name
@@ -1067,7 +1291,8 @@ function ItemDialog({
 
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) requestClose(); }}>
       <DialogContent className="max-w-md gap-0 overflow-hidden p-0">
         {/* Icon header */}
         <div className="flex flex-col items-center gap-2 bg-muted/60 px-4 pb-3 pt-6">
@@ -1165,6 +1390,13 @@ function ItemDialog({
             </label>
           </div>
 
+          {picked && mode === "product" && qty > stock && (
+            <div className="flex items-center gap-1.5 border-b bg-destructive/10 px-4 py-2 text-xs font-medium text-destructive">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              Entered quantity exceeds available stock
+            </div>
+          )}
+
           {/* Code + Unit */}
           <div className="grid grid-cols-2 border-b">
             <label className="border-r px-4 py-2">
@@ -1216,7 +1448,7 @@ function ItemDialog({
         </div>
 
         <DialogFooter className="grid grid-cols-2 gap-2 border-t bg-muted/40 p-3">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+          <Button variant="outline" onClick={requestClose}>Close</Button>
           <Button className="bg-accent text-accent-foreground hover:bg-accent/90" onClick={submit}>
             {editing ? "Save" : addedCount > 0 ? "Add another" : "Add"}
           </Button>
@@ -1224,5 +1456,19 @@ function ItemDialog({
 
       </DialogContent>
     </Dialog>
+
+    <AlertDialog open={exitConfirmOpen} onOpenChange={setExitConfirmOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Unsaved changes</AlertDialogTitle>
+          <AlertDialogDescription>Are you sure you want to exit? What you've entered here hasn't been added yet.</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Keep editing</AlertDialogCancel>
+          <AlertDialogAction onClick={() => { setExitConfirmOpen(false); onOpenChange(false); }}>Discard &amp; exit</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
