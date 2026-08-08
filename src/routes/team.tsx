@@ -43,6 +43,7 @@ function TeamPage() {
   const [invite, setInvite] = useState({ name: "", email: "", phone: "", role: "staff" as Role });
   const [inviting, setInviting] = useState(false);
   const [lastActive, setLastActive] = useState<Record<string, string | null>>({});
+  const [lastActiveLoaded, setLastActiveLoaded] = useState(false);
 
   const roleByUser = useMemo(() => new Map(roles.map((r) => [r.user_id, r.role])), [roles]);
   const hasAnyRole = roles.length > 0;
@@ -62,12 +63,15 @@ function TeamPage() {
     }
     setProfiles(profileData || []);
     setRoles((roleData || []) as RoleRow[]);
-    getTeamLastActive().then(setLastActive).catch(() => {});
+    getTeamLastActive()
+      .then((map) => { setLastActive(map); setLastActiveLoaded(true); })
+      .catch((err) => { console.error("[team] Could not load last-active times", err); setLastActiveLoaded(false); });
   };
 
   useEffect(() => { load(); }, []);
 
   const formatLastActive = (userId: string) => {
+    if (!lastActiveLoaded) return "—";
     const iso = lastActive[userId];
     if (!iso) return "Never signed in";
     const diffMs = Date.now() - new Date(iso).getTime();

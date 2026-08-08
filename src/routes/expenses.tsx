@@ -67,14 +67,23 @@ function ExpensesPage() {
       // account), so Fund Management's balances only ever reflected the
       // Payments ledger, never actual spending. Reverse the old debit
       // before applying the new one so editing an expense doesn't
-      // double-count or leave a stale amount behind.
-      if (existing?.accountId) {
-        const oldAccount = accounts.find((a) => a.id === existing.accountId);
-        if (oldAccount) await updateAccount(oldAccount.id, { currentBalance: oldAccount.currentBalance + existing.amount });
-      }
-      if (accountId) {
+      // double-count or leave a stale amount behind. When the old and new
+      // account are the SAME one, that has to be a single net-delta
+      // update — two sequential updates would both read the same
+      // pre-edit balance and the second would silently overwrite the
+      // first's effect instead of building on it.
+      if (existing?.accountId && existing.accountId === accountId) {
         const account = accounts.find((a) => a.id === accountId);
-        if (account) await updateAccount(account.id, { currentBalance: account.currentBalance - amount });
+        if (account) await updateAccount(account.id, { currentBalance: account.currentBalance + existing.amount - amount });
+      } else {
+        if (existing?.accountId) {
+          const oldAccount = accounts.find((a) => a.id === existing.accountId);
+          if (oldAccount) await updateAccount(oldAccount.id, { currentBalance: oldAccount.currentBalance + existing.amount });
+        }
+        if (accountId) {
+          const account = accounts.find((a) => a.id === accountId);
+          if (account) await updateAccount(account.id, { currentBalance: account.currentBalance - amount });
+        }
       }
 
       if (editingId) { await updateExpense(editingId, { category, description, amount, date, accountId: accountId || undefined }); toast.success("Updated"); }
