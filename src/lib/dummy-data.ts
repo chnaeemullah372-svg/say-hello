@@ -126,7 +126,7 @@ export type FundTransfer = {
   date: string;
 };
 
-export type WhatsAppLogStatus = "pending" | "sent" | "failed";
+export type WhatsAppLogStatus = "pending" | "sent" | "delivered" | "read" | "failed";
 export type WhatsAppLog = {
   id: string;
   customerId?: string;
@@ -141,7 +141,7 @@ export type WhatsAppLog = {
   createdAt: string;
 };
 
-export type EstimateStatus = "open" | "accepted" | "declined" | "expired";
+export type EstimateStatus = "open" | "followup" | "negotiation" | "not_interested" | "accepted";
 export type Estimate = {
   id: string;
   number: string;
@@ -155,6 +155,7 @@ export type Estimate = {
   shippingAmount?: number;
   notes?: string;
   status: EstimateStatus;
+  invoiceId?: string;
 };
 
 export type SaleOrderStatus = "booked" | "processing" | "completed" | "cancelled";
@@ -171,6 +172,7 @@ export type SaleOrder = {
   shippingAmount?: number;
   notes?: string;
   status: SaleOrderStatus;
+  invoiceId?: string;
 };
 
 export type Expense = {
@@ -179,11 +181,13 @@ export type Expense = {
   description?: string;
   amount: number;
   date: string;
+  accountId?: string;
 };
 
 export type PurchaseStatus = "paid" | "partial" | "unpaid";
 export type Purchase = {
   id: string;
+  number: string;
   supplierId?: string;
   supplierName: string;
   items: InvoiceItem[];
@@ -203,6 +207,7 @@ export type PurchaseOrder = {
   items: InvoiceItem[];
   total: number;
   status: PurchaseOrderStatus;
+  billId?: string;
 };
 
 export type DeliveryNoteStatus = "pending" | "delivered" | "cancelled";

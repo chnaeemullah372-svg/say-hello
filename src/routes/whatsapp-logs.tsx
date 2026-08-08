@@ -1,11 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { MessageCircle, CheckCircle2, XCircle, Clock, Search } from "lucide-react";
+import { MessageCircle, CheckCircle2, CheckCheck, XCircle, Clock, Search, RotateCw } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { useStore } from "@/lib/store";
+import { sendAndLogWhatsApp } from "@/lib/whatsapp";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/whatsapp-logs")({
   head: () => ({ meta: [
@@ -15,8 +18,14 @@ export const Route = createFileRoute("/whatsapp-logs")({
   component: WhatsAppLogsPage,
 });
 
+// The real WhatsApp engine writes "delivered"/"read" whenever Baileys
+// reports a receipt — a routine, expected outcome of a successful send,
+// not an edge case. Missing entries here used to throw mid-render (reading
+// `.icon` off `undefined`) and take the whole page down, not just that row.
 const statusMeta = {
   sent: { icon: CheckCircle2, tone: "border-accent/40 text-accent", label: "Sent" },
+  delivered: { icon: CheckCheck, tone: "border-accent/40 text-accent", label: "Delivered" },
+  read: { icon: CheckCheck, tone: "border-primary/40 text-primary", label: "Read" },
   failed: { icon: XCircle, tone: "border-destructive/40 text-destructive", label: "Failed" },
   pending: { icon: Clock, tone: "border-gold/40 text-gold-foreground", label: "Pending" },
 } as const;
@@ -24,13 +33,29 @@ const statusMeta = {
 function WhatsAppLogsPage() {
   const { whatsappLogs } = useStore();
   const [q, setQ] = useState("");
+  const [resendingId, setResendingId] = useState<string | null>(null);
+
+  const resend = async (l: (typeof whatsappLogs)[number]) => {
+    if (!l.messageText) return toast.error("No message text on file to resend");
+    setResendingId(l.id);
+    try {
+      const result = await sendAndLogWhatsApp({
+        customerId: l.customerId, customerName: l.customerName, toNumbers: [l.whatsappNumber],
+        message: l.messageText, messageType: l.messageType, referenceId: l.referenceId, referenceNumber: l.referenceNumber,
+      });
+      if (result.ok) toast.success("Resent");
+      else toast.error(result.error || "Could not resend");
+    } finally {
+      setResendingId(null);
+    }
+  };
 
   const filtered = useMemo(
     () => whatsappLogs.filter((l) => [l.customerName ?? "", l.whatsappNumber, l.referenceNumber ?? ""].join(" ").toLowerCase().includes(q.toLowerCase())),
     [whatsappLogs, q],
   );
 
-  const sentCount = whatsappLogs.filter((l) => l.status === "sent").length;
+  const sentCount = whatsappLogs.filter((l) => l.status === "sent" || l.status === "delivered" || l.status === "read").length;
   const failedCount = whatsappLogs.filter((l) => l.status === "failed").length;
 
   return (
@@ -49,7 +74,7 @@ function WhatsAppLogsPage() {
           </CardContent></Card>
         )}
         {filtered.map((l) => {
-          const meta = statusMeta[l.status];
+          const meta = statusMeta[l.status] ?? statusMeta.pending;
           const Icon = meta.icon;
           return (
             <Card key={l.id}>
@@ -66,6 +91,11 @@ function WhatsAppLogsPage() {
                   {l.status === "failed" && l.errorMessage && <div className="mt-0.5 truncate text-xs text-destructive">{l.errorMessage}</div>}
                 </div>
                 <Badge variant="outline" className={meta.tone}><Icon className="mr-1 h-3 w-3" />{meta.label}</Badge>
+                {l.status === "failed" && (
+                  <Button size="sm" variant="outline" disabled={resendingId === l.id} onClick={() => resend(l)}>
+                    <RotateCw className="mr-1.5 h-3.5 w-3.5" />{resendingId === l.id ? "Resending…" : "Resend"}
+                  </Button>
+                )}
               </CardContent>
             </Card>
           );

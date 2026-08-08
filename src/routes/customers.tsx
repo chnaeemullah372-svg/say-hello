@@ -55,13 +55,13 @@ function CustomersPage() {
   const [waSending, setWaSending] = useState(false);
 
   const sendWa = async () => {
-    if (!waTarget?.whatsapp) return;
+    if (!waTarget?.whatsapp && !waTarget?.whatsapp2) return;
     setWaSending(true);
     try {
       const result = await sendAndLogWhatsApp({
         customerId: waTarget.id,
         customerName: waTarget.name,
-        toNumbers: [waTarget.whatsapp],
+        toNumbers: [waTarget.whatsapp, waTarget.whatsapp2],
         message: waMessage,
         messageType: "other",
       });
@@ -80,19 +80,16 @@ function CustomersPage() {
     const list = visible.filter((c) =>
       [c.name, c.phone, c.contactPerson ?? "", c.email ?? ""].join(" ").toLowerCase().includes(q.toLowerCase())
     );
-    return [...list].sort((a, b) => {
-      if (sortBy === "balance") {
-        const av = tab === "supplier" ? (a.payableBalance ?? 0) : a.balance;
-        const bv = tab === "supplier" ? (b.payableBalance ?? 0) : b.balance;
-        return bv - av;
-      }
-      return a.name.localeCompare(b.name);
-    });
-  }, [visible, q, sortBy, tab]);
+    // Each contact's own figure — payable for a supplier, balance for a
+    // client — regardless of which tab is showing it. Branching on the
+    // page-level tab instead of each row's own party type (the previous
+    // bug) understated the total and mis-ordered the list the moment the
+    // "Both" tab mixed suppliers in.
+    const rowAmount = (c: Customer) => (c.partyType === "supplier" ? (c.payableBalance ?? 0) : c.balance);
+    return [...list].sort((a, b) => (sortBy === "balance" ? rowAmount(b) - rowAmount(a) : a.name.localeCompare(b.name)));
+  }, [visible, q, sortBy]);
 
-  const outstanding = tab === "supplier"
-    ? visible.reduce((s, c) => s + (c.payableBalance ?? 0), 0)
-    : visible.reduce((s, c) => s + c.balance, 0);
+  const outstanding = visible.reduce((s, c) => s + (c.partyType === "supplier" ? (c.payableBalance ?? 0) : c.balance), 0);
 
   const startAdd = () => { setEditingId(null); setForm({ ...emptyForm, partyType: tab === "both" ? "client" : tab }); setShowMore(false); setOpen(true); };
   const startEdit = (c: Customer) => {
@@ -115,8 +112,17 @@ function CustomersPage() {
 
   const save = async () => {
     if (!form.name) return toast.error("Name is required");
-    const duplicate = customers.some((c) => c.id !== editingId && c.name.trim().toLowerCase() === form.name.trim().toLowerCase());
-    if (duplicate) return toast.error("Client/Supplier with this name already exists");
+    // Clients and Suppliers are separate directories — a client and an
+    // unrelated supplier sharing a company name is normal, so the
+    // duplicate check only looks within the same party type (a "both"
+    // contact is checked against both, since it lives in each list).
+    const duplicate = customers.some((c) => {
+      if (c.id === editingId) return false;
+      if (c.name.trim().toLowerCase() !== form.name.trim().toLowerCase()) return false;
+      if (c.partyType === "both" || form.partyType === "both") return true;
+      return c.partyType === form.partyType;
+    });
+    if (duplicate) return toast.error(`${form.partyType === "supplier" ? "Supplier" : "Client"} with this name already exists`);
     if (saving) return;
     setSaving(true);
     const payload = {
@@ -195,7 +201,10 @@ function CustomersPage() {
                       <div className="grid gap-1.5"><Label>GSTIN / Tax ID</Label><Input value={form.gstin} onChange={(e) => setForm({ ...form, gstin: e.target.value })} /></div>
                       <div className="grid gap-1.5"><Label>Business ID</Label><Input value={form.businessId} onChange={(e) => setForm({ ...form, businessId: e.target.value })} /></div>
                     </div>
-                    <div className="grid gap-1.5"><Label>Region</Label><Input value={form.region} onChange={(e) => setForm({ ...form, region: e.target.value })} /></div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="grid gap-1.5"><Label>PAN No</Label><Input value={form.panNo} onChange={(e) => setForm({ ...form, panNo: e.target.value })} /></div>
+                      <div className="grid gap-1.5"><Label>Region</Label><Input value={form.region} onChange={(e) => setForm({ ...form, region: e.target.value })} /></div>
+                    </div>
 
                     <div className="border-t pt-3 grid gap-3">
                       <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Billing address</div>
@@ -355,9 +364,9 @@ function CustomersPage() {
                 </a>
                 <button
                   type="button"
-                  disabled={!c.whatsapp}
+                  disabled={!c.whatsapp && !c.whatsapp2}
                   onClick={() => { setWaTarget(c); setWaMessage(`Hello ${c.name}, `); setWaOpen(true); }}
-                  className={`flex items-center justify-center gap-1 rounded-md border py-1.5 text-xs font-semibold transition ${c.whatsapp ? "border-accent/30 text-accent hover:bg-accent/10" : "cursor-not-allowed border-muted text-muted-foreground/40"}`}
+                  className={`flex items-center justify-center gap-1 rounded-md border py-1.5 text-xs font-semibold transition ${(c.whatsapp || c.whatsapp2) ? "border-accent/30 text-accent hover:bg-accent/10" : "cursor-not-allowed border-muted text-muted-foreground/40"}`}
                 >
                   <MessageCircle className="h-3.5 w-3.5" />WA
                 </button>
@@ -375,7 +384,7 @@ function CustomersPage() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader><DialogTitle>Send WhatsApp to {waTarget?.name}</DialogTitle></DialogHeader>
           <div className="grid gap-3">
-            <div className="text-xs text-muted-foreground">To: {waTarget?.whatsapp}</div>
+            <div className="text-xs text-muted-foreground">To: {[waTarget?.whatsapp, waTarget?.whatsapp2].filter(Boolean).join(", ")}</div>
             <Textarea rows={4} value={waMessage} onChange={(e) => setWaMessage(e.target.value)} />
           </div>
           <DialogFooter>

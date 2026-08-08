@@ -25,10 +25,13 @@ function SaleOrderPage() {
 
   const rows: DocRow[] = saleOrders.map((s) => ({
     id: s.id, number: s.number, partyId: s.customerId, date: s.date, secondDate: s.deliveryDate,
-    items: s.items, taxRate: s.taxRate, status: s.status, notes: s.notes,
+    items: s.items, taxRate: s.taxRate, status: s.status, notes: s.notes, convertedId: s.invoiceId,
   }));
 
-  // Standard flow: once a sale order is fulfilled, bill it — didn't exist here.
+  // Standard flow: once a sale order is fulfilled, bill it. Recording the
+  // resulting invoice's id (not just a status label) is what lets the
+  // Convert button disable itself for good — clicking it twice used to
+  // create two invoices from the same order.
   const convertToInvoice = async (row: DocRow & { total: number }) => {
     try {
       const inv = await addInvoice({
@@ -41,7 +44,7 @@ function SaleOrderPage() {
         notes: row.notes,
         status: "unpaid",
       });
-      await updateSaleOrder(row.id, { status: "completed" });
+      await updateSaleOrder(row.id, { status: "completed", invoiceId: inv.id });
       toast.success(`Converted to invoice ${inv.number}`);
       nav({ to: "/invoices/$id", params: { id: inv.id } });
     } catch (err) {
@@ -57,7 +60,7 @@ function SaleOrderPage() {
       secondDateLabel="Delivery date"
       addLabel="New Sale Order"
       rows={rows}
-      parties={customers.filter((c) => c.partyType !== "supplier").map((c) => ({ id: c.id, name: c.name }))}
+      parties={customers.filter((c) => c.partyType !== "supplier").map((c) => ({ id: c.id, name: c.name, balance: c.balance }))}
       statusOptions={statusOptions}
       convertLabel="To Invoice"
       onConvert={convertToInvoice}

@@ -90,15 +90,13 @@ function InvoiceList() {
   }
 
   function handleWhatsApp(row: (typeof enriched)[number]) {
-    const phone = (row.customer?.whatsapp || row.customer?.phone || "").replace(/[^\d]/g, "");
-    const msg = encodeURIComponent(
-      `Hello ${row.customer?.name ?? ""},\nInvoice ${row.number} — Total ${fmt(row.total)}, Balance ${fmt(row.total - row.paid)}.\nThank you!`,
-    );
-    if (!phone) {
-      toast.error("No WhatsApp/phone on file for this customer");
-      return;
-    }
-    window.open(`https://wa.me/${phone}?text=${msg}`, "_blank");
+    // Route through the invoice detail page's own send flow instead of a
+    // plain wa.me link — that's the app's real WhatsApp integration (it
+    // attaches the actual invoice PDF, applies the configured message
+    // template, and logs the attempt to WhatsApp Monitoring / this
+    // invoice's Check History). A bare wa.me link did none of that and
+    // silently depended on the device having its own WhatsApp session.
+    navigate({ to: "/invoices/$id", params: { id: row.id }, search: { send: 1 } as never });
   }
 
   return (

@@ -157,8 +157,13 @@ function ProductsPage() {
             <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
               <DialogHeader><DialogTitle>{editingId ? "Edit item" : "Product / Service"}</DialogTitle></DialogHeader>
               <div className="grid gap-4">
-                <div className="grid grid-cols-3 gap-1.5 rounded-lg border bg-muted/40 p-1">
-                  {(["product", "service", "composite"] as ItemType[]).map((t) => (
+                {/* "Composite" used to be offered here with no way to
+                    actually define which component products make it up —
+                    selecting it only swapped a badge. Not offering it as a
+                    choice until it's a real bill-of-materials feature is
+                    more honest than a type that does nothing. */}
+                <div className="grid grid-cols-2 gap-1.5 rounded-lg border bg-muted/40 p-1">
+                  {(["product", "service"] as ItemType[]).map((t) => (
                     <button
                       key={t} type="button"
                       onClick={() => setForm({ ...form, itemType: t })}

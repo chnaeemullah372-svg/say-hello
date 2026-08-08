@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
 import type { Customer, Product, Invoice, Payment, InvoiceItem, Estimate, SaleOrder, PurchaseOrder, Account, FundTransfer, DeliveryNote, SaleReturn, PurchaseReturn, ProductionEntry, Subscription, Commission, WhatsAppLog, Expense, Purchase } from "./dummy-data";
+import { calcInvoiceTotals } from "./dummy-data";
 
 type Store = {
   customers: Customer[];
@@ -71,7 +72,7 @@ type Store = {
   addExpense: (e: Omit<Expense, "id">) => Promise<Expense>;
   updateExpense: (id: string, patch: Partial<Expense>) => Promise<void>;
   deleteExpense: (id: string) => Promise<void>;
-  addPurchase: (p: Omit<Purchase, "id">) => Promise<Purchase>;
+  addPurchase: (p: Omit<Purchase, "id" | "number">) => Promise<Purchase>;
   updatePurchase: (id: string, patch: Partial<Purchase>) => Promise<void>;
   deletePurchase: (id: string) => Promise<void>;
   getCustomer: (id: string) => Customer | undefined;
@@ -199,6 +200,7 @@ function estimateFromRow(row: any): Estimate {
     shippingAmount: Number(row.shipping_amount ?? 0),
     notes: row.notes ?? undefined,
     status: row.status as Estimate["status"],
+    invoiceId: row.invoice_id ?? undefined,
   };
 }
 
@@ -216,6 +218,7 @@ function saleOrderFromRow(row: any): SaleOrder {
     shippingAmount: Number(row.shipping_amount ?? 0),
     notes: row.notes ?? undefined,
     status: row.status as SaleOrder["status"],
+    invoiceId: row.invoice_id ?? undefined,
   };
 }
 
@@ -229,6 +232,7 @@ function purchaseOrderFromRow(row: any): PurchaseOrder {
     items: (row.items ?? []) as InvoiceItem[],
     total: Number(row.total ?? 0),
     status: row.status as PurchaseOrder["status"],
+    billId: row.bill_id ?? undefined,
   };
 }
 
@@ -304,13 +308,13 @@ function whatsAppLogFromRow(row: any): WhatsAppLog {
 function expenseFromRow(row: any): Expense {
   return {
     id: row.id, category: row.category, description: row.description ?? undefined,
-    amount: Number(row.amount ?? 0), date: row.date,
+    amount: Number(row.amount ?? 0), date: row.date, accountId: row.account_id ?? undefined,
   };
 }
 
 function purchaseFromRow(row: any): Purchase {
   return {
-    id: row.id, supplierId: row.supplier_id ?? undefined, supplierName: row.supplier_name ?? "",
+    id: row.id, number: row.number ?? "", supplierId: row.supplier_id ?? undefined, supplierName: row.supplier_name ?? "",
     items: (row.items ?? []) as InvoiceItem[], total: Number(row.total ?? 0), paid: Number(row.paid ?? 0),
     date: row.date, status: row.status,
   };
@@ -693,6 +697,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           await supabase.from("commissions").delete().in("id", relatedCommissionIds);
           setCommissions((prev) => prev.filter((c) => !relatedCommissionIds.includes(c.id)));
         }
+
+        // The invoice's own contribution to the client's balance, and the
+        // stock it took out when sold, never unwound on delete either —
+        // both were left permanently wrong, the same orphaned-side-effect
+        // bug the payment/commission cleanup above already fixes.
+        const customer = customers.find((c) => c.id === inv.customerId);
+        if (customer) {
+          const { total } = calcInvoiceTotals(inv.items, inv.taxRate, inv.discountMode, inv.discountValue, inv.shippingAmount);
+          const outstanding = total - inv.paid;
+          if (outstanding !== 0) {
+            const { data } = await supabase.from("customers").update({ balance: customer.balance - outstanding }).eq("id", customer.id).select().single();
+            if (data) setCustomers((prev) => prev.map((c) => (c.id === customer.id ? customerFromRow(data) : c)));
+          }
+        }
+        for (const it of inv.items) {
+          if (!it.productId) continue;
+          const p = products.find((x) => x.id === it.productId);
+          if (p) {
+            const { data } = await supabase.from("products").update({ stock: p.stock + it.qty }).eq("id", p.id).select().single();
+            if (data) setProducts((prev) => prev.map((x) => (x.id === p.id ? productFromRow(data) : x)));
+          }
+        }
       }
 
       const { error } = await supabase.from("invoices").delete().eq("id", id);
@@ -732,6 +758,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (patch.shippingAmount !== undefined) dbPatch.shipping_amount = patch.shippingAmount;
       if (patch.notes !== undefined) dbPatch.notes = patch.notes;
       if (patch.status !== undefined) dbPatch.status = patch.status;
+      if (patch.invoiceId !== undefined) dbPatch.invoice_id = patch.invoiceId || null;
       const { data, error } = await supabase.from("estimates").update(dbPatch as any).eq("id", id).select().single();
       if (error) throw new Error(error.message);
       if (data) {
@@ -777,6 +804,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (patch.shippingAmount !== undefined) dbPatch.shipping_amount = patch.shippingAmount;
       if (patch.notes !== undefined) dbPatch.notes = patch.notes;
       if (patch.status !== undefined) dbPatch.status = patch.status;
+      if (patch.invoiceId !== undefined) dbPatch.invoice_id = patch.invoiceId || null;
       const { data, error } = await supabase.from("sale_orders").update(dbPatch as any).eq("id", id).select().single();
       if (error) throw new Error(error.message);
       if (data) {
@@ -814,6 +842,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (patch.items !== undefined) dbPatch.items = patch.items;
       if (patch.total !== undefined) dbPatch.total = patch.total;
       if (patch.status !== undefined) dbPatch.status = patch.status;
+      if (patch.billId !== undefined) dbPatch.bill_id = patch.billId || null;
       const { data, error } = await supabase.from("purchase_orders").update(dbPatch as any).eq("id", id).select().single();
       if (error) throw new Error(error.message);
       if (data) {
@@ -874,20 +903,33 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         created_by: userData.user?.id,
       }).select().single();
       if (error || !data) throw new Error(error?.message || "Could not record transfer");
-      const nf = fundTransferFromRow(data);
-      setFundTransfers((prev) => [nf, ...prev]);
 
-      // Move the balance between the two accounts
+      // Move the balance between the two accounts. A transfer that debits
+      // one account and then fails to credit the other used to still show
+      // as "complete" in the ledger with the books quietly out of balance
+      // — check both legs, and if the credit fails, undo the debit and the
+      // ledger row rather than leave a half-applied transfer on file.
       const from = accounts.find((a) => a.id === f.fromAccountId);
       const to = accounts.find((a) => a.id === f.toAccountId);
       if (from) {
-        const { data: d1 } = await supabase.from("accounts").update({ current_balance: from.currentBalance - f.amount } as any).eq("id", from.id).select().single();
-        if (d1) setAccounts((prev) => prev.map((a) => (a.id === from.id ? accountFromRow(d1) : a)));
+        const { data: d1, error: e1 } = await supabase.from("accounts").update({ current_balance: from.currentBalance - f.amount } as any).eq("id", from.id).select().single();
+        if (e1 || !d1) {
+          await supabase.from("fund_transfers").delete().eq("id", data.id);
+          throw new Error(e1?.message || "Could not debit the source account — transfer cancelled");
+        }
+        setAccounts((prev) => prev.map((a) => (a.id === from.id ? accountFromRow(d1) : a)));
       }
       if (to) {
-        const { data: d2 } = await supabase.from("accounts").update({ current_balance: to.currentBalance + f.amount } as any).eq("id", to.id).select().single();
-        if (d2) setAccounts((prev) => prev.map((a) => (a.id === to.id ? accountFromRow(d2) : a)));
+        const { data: d2, error: e2 } = await supabase.from("accounts").update({ current_balance: to.currentBalance + f.amount } as any).eq("id", to.id).select().single();
+        if (e2 || !d2) {
+          if (from) await supabase.from("accounts").update({ current_balance: from.currentBalance } as any).eq("id", from.id);
+          await supabase.from("fund_transfers").delete().eq("id", data.id);
+          throw new Error(e2?.message || "Could not credit the destination account — transfer rolled back");
+        }
+        setAccounts((prev) => prev.map((a) => (a.id === to.id ? accountFromRow(d2) : a)));
       }
+      const nf = fundTransferFromRow(data);
+      setFundTransfers((prev) => [nf, ...prev]);
       return nf;
     },
 
@@ -897,12 +939,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const from = accounts.find((a) => a.id === transfer.fromAccountId);
         const to = accounts.find((a) => a.id === transfer.toAccountId);
         if (from) {
-          const { data: d1 } = await supabase.from("accounts").update({ current_balance: from.currentBalance + transfer.amount } as any).eq("id", from.id).select().single();
-          if (d1) setAccounts((prev) => prev.map((a) => (a.id === from.id ? accountFromRow(d1) : a)));
+          const { data: d1, error: e1 } = await supabase.from("accounts").update({ current_balance: from.currentBalance + transfer.amount } as any).eq("id", from.id).select().single();
+          if (e1 || !d1) throw new Error(e1?.message || "Could not reverse the source account's balance — transfer not deleted");
+          setAccounts((prev) => prev.map((a) => (a.id === from.id ? accountFromRow(d1) : a)));
         }
         if (to) {
-          const { data: d2 } = await supabase.from("accounts").update({ current_balance: to.currentBalance - transfer.amount } as any).eq("id", to.id).select().single();
-          if (d2) setAccounts((prev) => prev.map((a) => (a.id === to.id ? accountFromRow(d2) : a)));
+          const { data: d2, error: e2 } = await supabase.from("accounts").update({ current_balance: to.currentBalance - transfer.amount } as any).eq("id", to.id).select().single();
+          if (e2 || !d2) {
+            if (from) await supabase.from("accounts").update({ current_balance: from.currentBalance } as any).eq("id", from.id);
+            throw new Error(e2?.message || "Could not reverse the destination account's balance — transfer not deleted");
+          }
+          setAccounts((prev) => prev.map((a) => (a.id === to.id ? accountFromRow(d2) : a)));
         }
       }
       const { error } = await supabase.from("fund_transfers").delete().eq("id", id);
@@ -1087,8 +1134,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const { data: userData } = await supabase.auth.getUser();
       const { data, error } = await supabase.from("expenses").insert({
         category: e.category, description: e.description || null, amount: e.amount, date: e.date,
-        created_by: userData.user?.id,
-      }).select().single();
+        account_id: e.accountId || null, created_by: userData.user?.id,
+      } as any).select().single();
       if (error || !data) throw new Error(error?.message || "Could not save expense");
       const n = expenseFromRow(data);
       setExpenses((prev) => [n, ...prev]);
@@ -1100,6 +1147,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (patch.description !== undefined) dbPatch.description = patch.description || null;
       if (patch.amount !== undefined) dbPatch.amount = patch.amount;
       if (patch.date !== undefined) dbPatch.date = patch.date;
+      if (patch.accountId !== undefined) dbPatch.account_id = patch.accountId || null;
       const { data, error } = await supabase.from("expenses").update(dbPatch as any).eq("id", id).select().single();
       if (error) throw new Error(error.message);
       if (data) setExpenses((prev) => prev.map((x) => (x.id === id ? expenseFromRow(data) : x)));

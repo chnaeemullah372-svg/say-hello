@@ -29,6 +29,10 @@ async function tick() {
     const stats = await runDueReminderCheck();
     console.log(`[due-reminders] checked=${stats.checked} sent=${stats.sent} skipped=${stats.skipped} failed=${stats.failed}`);
 
+    const { runSubscriptionBillingCheck } = await import("@/lib/subscription-billing.server");
+    const subStats = await runSubscriptionBillingCheck();
+    console.log(`[subscription-billing] billed=${subStats.billed} failed=${subStats.failed}`);
+
     await supabaseAdmin
       .from("app_settings")
       .update({ setting_value: { ...notif, lastReminderRunAt: new Date().toISOString() } })

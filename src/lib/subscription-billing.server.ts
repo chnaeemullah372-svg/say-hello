@@ -1,0 +1,66 @@
+// Server-only. Subscriptions used to promise "automated recurring billing"
+// in its own page copy while nothing anywhere ever read next_billing_date
+// — it was a plain persisted list with no engine behind it. This is that
+// engine: once a day (see reminder-scheduler.server.ts, which calls this
+// from the same in-process heartbeat used for due-date reminders), every
+// active subscription whose next_billing_date has arrived gets a real
+// invoice and its date rolled forward by one cycle.
+import { supabaseAdmin } from "@/integrations/supabase/client.server";
+
+const BUSINESS_TIMEZONE = "Asia/Karachi";
+
+function todayInBusinessTimezone(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: BUSINESS_TIMEZONE }).format(new Date());
+}
+
+function nextCycleDate(from: string, cycle: string): string {
+  const d = new Date(`${from}T00:00:00Z`);
+  if (cycle === "yearly") d.setUTCFullYear(d.getUTCFullYear() + 1);
+  else d.setUTCMonth(d.getUTCMonth() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+export async function runSubscriptionBillingCheck(): Promise<{ billed: number; failed: number }> {
+  const today = todayInBusinessTimezone();
+  let billed = 0;
+  let failed = 0;
+
+  const { data: subs } = await supabaseAdmin
+    .from("subscriptions")
+    .select("id, customer_id, plan_name, amount, billing_cycle, next_billing_date, status")
+    .eq("status", "active")
+    .lte("next_billing_date", today);
+
+  for (const s of subs ?? []) {
+    if (!s.customer_id) continue;
+    try {
+      let number: string | undefined;
+      try {
+        const { data } = await supabaseAdmin.rpc("next_document_number", { p_prefix_key: "invoicePrefix", p_next_key: "invoiceNext" });
+        if (data) number = data as string;
+      } catch { /* fall back to the DB's own numbering if the RPC isn't available */ }
+
+      const { data: inv, error } = await supabaseAdmin.from("invoices").insert({
+        ...(number ? { number } : {}),
+        customer_id: s.customer_id,
+        date: today,
+        due_date: today,
+        items: [{ productId: "", name: s.plan_name || "Subscription", qty: 1, rate: s.amount, discount: 0 }],
+        tax_rate: 0, discount_mode: "rate", discount_value: 0, shipping_amount: 0, paid: 0, status: "unpaid",
+      }).select().single();
+      if (error || !inv) { failed++; continue; }
+
+      const { data: cust } = await supabaseAdmin.from("customers").select("balance").eq("id", s.customer_id).maybeSingle();
+      if (cust) {
+        await supabaseAdmin.from("customers").update({ balance: Number(cust.balance ?? 0) + Number(s.amount) }).eq("id", s.customer_id);
+      }
+
+      await supabaseAdmin.from("subscriptions").update({ next_billing_date: nextCycleDate(s.next_billing_date ?? today, s.billing_cycle) }).eq("id", s.id);
+      billed++;
+    } catch {
+      failed++;
+    }
+  }
+
+  return { billed, failed };
+}

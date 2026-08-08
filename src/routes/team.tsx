@@ -13,6 +13,7 @@ import { ROLE_PERMISSIONS } from "@/lib/modules-data";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
+import { inviteTeamMember, getTeamLastActive } from "@/lib/team-actions";
 
 export const Route = createFileRoute("/team")({
   head: () => ({ meta: [
@@ -40,6 +41,8 @@ function TeamPage() {
   const [loading, setLoading] = useState(true);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [invite, setInvite] = useState({ name: "", email: "", phone: "", role: "staff" as Role });
+  const [inviting, setInviting] = useState(false);
+  const [lastActive, setLastActive] = useState<Record<string, string | null>>({});
 
   const roleByUser = useMemo(() => new Map(roles.map((r) => [r.user_id, r.role])), [roles]);
   const hasAnyRole = roles.length > 0;
@@ -59,9 +62,21 @@ function TeamPage() {
     }
     setProfiles(profileData || []);
     setRoles((roleData || []) as RoleRow[]);
+    getTeamLastActive().then(setLastActive).catch(() => {});
   };
 
   useEffect(() => { load(); }, []);
+
+  const formatLastActive = (userId: string) => {
+    const iso = lastActive[userId];
+    if (!iso) return "Never signed in";
+    const diffMs = Date.now() - new Date(iso).getTime();
+    const days = Math.floor(diffMs / 86_400_000);
+    if (days === 0) return "Today";
+    if (days === 1) return "Yesterday";
+    if (days < 30) return `${days}d ago`;
+    return new Date(iso).toLocaleDateString();
+  };
 
   const claimAdmin = async () => {
     if (!user) return;
@@ -91,10 +106,19 @@ function TeamPage() {
     await load();
   };
 
-  const saveInvite = () => {
-    toast.info("Invite email setup is ready for the next email service step");
-    setInviteOpen(false);
-    setInvite({ name: "", email: "", phone: "", role: "staff" });
+  const saveInvite = async () => {
+    if (!invite.email.trim()) return toast.error("Email is required");
+    setInviting(true);
+    try {
+      await inviteTeamMember({ data: { email: invite.email.trim(), fullName: invite.name.trim(), phone: invite.phone.trim() } });
+      toast.success(`Invite sent to ${invite.email}. Once they sign in, set their role below — it defaults to Staff.`);
+      setInviteOpen(false);
+      setInvite({ name: "", email: "", phone: "", role: "staff" });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not send invite");
+    } finally {
+      setInviting(false);
+    }
   };
 
   return (
@@ -156,7 +180,7 @@ function TeamPage() {
                       <SelectContent>{roleOptions.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}</SelectContent>
                     </Select>
                   </td>
-                  <td className="px-6 py-3 text-muted-foreground">Live</td>
+                  <td className="px-6 py-3 text-muted-foreground">{formatLastActive(m.user_id)}</td>
                   <td className="px-6 py-3 text-center">
                     <Badge variant="outline" className={m.status === "active" ? "bg-accent/15 text-accent border-accent/30 capitalize" : m.status === "blocked" ? "bg-destructive/10 text-destructive border-destructive/30 capitalize" : "bg-gold/15 text-gold-foreground border-gold/40 capitalize"}>{m.status}</Badge>
                   </td>
@@ -209,7 +233,7 @@ function TeamPage() {
             <div className="grid gap-1.5"><Label>Phone</Label><Input value={invite.phone} onChange={(e) => setInvite({ ...invite, phone: e.target.value })} placeholder="WhatsApp / contact number" /></div>
             <div className="grid gap-1.5"><Label>Role</Label><Select value={invite.role} onValueChange={(v) => setInvite({ ...invite, role: v as Role })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{roleOptions.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}</SelectContent></Select></div>
           </div>
-          <DialogFooter><Button variant="outline" onClick={() => setInviteOpen(false)}>Cancel</Button><Button onClick={saveInvite}>Prepare invite</Button></DialogFooter>
+          <DialogFooter><Button variant="outline" onClick={() => setInviteOpen(false)}>Cancel</Button><Button onClick={saveInvite} disabled={inviting}>{inviting ? "Sending…" : "Send invite"}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

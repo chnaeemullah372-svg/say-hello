@@ -32,6 +32,7 @@ function DeliveryNotePage() {
       partyLabel="Customer"
       secondDateLabel="Expected delivery"
       addLabel="New Delivery Note"
+      showTax={false}
       rows={rows}
       parties={customers.filter((c) => c.partyType !== "supplier").map((c) => ({ id: c.id, name: c.name }))}
       statusOptions={statusOptions}

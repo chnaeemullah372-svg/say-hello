@@ -2,7 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard, Users, Package, FileText, PlusCircle, FileSpreadsheet,
   Warehouse, Wallet, BarChart3, Settings, Sparkles, Truck, PackageMinus, PackageX,
-  ShoppingCart, ClipboardList, Receipt, Landmark, Repeat, Trophy, ShieldCheck,
+  ShoppingCart, ClipboardList, Receipt, Landmark, Repeat, ShieldCheck,
   UserCircle2, Factory, MessageCircle,
 } from "lucide-react";
 import {
@@ -40,7 +40,6 @@ const financeItems = [
   { title: "Payments", url: "/payments", icon: Wallet },
   { title: "Expenses", url: "/expenses", icon: Receipt },
   { title: "Fund Management", url: "/funds", icon: Landmark },
-  { title: "Commissions", url: "/commissions", icon: Trophy },
   { title: "Agents", url: "/agent", icon: UserCircle2 },
   { title: "WhatsApp Monitoring", url: "/whatsapp-logs", icon: MessageCircle },
 ];

@@ -47,8 +47,13 @@ function StatementPage() {
       })),
     ].sort((a, b) => a.date.localeCompare(b.date));
 
+    // The client's stored opening balance (set when they were onboarded)
+    // never factored in here — only transactions did, so a client with a
+    // non-zero starting balance would show a statement that permanently
+    // disagreed with the balance shown everywhere else in the app.
+    const startingBalance = customers.find((c) => c.id === customerId)?.openingBalance ?? 0;
     const beforeFrom = from ? allRows.filter((r) => r.date < from) : [];
-    const opening = beforeFrom.reduce((s, r) => s + r.debit - r.credit, 0);
+    const opening = startingBalance + beforeFrom.reduce((s, r) => s + r.debit - r.credit, 0);
 
     const inRange = allRows.filter((r) => (!from || r.date >= from) && (!to || r.date <= to));
     const totalDebit = inRange.reduce((s, r) => s + r.debit, 0);
@@ -56,7 +61,7 @@ function StatementPage() {
     const closing = opening + totalDebit - totalCredit;
 
     return { rows: inRange, opening, closing, totalDebit, totalCredit };
-  }, [customerId, from, to, invoices, payments]);
+  }, [customerId, from, to, invoices, payments, customers]);
 
   let running = opening;
 

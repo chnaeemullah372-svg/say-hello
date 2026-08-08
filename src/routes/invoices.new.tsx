@@ -37,7 +37,7 @@ type DraftLine = InvoiceItem & { unit?: string; code?: string; warehouse?: strin
 
 function CreateInvoice() {
   const nav = useNavigate();
-  const { customers, products, addCustomer, updateCustomer, addProduct, addInvoice, updateInvoice, invoices, addCommission, addPayment, accounts, updateAccount } = useStore();
+  const { customers, products, addCustomer, updateCustomer, addProduct, updateProduct, addInvoice, updateInvoice, invoices, addCommission, addPayment, accounts, updateAccount } = useStore();
 
   const editId = useMemo(() => {
     if (typeof window === "undefined") return null;
@@ -338,15 +338,11 @@ function CreateInvoice() {
       // that money was already received earlier, so it settles the
       // invoice's balance without going into a payment-method account a
       // second time; only genuinely new cash does that.
-      if (paymentAmount > 0 && isNew) {
+      if (isNew) {
         const freshAmount = Math.max(0, paymentAmount - advanceApplied);
         if (advanceApplied > 0) {
           addPayment({ invoiceNumber, customerName: customer?.name ?? "", amount: advanceApplied, method: "Advance Adjustment", date: invoiceDate.toISOString().slice(0, 10) })
             .catch(() => toast.error("Invoice saved, but the advance-payment record could not be created"));
-          if (customer) {
-            updateCustomer(customer.id, { balance: customer.balance + advanceApplied })
-              .catch(() => toast.error("Invoice saved, but the client's advance balance could not be updated"));
-          }
         }
         if (freshAmount > 0) {
           addPayment({ invoiceNumber, customerName: customer?.name ?? "", amount: freshAmount, method: paymentMethod, date: invoiceDate.toISOString().slice(0, 10) })
@@ -355,6 +351,33 @@ function CreateInvoice() {
           if (account) {
             updateAccount(account.id, { currentBalance: account.currentBalance + freshAmount })
               .catch(() => toast.error("Payment saved, but the account balance could not be updated"));
+          }
+        }
+
+        // What the client still owes after this invoice needs to show up
+        // on their account — previously only the advance-drawdown touched
+        // `balance` at all, so an ordinary unpaid/partial invoice never
+        // raised what the Customers list, Statement, and Reports show
+        // they owe. Combined into one update (rather than one call per
+        // effect) since both read the same `customer.balance` snapshot.
+        if (customer) {
+          const netDelta = advanceApplied + (total - paymentAmount);
+          if (netDelta !== 0) {
+            updateCustomer(customer.id, { balance: customer.balance + netDelta })
+              .catch(() => toast.error("Invoice saved, but the client's balance could not be updated"));
+          }
+        }
+
+        // Selling stock never actually reduced it anywhere in the app —
+        // the "exceeds available stock" warning above was checking a
+        // number that could never move. Only lines tied to a real product
+        // are affected; a one-off typed line has no stock to track.
+        for (const it of items) {
+          if (!it.productId) continue;
+          const p = products.find((x) => x.id === it.productId);
+          if (p) {
+            updateProduct(p.id, { stock: p.stock - it.qty })
+              .catch(() => toast.error(`Invoice saved, but stock for "${it.name}" could not be updated`));
           }
         }
       }
