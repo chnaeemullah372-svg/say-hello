@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Sparkles, ShieldCheck, Zap, TrendingUp, AlertCircle, Mail, Lock, User, Building2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -85,7 +85,7 @@ function LoginPage() {
           </div>
         </div>
 
-        <div className="relative text-xs text-primary-foreground/60">© 2026 CN Invoice — Demo build</div>
+        <div className="relative text-xs text-primary-foreground/60">© 2026 CN Invoice. All rights reserved.</div>
       </div>
 
       <div className="flex items-center justify-center bg-background px-6 py-10">
@@ -162,7 +162,7 @@ function LoginPage() {
           </div>
 
           <p className="mt-6 text-center text-xs text-muted-foreground">
-            New to CN Invoice? <Link to="/" className="text-accent hover:underline">Explore the demo</Link>
+            New to CN Invoice? Use "Sign up" above to create your business account.
           </p>
         </div>
       </div>
