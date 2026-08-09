@@ -25,6 +25,7 @@ import {
   LockKeyhole,
   LogOut,
   Mail,
+  DollarSign,
   MessageCircle,
   MonitorSmartphone,
   Palette,
@@ -435,7 +436,7 @@ const categories: Category[] = [
   // Company Information
   { key: "business", title: "Business Profile", subtitle: "Business details shown on documents: logo, GST, address and company info.", icon: Store, badge: "Main", tone: "text-primary bg-primary/10 ring-primary/20", group: "Company Information" },
   { key: "bank", title: "Bank / UPI", subtitle: "Bank and UPI details shown on invoices so customers know where to pay.", icon: Landmark, tone: "text-primary bg-primary/10 ring-primary/20", group: "Company Information" },
-  { key: "tax", title: "Tax / GST / TDS", subtitle: "Set taxes and discounts for bills. Apply item-wise or on the full bill.", icon: Percent, badge: "TDS", tone: "text-coral bg-coral/10 ring-coral/20", group: "Company Information" },
+  { key: "tax", title: "Currency & Tax", subtitle: "Set your currency, plus taxes and discounts for bills. Apply item-wise or on the full bill.", icon: Percent, tone: "text-coral bg-coral/10 ring-coral/20", group: "Company Information" },
   { key: "terms", title: "Terms & Condition", subtitle: "Terms shown on documents. Set different text for invoices, estimates, purchases, etc.", icon: FileSignature, tone: "text-jade bg-jade/10 ring-jade/20", group: "Company Information" },
   { key: "accounts", title: "Accounts & Categories", subtitle: "Create accounts for payments and expenses. Helps organize and track your money.", icon: Landmark, tone: "text-orchid bg-orchid/10 ring-orchid/20", group: "Company Information" },
   { key: "fundManagement", title: "Fund Management", subtitle: "Transfer money between payment accounts. Keeps proper records of fund movement.", icon: ArrowLeftRight, tone: "text-aqua bg-aqua/10 ring-aqua/20", group: "Company Information" },
@@ -622,7 +623,7 @@ function SettingsPage() {
 
         {active === "business" && <BusinessPanel data={settings.business} set={(k, v) => setField("business", k, v)} />}
         {active === "invoice" && <InvoicePanel data={settings.invoice} set={(k, v) => setField("invoice", k, v)} />}
-        {active === "tax" && <TaxPanel data={settings.tax} set={(k, v) => setField("tax", k, v)} />}
+        {active === "tax" && <TaxPanel data={settings.tax} set={(k, v) => setField("tax", k, v)} country={(settings.business.country as string) || "Pakistan"} />}
         {active === "terms" && <TermsPanel data={settings.terms} set={(k, v) => setField("terms", k, v)} />}
         {active === "accounts" && <AccountsPanel />}
         {active === "fundManagement" && <FundManagementPanel />}
@@ -873,8 +874,9 @@ function InvoicePanel({ data, set }: PanelProps) {
   );
 }
 
-function TaxPanel({ data, set }: PanelProps) {
+function TaxPanel({ data, set, country }: PanelProps & { country: string }) {
   const taxList: { id: string; name: string; pct: string; inclusive: boolean; enabled: boolean }[] = data.taxList ?? [];
+  const isIndia = country === "India";
 
   const updateTax = (id: string, patch: Partial<(typeof taxList)[number]>) => {
     set("taxList", taxList.map((t) => (t.id === id ? { ...t, ...patch } : t)));
@@ -886,7 +888,7 @@ function TaxPanel({ data, set }: PanelProps) {
 
   return (
     <Panel>
-      <PanelHeader icon={Percent} title="Tax, GST, TDS and currency" subtitle="Default calculations for invoice, purchase and payment entries." />
+      <PanelHeader icon={DollarSign} title="Currency" subtitle="The currency used across every invoice, estimate and report." />
       <Grid>
         <div className="grid gap-1.5">
           <Label>Currency</Label>
@@ -903,8 +905,14 @@ function TaxPanel({ data, set }: PanelProps) {
           </select>
         </div>
         <TextField label="Currency symbol (auto-set, editable)" value={data.symbol} onChange={(v) => set("symbol", v)} />
-        <SelectField label="Interstate GST" value={data.interstateTax} onChange={(v) => set("interstateTax", v)} options={["auto", "igst", "cgst-sgst"]} optionLabels={{ igst: "IGST", "cgst-sgst": "CGST-SGST" }} />
       </Grid>
+
+      <PanelHeader icon={Percent} title="Tax" subtitle="Default tax calculations for invoice, purchase and payment entries." />
+      {isIndia && (
+        <Grid>
+          <SelectField label="Interstate GST" value={data.interstateTax} onChange={(v) => set("interstateTax", v)} options={["auto", "igst", "cgst-sgst"]} optionLabels={{ igst: "IGST", "cgst-sgst": "CGST-SGST" }} />
+        </Grid>
+      )}
 
       <SettingBlock title="Discount setting" icon={Percent}>
         <div className="inline-flex rounded-lg border bg-muted/40 p-1">
@@ -943,21 +951,30 @@ function TaxPanel({ data, set }: PanelProps) {
         <Button type="button" variant="outline" size="sm" className="mt-2" onClick={addTax}><Plus className="mr-1.5 h-4 w-4" />Add new tax</Button>
       </SettingBlock>
 
-      <ToggleGrid>
-        <ToggleField label="Enable GST" checked={data.gstEnabled} onChange={(v) => set("gstEnabled", v)} />
-        <ToggleField label="Enable cess" checked={data.cess} onChange={(v) => set("cess", v)} />
-        <ToggleField label="Enable TDS" checked={data.tds} onChange={(v) => set("tds", v)} />
-        <ToggleField label="Enable TCS" checked={data.tcs} onChange={(v) => set("tcs", v)} />
-        <ToggleField label="Reverse charge (RCM)" checked={data.rcm} onChange={(v) => set("rcm", v)} />
-      </ToggleGrid>
-      <SettingBlock title="TDS sections" icon={Percent}>
-        <div className="grid gap-3 md:grid-cols-2">
-          <TextField label="194C Contractor %" value={data.tds194c} onChange={(v) => set("tds194c", v)} type="number" />
-          <TextField label="194J Professional %" value={data.tds194j} onChange={(v) => set("tds194j", v)} type="number" />
-          <TextField label="194H Commission %" value={data.tds194h} onChange={(v) => set("tds194h", v)} type="number" />
-          <TextField label="194Q Purchase %" value={data.tds194q} onChange={(v) => set("tds194q", v)} type="number" />
-        </div>
-      </SettingBlock>
+      {/* GST/TDS/Cess/RCM are Indian tax-law concepts (TDS section codes like
+          194C are literal Indian Income Tax Act sections) — this app also
+          serves Indian tenants, so they stay available, just gated to the
+          business's own configured Country instead of always showing for
+          every tenant regardless of where they actually operate. */}
+      {isIndia && (
+        <>
+          <ToggleGrid>
+            <ToggleField label="Enable GST" checked={data.gstEnabled} onChange={(v) => set("gstEnabled", v)} />
+            <ToggleField label="Enable cess" checked={data.cess} onChange={(v) => set("cess", v)} />
+            <ToggleField label="Enable TDS" checked={data.tds} onChange={(v) => set("tds", v)} />
+            <ToggleField label="Enable TCS" checked={data.tcs} onChange={(v) => set("tcs", v)} />
+            <ToggleField label="Reverse charge (RCM)" checked={data.rcm} onChange={(v) => set("rcm", v)} />
+          </ToggleGrid>
+          <SettingBlock title="TDS sections" icon={Percent}>
+            <div className="grid gap-3 md:grid-cols-2">
+              <TextField label="194C Contractor %" value={data.tds194c} onChange={(v) => set("tds194c", v)} type="number" />
+              <TextField label="194J Professional %" value={data.tds194j} onChange={(v) => set("tds194j", v)} type="number" />
+              <TextField label="194H Commission %" value={data.tds194h} onChange={(v) => set("tds194h", v)} type="number" />
+              <TextField label="194Q Purchase %" value={data.tds194q} onChange={(v) => set("tds194q", v)} type="number" />
+            </div>
+          </SettingBlock>
+        </>
+      )}
     </Panel>
   );
 }
@@ -1077,7 +1094,7 @@ function NumberingPanel({ data, set }: PanelProps) {
 
       <SettingBlock title="Country & currency" icon={Landmark}>
         <div className="mb-3 rounded-lg border bg-muted/25 p-3 text-xs text-muted-foreground">
-          Currency code and symbol are set in one place — Tax &amp; Discount — so this page only controls the amount-in-words wording and number/date format, not the currency itself.
+          Currency code and symbol are set in one place — Currency &amp; Tax — so this page only controls the amount-in-words wording and number/date format, not the currency itself.
         </div>
         <Grid>
           <SelectField label="Country" value={data.country || "Pakistan"} onChange={(v) => set("country", v)} options={COUNTRIES} />
