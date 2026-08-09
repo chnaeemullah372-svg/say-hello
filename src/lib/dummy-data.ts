@@ -212,9 +212,14 @@ export type PurchaseOrder = {
   supplierName: string;
   date: string;
   items: InvoiceItem[];
+  taxRate: number;
+  discountMode?: "rate" | "flat";
+  discountValue?: number;
+  shippingAmount?: number;
   total: number;
   status: PurchaseOrderStatus;
   billId?: string;
+  notes?: string;
 };
 
 export type DeliveryNoteStatus = "pending" | "delivered" | "cancelled";
