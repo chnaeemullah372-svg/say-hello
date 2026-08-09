@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { UserPlus, Search, Phone, Mail, MapPin, Pencil, ChevronDown, ChevronUp, MessageCircle, Building2, Receipt } from "lucide-react";
+import { UserPlus, Search, Phone, Mail, MapPin, Pencil, ChevronDown, ChevronUp, MessageCircle, Building2, Receipt, Tag } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +16,11 @@ import { fmt, type Customer, type PartyType } from "@/lib/dummy-data";
 import { normalizeWhatsAppNumber } from "@/lib/phone";
 import { sendAndLogWhatsApp } from "@/lib/whatsapp";
 import { useStaffPermissions } from "@/lib/permissions";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
+
+type PriceOverride = { price: string; wholesalePrice: string; discountPct: string };
 
 export const Route = createFileRoute("/customers")({
   head: () => ({ meta: [
@@ -41,7 +45,8 @@ const emptyForm = {
 };
 
 function CustomersPage() {
-  const { customers, addCustomer, updateCustomer, invoices, purchases } = useStore();
+  const { customers, addCustomer, updateCustomer, invoices, purchases, products } = useStore();
+  const { user } = useAuth();
   const { can } = useStaffPermissions();
   const canCreate = can("customers", "create");
   const canEdit = can("customers", "edit");
@@ -73,6 +78,81 @@ function CustomersPage() {
   const [waTarget, setWaTarget] = useState<Customer | null>(null);
   const [waMessage, setWaMessage] = useState("");
   const [waSending, setWaSending] = useState(false);
+
+  // Per-client custom pricing — found missing when matching the reference
+  // app's Client/Supplier "Price List" screen against ours. No override row
+  // for a product means "use the catalog price," so this is purely
+  // additive; nothing changes for a tenant who never opens it.
+  const [priceListTarget, setPriceListTarget] = useState<Customer | null>(null);
+  const [priceListRows, setPriceListRows] = useState<Record<string, PriceOverride>>({});
+  const [priceListSearch, setPriceListSearch] = useState("");
+  const [priceListLoading, setPriceListLoading] = useState(false);
+  const [priceListSaving, setPriceListSaving] = useState(false);
+
+  const openPriceList = async (c: Customer) => {
+    setPriceListTarget(c);
+    setPriceListSearch("");
+    setPriceListLoading(true);
+    const { data, error } = await supabase
+      .from("customer_product_prices")
+      .select("product_id, price, wholesale_price, discount_pct")
+      .eq("customer_id", c.id);
+    setPriceListLoading(false);
+    if (error) { toast.error(error.message); return; }
+    const rows: Record<string, PriceOverride> = {};
+    for (const row of data || []) {
+      rows[row.product_id] = {
+        price: row.price != null ? String(row.price) : "",
+        wholesalePrice: row.wholesale_price != null ? String(row.wholesale_price) : "",
+        discountPct: row.discount_pct ? String(row.discount_pct) : "",
+      };
+    }
+    setPriceListRows(rows);
+  };
+
+  const setPriceListField = (productId: string, field: keyof PriceOverride, value: string) => {
+    setPriceListRows((prev) => {
+      const current = prev[productId] ?? { price: "", wholesalePrice: "", discountPct: "" };
+      return { ...prev, [productId]: { ...current, [field]: value } };
+    });
+  };
+
+  const savePriceList = async () => {
+    if (!priceListTarget || !user?.tenantId) return;
+    setPriceListSaving(true);
+    try {
+      const toUpsert: { tenant_id: string; customer_id: string; product_id: string; price: number | null; wholesale_price: number | null; discount_pct: number }[] = [];
+      const toDelete: string[] = [];
+      for (const [productId, row] of Object.entries(priceListRows)) {
+        const hasValue = row.price.trim() || row.wholesalePrice.trim() || row.discountPct.trim();
+        if (!hasValue) { toDelete.push(productId); continue; }
+        toUpsert.push({
+          tenant_id: user.tenantId, customer_id: priceListTarget.id, product_id: productId,
+          price: row.price.trim() ? Number(row.price) : null,
+          wholesale_price: row.wholesalePrice.trim() ? Number(row.wholesalePrice) : null,
+          discount_pct: row.discountPct.trim() ? Number(row.discountPct) : 0,
+        });
+      }
+      if (toUpsert.length) {
+        const { error } = await supabase.from("customer_product_prices").upsert(toUpsert, { onConflict: "tenant_id,customer_id,product_id" });
+        if (error) throw error;
+      }
+      if (toDelete.length) {
+        await supabase.from("customer_product_prices").delete().eq("customer_id", priceListTarget.id).in("product_id", toDelete);
+      }
+      toast.success(`Price list saved for ${priceListTarget.name}`);
+      setPriceListTarget(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not save price list");
+    } finally {
+      setPriceListSaving(false);
+    }
+  };
+
+  const priceListProducts = useMemo(
+    () => products.filter((p) => (p.name + " " + p.sku).toLowerCase().includes(priceListSearch.toLowerCase())),
+    [products, priceListSearch],
+  );
 
   const sendWa = async () => {
     if (!waTarget?.whatsapp && !waTarget?.whatsapp2) return;
@@ -397,6 +477,11 @@ function CustomersPage() {
                   ? <Badge className="bg-gold/20 text-gold-foreground border-gold/40" variant="outline">{fmt(c.partyType === "supplier" ? (c.payableBalance ?? 0) : c.balance)}</Badge>
                   : <Badge variant="outline" className="border-accent/30 text-accent">Settled</Badge>}
               </div>
+              {canEdit && (
+                <button type="button" onClick={() => openPriceList(c)} className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary">
+                  <Tag className="h-3 w-3" />Price list
+                </button>
+              )}
               <div className="mt-2 grid grid-cols-4 gap-1.5">
                 <a href={c.phone ? `tel:${c.phone}` : undefined} onClick={(e) => !c.phone && e.preventDefault()}
                   className={`flex items-center justify-center gap-1 rounded-md border py-1.5 text-xs font-semibold transition ${c.phone ? "border-sapphire/30 text-sapphire hover:bg-sapphire/10" : "cursor-not-allowed border-muted text-muted-foreground/40"}`}>
@@ -434,6 +519,55 @@ function CustomersPage() {
           <DialogFooter>
             <Button variant="ghost" onClick={() => setWaOpen(false)}>Cancel</Button>
             <Button onClick={sendWa} disabled={waSending}>{waSending ? "Sending…" : "Send"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!priceListTarget} onOpenChange={(o) => !o && setPriceListTarget(null)}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader><DialogTitle>Price list — {priceListTarget?.name}</DialogTitle></DialogHeader>
+          <p className="text-xs text-muted-foreground">
+            Leave a row blank to use the catalog price. Only set what's different for this {priceListTarget?.partyType === "supplier" ? "supplier" : "client"}.
+          </p>
+          <Input placeholder="Search products…" value={priceListSearch} onChange={(e) => setPriceListSearch(e.target.value)} />
+          {priceListLoading ? (
+            <div className="py-8 text-center text-sm text-muted-foreground">Loading…</div>
+          ) : (
+            <div className="max-h-[50vh] overflow-y-auto rounded-lg border">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-background text-xs uppercase tracking-wide text-muted-foreground">
+                  <tr>
+                    <th className="p-2 text-left">Product</th>
+                    <th className="p-2 text-right">Rate</th>
+                    <th className="p-2 text-right">Wholesale</th>
+                    <th className="p-2 text-right">Discount %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {priceListProducts.map((p) => {
+                    const row = priceListRows[p.id] ?? { price: "", wholesalePrice: "", discountPct: "" };
+                    return (
+                      <tr key={p.id} className="border-t">
+                        <td className="p-2">
+                          <div className="font-medium">{p.name}</div>
+                          <div className="text-[11px] text-muted-foreground">Catalog: {fmt(p.price)}{p.wholesaleRate ? ` / ${fmt(p.wholesaleRate)} wholesale` : ""}</div>
+                        </td>
+                        <td className="p-2"><Input className="h-8 w-24 text-right" type="number" placeholder={String(p.price)} value={row.price} onChange={(e) => setPriceListField(p.id, "price", e.target.value)} /></td>
+                        <td className="p-2"><Input className="h-8 w-24 text-right" type="number" placeholder={p.wholesaleRate ? String(p.wholesaleRate) : "-"} value={row.wholesalePrice} onChange={(e) => setPriceListField(p.id, "wholesalePrice", e.target.value)} /></td>
+                        <td className="p-2"><Input className="h-8 w-20 text-right" type="number" placeholder="0" value={row.discountPct} onChange={(e) => setPriceListField(p.id, "discountPct", e.target.value)} /></td>
+                      </tr>
+                    );
+                  })}
+                  {priceListProducts.length === 0 && (
+                    <tr><td colSpan={4} className="p-6 text-center text-muted-foreground">No products match.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setPriceListTarget(null)} disabled={priceListSaving}>Cancel</Button>
+            <Button onClick={savePriceList} disabled={priceListSaving || priceListLoading}>{priceListSaving ? "Saving…" : "Save price list"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

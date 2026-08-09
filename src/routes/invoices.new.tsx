@@ -1210,6 +1210,7 @@ function CreateInvoice() {
         initial={editingIndex !== null ? items[editingIndex] : undefined}
         onSave={saveLine}
         onRegisterProduct={(p) => addProduct(p)}
+        customerId={customerId}
       />
 
     </div>
@@ -1219,7 +1220,7 @@ function CreateInvoice() {
 /* ---------------- Item dialog ---------------- */
 
 function ItemDialog({
-  open, onOpenChange, mode, products, editing, initial, onSave, onRegisterProduct,
+  open, onOpenChange, mode, products, editing, initial, onSave, onRegisterProduct, customerId,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -1229,7 +1230,21 @@ function ItemDialog({
   initial?: DraftLine;
   onSave: (line: DraftLine) => void;
   onRegisterProduct: (p: Omit<Product, "id">) => Promise<Product>;
+  /** When the selected client has custom pricing on file (Customers ->
+   * Price list), picking a product defaults to their rate instead of the
+   * catalog price — previously every client always saw the same price. */
+  customerId?: string;
 }) {
+  const [priceOverrides, setPriceOverrides] = useState<Record<string, { price: number | null; wholesalePrice: number | null; discountPct: number }>>({});
+  useEffect(() => {
+    if (!open || !customerId) { setPriceOverrides({}); return; }
+    supabase.from("customer_product_prices").select("product_id, price, wholesale_price, discount_pct").eq("customer_id", customerId)
+      .then(({ data }) => {
+        const map: Record<string, { price: number | null; wholesalePrice: number | null; discountPct: number }> = {};
+        for (const row of data ?? []) map[row.product_id] = { price: row.price, wholesalePrice: row.wholesale_price, discountPct: row.discount_pct ?? 0 };
+        setPriceOverrides(map);
+      });
+  }, [open, customerId]);
   const [wholesale, setWholesale] = useState(initial?.wholesale ?? false);
   const [name, setName] = useState(initial?.name ?? "");
   const [productId, setProductId] = useState(initial?.productId ?? "");
@@ -1277,7 +1292,12 @@ function ItemDialog({
   const pickProduct = (p: Product) => {
     setProductId(p.id);
     setName(p.name);
-    setRate(wholesale ? Math.round(p.price * 0.92) : p.price);
+    const override = priceOverrides[p.id];
+    const baseRate = wholesale
+      ? override?.wholesalePrice ?? p.wholesaleRate ?? Math.round(p.price * 0.92)
+      : override?.price ?? p.price;
+    const discounted = override?.discountPct ? Math.round(baseRate * (1 - override.discountPct / 100)) : baseRate;
+    setRate(discounted);
     setCode(p.sku);
     setUnit(p.unit);
     setSearch(false);
@@ -1368,7 +1388,13 @@ function ItemDialog({
               checked={wholesale}
               onChange={(e) => {
                 setWholesale(e.target.checked);
-                if (picked) setRate(e.target.checked ? Math.round(picked.price * 0.92) : picked.price);
+                if (picked) {
+                  const override = priceOverrides[picked.id];
+                  const baseRate = e.target.checked
+                    ? override?.wholesalePrice ?? picked.wholesaleRate ?? Math.round(picked.price * 0.92)
+                    : override?.price ?? picked.price;
+                  setRate(override?.discountPct ? Math.round(baseRate * (1 - override.discountPct / 100)) : baseRate);
+                }
               }}
               className="h-4 w-4 accent-primary"
             />

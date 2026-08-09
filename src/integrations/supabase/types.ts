@@ -651,6 +651,42 @@ export type Database = {
         }
         Relationships: []
       }
+      customer_product_prices: {
+        Row: {
+          created_at: string
+          customer_id: string
+          discount_pct: number
+          id: string
+          price: number | null
+          product_id: string
+          tenant_id: string
+          updated_at: string
+          wholesale_price: number | null
+        }
+        Insert: {
+          created_at?: string
+          customer_id: string
+          discount_pct?: number
+          id?: string
+          price?: number | null
+          product_id: string
+          tenant_id: string
+          updated_at?: string
+          wholesale_price?: number | null
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string
+          discount_pct?: number
+          id?: string
+          price?: number | null
+          product_id?: string
+          tenant_id?: string
+          updated_at?: string
+          wholesale_price?: number | null
+        }
+        Relationships: []
+      }
       products: {
         Row: {
           barcode: string | null
