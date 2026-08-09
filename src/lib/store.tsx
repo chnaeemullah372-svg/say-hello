@@ -317,8 +317,10 @@ function expenseFromRow(row: any): Expense {
 function purchaseFromRow(row: any): Purchase {
   return {
     id: row.id, number: row.number ?? "", supplierId: row.supplier_id ?? undefined, supplierName: row.supplier_name ?? "",
-    items: (row.items ?? []) as InvoiceItem[], total: Number(row.total ?? 0), paid: Number(row.paid ?? 0),
-    date: row.date, status: row.status,
+    items: (row.items ?? []) as InvoiceItem[], taxRate: Number(row.tax_rate ?? 0),
+    discountMode: row.discount_mode ?? "rate", discountValue: Number(row.discount_value ?? 0),
+    shippingAmount: Number(row.shipping_amount ?? 0), total: Number(row.total ?? 0), paid: Number(row.paid ?? 0),
+    date: row.date, status: row.status, notes: row.notes ?? undefined,
   };
 }
 
@@ -1000,7 +1002,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const { data, error } = await supabase.from("delivery_notes").insert({
         ...(number ? { number } : {}),
         customer_id: d.customerId || null, date: d.date, items: d.items as unknown as import("@/integrations/supabase/types").Json,
-        notes: d.notes || null, status: d.status, created_by: userData.user?.id,
+        notes: d.notes || null, status: d.status, created_by: userData.user?.id, tenant_id: tenantId,
       }).select().single();
       if (error || !data) throw new Error(error?.message || "Could not save delivery note");
       const n = deliveryNoteFromRow(data);
@@ -1030,7 +1032,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const { data, error } = await supabase.from("sale_returns").insert({
         ...(number ? { number } : {}),
         customer_id: s.customerId || null, date: s.date, items: s.items as unknown as import("@/integrations/supabase/types").Json,
-        total: s.total, notes: s.notes || null, status: s.status, created_by: userData.user?.id,
+        total: s.total, notes: s.notes || null, status: s.status, created_by: userData.user?.id, tenant_id: tenantId,
       }).select().single();
       if (error || !data) throw new Error(error?.message || "Could not save sale return");
       const n = saleReturnFromRow(data);
@@ -1061,7 +1063,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const { data, error } = await supabase.from("purchase_returns").insert({
         ...(number ? { number } : {}),
         supplier_id: p.supplierId || null, date: p.date, items: p.items as unknown as import("@/integrations/supabase/types").Json,
-        total: p.total, notes: p.notes || null, status: p.status, created_by: userData.user?.id,
+        total: p.total, notes: p.notes || null, status: p.status, created_by: userData.user?.id, tenant_id: tenantId,
       }).select().single();
       if (error || !data) throw new Error(error?.message || "Could not save purchase return");
       const n = purchaseReturnFromRow(data);
@@ -1092,7 +1094,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const { data, error } = await supabase.from("production_entries").insert({
         ...(number ? { number } : {}),
         product_name: p.productName, date: p.date, items: p.items as unknown as import("@/integrations/supabase/types").Json,
-        quantity_produced: p.quantityProduced, notes: p.notes || null, status: p.status, created_by: userData.user?.id,
+        quantity_produced: p.quantityProduced, notes: p.notes || null, status: p.status, created_by: userData.user?.id, tenant_id: tenantId,
       }).select().single();
       if (error || !data) throw new Error(error?.message || "Could not save production entry");
       const n = productionEntryFromRow(data);
@@ -1152,7 +1154,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const { data: userData } = await supabase.auth.getUser();
       const { data, error } = await supabase.from("commissions").insert({
         agent_name: c.agentName, invoice_id: c.invoiceId || null, commission: c.commission,
-        status: c.status, date: c.date, created_by: userData.user?.id,
+        status: c.status, date: c.date, created_by: userData.user?.id, tenant_id: tenantId,
       }).select().single();
       if (error || !data) throw new Error(error?.message || "Could not save commission");
       const n = commissionFromRow(data);
@@ -1180,7 +1182,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const { data: userData } = await supabase.auth.getUser();
       const { data, error } = await supabase.from("expenses").insert({
         category: e.category, description: e.description || null, amount: e.amount, date: e.date,
-        account_id: e.accountId || null, created_by: userData.user?.id,
+        account_id: e.accountId || null, created_by: userData.user?.id, tenant_id: tenantId,
       } as any).select().single();
       if (error || !data) throw new Error(error?.message || "Could not save expense");
       const n = expenseFromRow(data);
@@ -1211,7 +1213,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ...(number ? { number } : {}),
         supplier_id: p.supplierId || null, supplier_name: p.supplierName,
         items: p.items as unknown as import("@/integrations/supabase/types").Json,
-        total: p.total, paid: p.paid, date: p.date, status: p.status, created_by: userData.user?.id,
+        tax_rate: p.taxRate ?? 0, discount_mode: p.discountMode ?? "rate", discount_value: p.discountValue ?? 0,
+        shipping_amount: p.shippingAmount ?? 0, notes: p.notes || null,
+        total: p.total, paid: p.paid, date: p.date, status: p.status, created_by: userData.user?.id, tenant_id: tenantId,
       }).select().single();
       if (error || !data) throw new Error(error?.message || "Could not save purchase");
       const n = purchaseFromRow(data);
@@ -1223,6 +1227,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (patch.supplierId !== undefined) dbPatch.supplier_id = patch.supplierId || null;
       if (patch.supplierName !== undefined) dbPatch.supplier_name = patch.supplierName;
       if (patch.items !== undefined) dbPatch.items = patch.items;
+      if (patch.taxRate !== undefined) dbPatch.tax_rate = patch.taxRate;
+      if (patch.discountMode !== undefined) dbPatch.discount_mode = patch.discountMode;
+      if (patch.discountValue !== undefined) dbPatch.discount_value = patch.discountValue;
+      if (patch.shippingAmount !== undefined) dbPatch.shipping_amount = patch.shippingAmount;
+      if (patch.notes !== undefined) dbPatch.notes = patch.notes || null;
       if (patch.total !== undefined) dbPatch.total = patch.total;
       if (patch.paid !== undefined) dbPatch.paid = patch.paid;
       if (patch.date !== undefined) dbPatch.date = patch.date;

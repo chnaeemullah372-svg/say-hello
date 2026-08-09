@@ -193,10 +193,15 @@ export type Purchase = {
   supplierId?: string;
   supplierName: string;
   items: InvoiceItem[];
+  taxRate: number;
+  discountMode?: "rate" | "flat";
+  discountValue?: number;
+  shippingAmount?: number;
   total: number;
   paid: number;
   date: string;
   status: PurchaseStatus;
+  notes?: string;
 };
 
 export type PurchaseOrderStatus = "pending" | "received" | "cancelled";

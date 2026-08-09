@@ -16,7 +16,6 @@ import { Route as StatementRouteImport } from './routes/statement'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SaleReturnRouteImport } from './routes/sale-return'
 import { Route as ReportsRouteImport } from './routes/reports'
-import { Route as PurchasesRouteImport } from './routes/purchases'
 import { Route as PurchaseReturnRouteImport } from './routes/purchase-return'
 import { Route as PurchaseOrdersRouteImport } from './routes/purchase-orders'
 import { Route as ProductsRouteImport } from './routes/products'
@@ -34,9 +33,11 @@ import { Route as CommissionsRouteImport } from './routes/commissions'
 import { Route as AgentRouteImport } from './routes/agent'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SaleOrderIndexRouteImport } from './routes/sale-order.index'
+import { Route as PurchasesIndexRouteImport } from './routes/purchases.index'
 import { Route as InvoicesIndexRouteImport } from './routes/invoices.index'
 import { Route as EstimatesIndexRouteImport } from './routes/estimates.index'
 import { Route as SaleOrderNewRouteImport } from './routes/sale-order.new'
+import { Route as PurchasesNewRouteImport } from './routes/purchases.new'
 import { Route as InvoicesNewRouteImport } from './routes/invoices.new'
 import { Route as InvoicesIdRouteImport } from './routes/invoices.$id'
 import { Route as EstimatesNewRouteImport } from './routes/estimates.new'
@@ -74,11 +75,6 @@ const SaleReturnRoute = SaleReturnRouteImport.update({
 const ReportsRoute = ReportsRouteImport.update({
   id: '/reports',
   path: '/reports',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PurchasesRoute = PurchasesRouteImport.update({
-  id: '/purchases',
-  path: '/purchases',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PurchaseReturnRoute = PurchaseReturnRouteImport.update({
@@ -166,6 +162,11 @@ const SaleOrderIndexRoute = SaleOrderIndexRouteImport.update({
   path: '/sale-order/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PurchasesIndexRoute = PurchasesIndexRouteImport.update({
+  id: '/purchases/',
+  path: '/purchases/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const InvoicesIndexRoute = InvoicesIndexRouteImport.update({
   id: '/invoices/',
   path: '/invoices/',
@@ -179,6 +180,11 @@ const EstimatesIndexRoute = EstimatesIndexRouteImport.update({
 const SaleOrderNewRoute = SaleOrderNewRouteImport.update({
   id: '/sale-order/new',
   path: '/sale-order/new',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PurchasesNewRoute = PurchasesNewRouteImport.update({
+  id: '/purchases/new',
+  path: '/purchases/new',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InvoicesNewRoute = InvoicesNewRouteImport.update({
@@ -214,7 +220,6 @@ export interface FileRoutesByFullPath {
   '/products': typeof ProductsRoute
   '/purchase-orders': typeof PurchaseOrdersRoute
   '/purchase-return': typeof PurchaseReturnRoute
-  '/purchases': typeof PurchasesRoute
   '/reports': typeof ReportsRoute
   '/sale-return': typeof SaleReturnRoute
   '/settings': typeof SettingsRoute
@@ -225,9 +230,11 @@ export interface FileRoutesByFullPath {
   '/estimates/new': typeof EstimatesNewRoute
   '/invoices/$id': typeof InvoicesIdRoute
   '/invoices/new': typeof InvoicesNewRoute
+  '/purchases/new': typeof PurchasesNewRoute
   '/sale-order/new': typeof SaleOrderNewRoute
   '/estimates/': typeof EstimatesIndexRoute
   '/invoices/': typeof InvoicesIndexRoute
+  '/purchases/': typeof PurchasesIndexRoute
   '/sale-order/': typeof SaleOrderIndexRoute
 }
 export interface FileRoutesByTo {
@@ -247,7 +254,6 @@ export interface FileRoutesByTo {
   '/products': typeof ProductsRoute
   '/purchase-orders': typeof PurchaseOrdersRoute
   '/purchase-return': typeof PurchaseReturnRoute
-  '/purchases': typeof PurchasesRoute
   '/reports': typeof ReportsRoute
   '/sale-return': typeof SaleReturnRoute
   '/settings': typeof SettingsRoute
@@ -258,9 +264,11 @@ export interface FileRoutesByTo {
   '/estimates/new': typeof EstimatesNewRoute
   '/invoices/$id': typeof InvoicesIdRoute
   '/invoices/new': typeof InvoicesNewRoute
+  '/purchases/new': typeof PurchasesNewRoute
   '/sale-order/new': typeof SaleOrderNewRoute
   '/estimates': typeof EstimatesIndexRoute
   '/invoices': typeof InvoicesIndexRoute
+  '/purchases': typeof PurchasesIndexRoute
   '/sale-order': typeof SaleOrderIndexRoute
 }
 export interface FileRoutesById {
@@ -281,7 +289,6 @@ export interface FileRoutesById {
   '/products': typeof ProductsRoute
   '/purchase-orders': typeof PurchaseOrdersRoute
   '/purchase-return': typeof PurchaseReturnRoute
-  '/purchases': typeof PurchasesRoute
   '/reports': typeof ReportsRoute
   '/sale-return': typeof SaleReturnRoute
   '/settings': typeof SettingsRoute
@@ -292,9 +299,11 @@ export interface FileRoutesById {
   '/estimates/new': typeof EstimatesNewRoute
   '/invoices/$id': typeof InvoicesIdRoute
   '/invoices/new': typeof InvoicesNewRoute
+  '/purchases/new': typeof PurchasesNewRoute
   '/sale-order/new': typeof SaleOrderNewRoute
   '/estimates/': typeof EstimatesIndexRoute
   '/invoices/': typeof InvoicesIndexRoute
+  '/purchases/': typeof PurchasesIndexRoute
   '/sale-order/': typeof SaleOrderIndexRoute
 }
 export interface FileRouteTypes {
@@ -316,7 +325,6 @@ export interface FileRouteTypes {
     | '/products'
     | '/purchase-orders'
     | '/purchase-return'
-    | '/purchases'
     | '/reports'
     | '/sale-return'
     | '/settings'
@@ -327,9 +335,11 @@ export interface FileRouteTypes {
     | '/estimates/new'
     | '/invoices/$id'
     | '/invoices/new'
+    | '/purchases/new'
     | '/sale-order/new'
     | '/estimates/'
     | '/invoices/'
+    | '/purchases/'
     | '/sale-order/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -349,7 +359,6 @@ export interface FileRouteTypes {
     | '/products'
     | '/purchase-orders'
     | '/purchase-return'
-    | '/purchases'
     | '/reports'
     | '/sale-return'
     | '/settings'
@@ -360,9 +369,11 @@ export interface FileRouteTypes {
     | '/estimates/new'
     | '/invoices/$id'
     | '/invoices/new'
+    | '/purchases/new'
     | '/sale-order/new'
     | '/estimates'
     | '/invoices'
+    | '/purchases'
     | '/sale-order'
   id:
     | '__root__'
@@ -382,7 +393,6 @@ export interface FileRouteTypes {
     | '/products'
     | '/purchase-orders'
     | '/purchase-return'
-    | '/purchases'
     | '/reports'
     | '/sale-return'
     | '/settings'
@@ -393,9 +403,11 @@ export interface FileRouteTypes {
     | '/estimates/new'
     | '/invoices/$id'
     | '/invoices/new'
+    | '/purchases/new'
     | '/sale-order/new'
     | '/estimates/'
     | '/invoices/'
+    | '/purchases/'
     | '/sale-order/'
   fileRoutesById: FileRoutesById
 }
@@ -416,7 +428,6 @@ export interface RootRouteChildren {
   ProductsRoute: typeof ProductsRoute
   PurchaseOrdersRoute: typeof PurchaseOrdersRoute
   PurchaseReturnRoute: typeof PurchaseReturnRoute
-  PurchasesRoute: typeof PurchasesRoute
   ReportsRoute: typeof ReportsRoute
   SaleReturnRoute: typeof SaleReturnRoute
   SettingsRoute: typeof SettingsRoute
@@ -427,9 +438,11 @@ export interface RootRouteChildren {
   EstimatesNewRoute: typeof EstimatesNewRoute
   InvoicesIdRoute: typeof InvoicesIdRoute
   InvoicesNewRoute: typeof InvoicesNewRoute
+  PurchasesNewRoute: typeof PurchasesNewRoute
   SaleOrderNewRoute: typeof SaleOrderNewRoute
   EstimatesIndexRoute: typeof EstimatesIndexRoute
   InvoicesIndexRoute: typeof InvoicesIndexRoute
+  PurchasesIndexRoute: typeof PurchasesIndexRoute
   SaleOrderIndexRoute: typeof SaleOrderIndexRoute
 }
 
@@ -482,13 +495,6 @@ declare module '@tanstack/react-router' {
       path: '/reports'
       fullPath: '/reports'
       preLoaderRoute: typeof ReportsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/purchases': {
-      id: '/purchases'
-      path: '/purchases'
-      fullPath: '/purchases'
-      preLoaderRoute: typeof PurchasesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/purchase-return': {
@@ -610,6 +616,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SaleOrderIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/purchases/': {
+      id: '/purchases/'
+      path: '/purchases'
+      fullPath: '/purchases/'
+      preLoaderRoute: typeof PurchasesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/invoices/': {
       id: '/invoices/'
       path: '/invoices'
@@ -629,6 +642,13 @@ declare module '@tanstack/react-router' {
       path: '/sale-order/new'
       fullPath: '/sale-order/new'
       preLoaderRoute: typeof SaleOrderNewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/purchases/new': {
+      id: '/purchases/new'
+      path: '/purchases/new'
+      fullPath: '/purchases/new'
+      preLoaderRoute: typeof PurchasesNewRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/invoices/new': {
@@ -672,7 +692,6 @@ const rootRouteChildren: RootRouteChildren = {
   ProductsRoute: ProductsRoute,
   PurchaseOrdersRoute: PurchaseOrdersRoute,
   PurchaseReturnRoute: PurchaseReturnRoute,
-  PurchasesRoute: PurchasesRoute,
   ReportsRoute: ReportsRoute,
   SaleReturnRoute: SaleReturnRoute,
   SettingsRoute: SettingsRoute,
@@ -683,9 +702,11 @@ const rootRouteChildren: RootRouteChildren = {
   EstimatesNewRoute: EstimatesNewRoute,
   InvoicesIdRoute: InvoicesIdRoute,
   InvoicesNewRoute: InvoicesNewRoute,
+  PurchasesNewRoute: PurchasesNewRoute,
   SaleOrderNewRoute: SaleOrderNewRoute,
   EstimatesIndexRoute: EstimatesIndexRoute,
   InvoicesIndexRoute: InvoicesIndexRoute,
+  PurchasesIndexRoute: PurchasesIndexRoute,
   SaleOrderIndexRoute: SaleOrderIndexRoute,
 }
 export const routeTree = rootRouteImport

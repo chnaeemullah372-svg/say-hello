@@ -1220,7 +1220,7 @@ function CreateInvoice() {
 /* ---------------- Item dialog ---------------- */
 
 export function ItemDialog({
-  open, onOpenChange, mode, products, editing, initial, onSave, onRegisterProduct, customerId,
+  open, onOpenChange, mode, products, editing, initial, onSave, onRegisterProduct, customerId, rateField = "price",
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -1234,6 +1234,9 @@ export function ItemDialog({
    * Price list), picking a product defaults to their rate instead of the
    * catalog price — previously every client always saw the same price. */
   customerId?: string;
+  /** Purchase-side screens (Purchase Bill, Purchase Order) buy at cost,
+   * not sale price — defaults the picked product's rate to purchaseRate. */
+  rateField?: "price" | "purchaseRate";
 }) {
   const [priceOverrides, setPriceOverrides] = useState<Record<string, { price: number | null; wholesalePrice: number | null; discountPct: number }>>({});
   useEffect(() => {
@@ -1294,12 +1297,16 @@ export function ItemDialog({
   const pickProduct = (p: Product) => {
     setProductId(p.id);
     setName(p.name);
-    const override = priceOverrides[p.id];
-    const baseRate = wholesale
-      ? override?.wholesalePrice ?? p.wholesaleRate ?? Math.round(p.price * 0.92)
-      : override?.price ?? p.price;
-    const discounted = override?.discountPct ? Math.round(baseRate * (1 - override.discountPct / 100)) : baseRate;
-    setRate(discounted);
+    if (rateField === "purchaseRate") {
+      setRate(p.purchaseRate || p.price);
+    } else {
+      const override = priceOverrides[p.id];
+      const baseRate = wholesale
+        ? override?.wholesalePrice ?? p.wholesaleRate ?? Math.round(p.price * 0.92)
+        : override?.price ?? p.price;
+      const discounted = override?.discountPct ? Math.round(baseRate * (1 - override.discountPct / 100)) : baseRate;
+      setRate(discounted);
+    }
     setCode(p.sku);
     setUnit(p.unit);
     setSearch(false);
@@ -1383,25 +1390,27 @@ export function ItemDialog({
         </div>
 
         <div className="space-y-0 px-0 py-0">
-          {/* Wholesale toggle */}
-          <label className="flex items-center justify-between border-b px-4 py-3">
-            <span className="text-sm">Use WholeSale Rate</span>
-            <input
-              type="checkbox"
-              checked={wholesale}
-              onChange={(e) => {
-                setWholesale(e.target.checked);
-                if (picked) {
-                  const override = priceOverrides[picked.id];
-                  const baseRate = e.target.checked
-                    ? override?.wholesalePrice ?? picked.wholesaleRate ?? Math.round(picked.price * 0.92)
-                    : override?.price ?? picked.price;
-                  setRate(override?.discountPct ? Math.round(baseRate * (1 - override.discountPct / 100)) : baseRate);
-                }
-              }}
-              className="h-4 w-4 accent-primary"
-            />
-          </label>
+          {/* Wholesale toggle — a customer-sale concept, not relevant when buying at cost */}
+          {rateField !== "purchaseRate" && (
+            <label className="flex items-center justify-between border-b px-4 py-3">
+              <span className="text-sm">Use WholeSale Rate</span>
+              <input
+                type="checkbox"
+                checked={wholesale}
+                onChange={(e) => {
+                  setWholesale(e.target.checked);
+                  if (picked) {
+                    const override = priceOverrides[picked.id];
+                    const baseRate = e.target.checked
+                      ? override?.wholesalePrice ?? picked.wholesaleRate ?? Math.round(picked.price * 0.92)
+                      : override?.price ?? picked.price;
+                    setRate(override?.discountPct ? Math.round(baseRate * (1 - override.discountPct / 100)) : baseRate);
+                  }
+                }}
+                className="h-4 w-4 accent-primary"
+              />
+            </label>
+          )}
 
           {/* Stock banner */}
           <div className={`px-4 py-2 text-xs font-semibold ${picked ? "bg-accent/25 text-accent-foreground" : "bg-accent/10 text-muted-foreground"}`}>

@@ -45,7 +45,7 @@ function POPage() {
         const supplier = suppliers.find((c) => c.id === row.partyId);
         try {
           const purchase = await addPurchase({
-            supplierId: row.partyId, supplierName: supplier?.name ?? "", items: row.items,
+            supplierId: row.partyId, supplierName: supplier?.name ?? "", items: row.items, taxRate: row.taxRate,
             total: row.total, paid: 0, date: new Date().toISOString().slice(0, 10), status: "unpaid",
           });
           if (supplier) await updateCustomer(supplier.id, { payableBalance: (supplier.payableBalance ?? 0) + row.total });
