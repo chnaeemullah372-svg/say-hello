@@ -29,6 +29,7 @@ function EstimatesPage() {
   const rows: DocRow[] = estimates.map((e) => ({
     id: e.id, number: e.number, partyId: e.customerId, date: e.date, secondDate: e.validUntil,
     items: e.items, taxRate: e.taxRate, status: e.status, notes: e.notes, convertedId: e.invoiceId,
+    discountMode: e.discountMode, discountValue: e.discountValue, shippingAmount: e.shippingAmount,
   }));
 
   // Standard invoice-maker feature: once a client accepts an estimate,
@@ -46,6 +47,9 @@ function EstimatesPage() {
         taxRate: row.taxRate,
         taxEnabled: row.taxRate > 0,
         taxInclusive: false,
+        discountMode: row.discountMode ?? "rate",
+        discountValue: row.discountValue ?? 0,
+        shippingAmount: row.shippingAmount ?? 0,
         paid: 0,
         notes: row.notes,
         status: "unpaid",
@@ -71,13 +75,16 @@ function EstimatesPage() {
       statusOptions={statusOptions}
       convertLabel="To Invoice"
       onConvert={convertToInvoice}
+      showDiscountShipping
       onCreate={(row) => addEstimate({
         customerId: row.partyId, date: row.date, validUntil: row.secondDate ?? "",
         items: row.items, taxRate: row.taxRate, status: row.status as Estimate["status"], notes: row.notes,
+        discountMode: row.discountMode, discountValue: row.discountValue, shippingAmount: row.shippingAmount,
       })}
       onUpdate={(id, patch) => updateEstimate(id, {
         customerId: patch.partyId, date: patch.date, validUntil: patch.secondDate,
         items: patch.items, taxRate: patch.taxRate, status: patch.status as Estimate["status"] | undefined, notes: patch.notes,
+        discountMode: patch.discountMode, discountValue: patch.discountValue, shippingAmount: patch.shippingAmount,
       })}
       onDelete={(id) => deleteEstimate(id)}
     />

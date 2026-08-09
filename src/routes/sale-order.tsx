@@ -48,6 +48,7 @@ function SaleOrderPage() {
   const rows: DocRow[] = saleOrders.map((s) => ({
     id: s.id, number: s.number, partyId: s.customerId, date: s.date, secondDate: s.deliveryDate,
     items: s.items, taxRate: s.taxRate, status: s.status, notes: s.notes, convertedId: s.invoiceId,
+    discountMode: s.discountMode, discountValue: s.discountValue, shippingAmount: s.shippingAmount,
   }));
 
   // Standard flow: once a sale order is fulfilled, bill it. Recording the
@@ -64,6 +65,9 @@ function SaleOrderPage() {
         taxRate: row.taxRate,
         taxEnabled: row.taxRate > 0,
         taxInclusive: false,
+        discountMode: row.discountMode ?? "rate",
+        discountValue: row.discountValue ?? 0,
+        shippingAmount: row.shippingAmount ?? 0,
         paid: 0,
         notes: row.notes,
         status: "unpaid",
@@ -91,9 +95,11 @@ function SaleOrderPage() {
       statusOptions={statusOptions}
       convertLabel="To Invoice"
       onConvert={convertToInvoice}
+      showDiscountShipping
       onCreate={(row) => addSaleOrder({
         customerId: row.partyId, date: row.date, deliveryDate: row.secondDate ?? "",
         items: row.items, taxRate: row.taxRate, status: row.status as SaleOrder["status"], notes: row.notes,
+        discountMode: row.discountMode, discountValue: row.discountValue, shippingAmount: row.shippingAmount,
       })}
       onUpdate={(id, patch) => {
         const order = saleOrders.find((s) => s.id === id);
@@ -101,6 +107,7 @@ function SaleOrderPage() {
         return updateSaleOrder(id, {
           customerId: patch.partyId, date: patch.date, deliveryDate: patch.secondDate,
           items: patch.items, taxRate: patch.taxRate, status: patch.status as SaleOrder["status"] | undefined, notes: patch.notes,
+          discountMode: patch.discountMode, discountValue: patch.discountValue, shippingAmount: patch.shippingAmount,
         });
       }}
       onDelete={(id) => deleteSaleOrder(id)}

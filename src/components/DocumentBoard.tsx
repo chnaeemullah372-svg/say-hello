@@ -18,6 +18,8 @@ import { useStore } from "@/lib/store";
 import { useStaffPermissions } from "@/lib/permissions";
 import { toast } from "sonner";
 
+export type DiscountMode = "rate" | "flat";
+
 export type DocRow = {
   id: string;
   number: string;
@@ -26,6 +28,9 @@ export type DocRow = {
   secondDate?: string; // due/valid-until/delivery date
   items: InvoiceItem[];
   taxRate: number;
+  discountMode?: DiscountMode;
+  discountValue?: number;
+  shippingAmount?: number;
   /** Authoritative persisted total (already includes tax, etc). When set, the
    * list row shows this instead of recomputing from items+taxRate — recomputing
    * silently disagreed with what was actually saved whenever a caller applied
@@ -44,7 +49,7 @@ export type PartyOption = { id: string; name: string; balance?: number };
 
 export function DocumentBoard({
   title, subtitle, partyLabel, secondDateLabel, addLabel, rows, parties, statusOptions, partyType = "client",
-  convertLabel, onConvert, showTax = true, rateField = "price", moduleKey,
+  convertLabel, onConvert, showTax = true, showDiscountShipping = false, rateField = "price", moduleKey,
   onCreate, onUpdate, onDelete,
 }: {
   title: string;
@@ -61,6 +66,13 @@ export function DocumentBoard({
   /** Some documents (Delivery Notes) carry no tax at all — hide the field
    * instead of showing one that silently gets dropped on save. */
   showTax?: boolean;
+  /** Estimate/Sale Order already persist discount_mode/discount_value/
+   * shipping_amount (see store.tsx's addEstimate/addSaleOrder) -- this was
+   * simply never exposed in this shared dialog, so a discount or shipping
+   * charge could never actually be entered even though the columns existed.
+   * Other document types (Purchase, Purchase Order, Sale/Purchase Return,
+   * Delivery Note) don't have these columns yet, so this defaults off. */
+  showDiscountShipping?: boolean;
   /** Which product field to default a picked item's rate from — sale price
    * for sales-side documents, purchase cost for purchase-side ones. */
   rateField?: "price" | "purchaseRate";
@@ -102,17 +114,26 @@ export function DocumentBoard({
   const [lineRate, setLineRate] = useState(0);
   const [lineSearchOpen, setLineSearchOpen] = useState(false);
   const [taxRate, setTaxRate] = useState(0);
+  const [discountMode, setDiscountMode] = useState<DiscountMode>("rate");
+  const [discountValue, setDiscountValue] = useState(0);
+  const [shippingAmount, setShippingAmount] = useState(0);
   const [status, setStatus] = useState(statusOptions[0]?.value ?? "");
   const [notes, setNotes] = useState("");
 
+  const baseAmount = useMemo(() => items.reduce((s, it) => s + it.qty * it.rate, 0), [items]);
+  const discountAmount = showDiscountShipping
+    ? (discountMode === "rate" ? (baseAmount * discountValue) / 100 : discountValue)
+    : 0;
   const total = useMemo(() => {
-    const base = items.reduce((s, it) => s + it.qty * it.rate, 0);
-    return showTax ? base + (base * taxRate) / 100 : base;
-  }, [items, taxRate, showTax]);
+    const taxable = baseAmount - discountAmount;
+    const taxed = showTax ? taxable + (taxable * taxRate) / 100 : taxable;
+    return showDiscountShipping ? taxed + shippingAmount : taxed;
+  }, [baseAmount, discountAmount, taxRate, showTax, showDiscountShipping, shippingAmount]);
 
   const resetForm = () => {
     setPartyId(""); setDate(new Date().toISOString().slice(0, 10)); setSecondDate("");
     setItems([]); setLineName(""); setLineProductId(""); setLineQty(1); setLineRate(0); setTaxRate(0);
+    setDiscountMode("rate"); setDiscountValue(0); setShippingAmount(0);
     setStatus(statusOptions[0]?.value ?? ""); setNotes("");
   };
 
@@ -121,6 +142,7 @@ export function DocumentBoard({
     setEditingId(r.id);
     setPartyId(r.partyId); setDate(r.date); setSecondDate(r.secondDate ?? "");
     setItems(r.items); setTaxRate(r.taxRate); setStatus(r.status); setNotes(r.notes ?? "");
+    setDiscountMode(r.discountMode ?? "rate"); setDiscountValue(r.discountValue ?? 0); setShippingAmount(r.shippingAmount ?? 0);
     setOpen(true);
   };
 
@@ -205,7 +227,10 @@ export function DocumentBoard({
     if (!items.length) return toast.error("Add at least one item");
     if (saving) return;
     setSaving(true);
-    const payload = { partyId, date, secondDate, items, taxRate: showTax ? taxRate : 0, status, notes };
+    const payload = {
+      partyId, date, secondDate, items, taxRate: showTax ? taxRate : 0, status, notes,
+      ...(showDiscountShipping ? { discountMode, discountValue, shippingAmount } : {}),
+    };
     try {
       if (editingId) {
         await onUpdate(editingId, payload);
@@ -382,6 +407,25 @@ export function DocumentBoard({
                   </div>
                 </div>
 
+                {showDiscountShipping && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="grid gap-1.5">
+                      <Label>Discount</Label>
+                      <div className="flex gap-2">
+                        <Select value={discountMode} onValueChange={(v) => setDiscountMode(v as DiscountMode)}>
+                          <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="rate">Rate %</SelectItem>
+                            <SelectItem value="flat">Flat</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Input type="number" min={0} value={discountValue} onChange={(e) => setDiscountValue(Math.max(0, +e.target.value || 0))} />
+                      </div>
+                    </div>
+                    <div className="grid gap-1.5"><Label>Shipping Amount</Label><Input type="number" min={0} value={shippingAmount} onChange={(e) => setShippingAmount(Math.max(0, +e.target.value || 0))} /></div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-3">
                   {showTax && (
                     <div className="grid gap-1.5"><Label>Tax %</Label><Input type="number" value={taxRate} onChange={(e) => setTaxRate(+e.target.value || 0)} /></div>
@@ -419,7 +463,11 @@ export function DocumentBoard({
           </CardContent></Card>
         )}
         {rows.map((r) => {
-          const rowTotal = r.total ?? (r.items.reduce((s, it) => s + it.qty * it.rate, 0) * (1 + r.taxRate / 100));
+          const rowTotal = r.total ?? (() => {
+            const base = r.items.reduce((s, it) => s + it.qty * it.rate, 0);
+            const disc = r.discountMode === "flat" ? (r.discountValue ?? 0) : (base * (r.discountValue ?? 0)) / 100;
+            return (base - disc) * (1 + r.taxRate / 100) + (r.shippingAmount ?? 0);
+          })();
           return (
             <Card key={r.id} className="transition hover:border-accent/50">
               <CardContent className="flex items-center justify-between gap-3 p-4">
