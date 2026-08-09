@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ArrowLeft,
@@ -79,10 +79,20 @@ import { friendlyErrorMessage } from "@/lib/friendly-error";
 import { sendAndLogWhatsApp } from "@/lib/whatsapp";
 import { setCurrencySymbol, fmt, type AccountType } from "@/lib/dummy-data";
 import { CURRENCIES } from "@/lib/currencies";
+import { COUNTRIES } from "@/lib/countries";
 import { useTheme } from "@/lib/theme";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/settings")({
+  // Which section is open lives in the URL (not just component state) so
+  // the browser's own back button/gesture works the way it does on every
+  // other page: opening a section pushes a real history entry, and
+  // stepping back out of it (even after navigating away to e.g. /funds and
+  // back) lands you exactly where you left off instead of losing your
+  // place or falling through further than one step.
+  validateSearch: (search: Record<string, unknown>): { section?: string } => ({
+    section: typeof search.section === "string" ? search.section : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Settings — CN Invoice" },
@@ -158,20 +168,29 @@ export const templateSettingsDefaults: Record<string, boolean> = {
   hideTaxColumn: false, showSubtotal: false,
 };
 
+// NOTE: every text field below that describes a SPECIFIC business (name,
+// email, GSTIN, bank account...) must stay blank. This object is the
+// in-memory starting point for ANY tenant that hasn't saved a settings
+// row yet -- a brand-new signup, not just the original demo account -- so
+// a hardcoded "Prestige Store" here used to appear in a new business's own
+// Settings looking exactly like their own already-saved identity (and,
+// worse, a fake bank account/GSTIN they could genuinely put on a real
+// invoice without noticing). Only structural/behavioral defaults (toggles,
+// tax rates, invoice type) belong here.
 const defaults: SettingsState = {
   business: {
-    businessName: "Prestige Store",
-    legalName: "Prestige Store Pvt Ltd",
-    ownerName: "Admin User",
-    mobile: "+91 90000 00000",
-    whatsapp: "+91 90000 00000",
-    email: "billing@prestige.store",
-    website: "prestige.store",
-    gstin: "27PPPPP1234P1Z5",
-    pan: "PPPPP1234P",
-    address: "Main market, Mumbai, Maharashtra 400001",
-    state: "Maharashtra",
-    country: "India",
+    businessName: "",
+    legalName: "",
+    ownerName: "",
+    mobile: "",
+    whatsapp: "",
+    email: "",
+    website: "",
+    gstin: "",
+    pan: "",
+    address: "",
+    state: "",
+    country: "",
     showLogo: true,
     showBusinessStamp: true,
     logoUrl: "",
@@ -301,12 +320,12 @@ const defaults: SettingsState = {
     defaultMethod: "upi",
   },
   bank: {
-    accountName: "Prestige Store",
-    bankName: "HDFC Bank",
-    accountNumber: "50100xxxxxx0021",
-    ifsc: "HDFC0000123",
-    branch: "Mumbai Fort",
-    upi: "prestige@hdfcbank",
+    accountName: "",
+    bankName: "",
+    accountNumber: "",
+    ifsc: "",
+    branch: "",
+    upi: "",
     showOnInvoice: true,
   },
   users: {
@@ -324,7 +343,7 @@ const defaults: SettingsState = {
     dailySummary: false,
     weeklyReport: true,
     overdueReminder: true,
-    ownerEmail: "owner@prestige.store",
+    ownerEmail: "",
     reminderTime: "10:00",
     outstandingReminderEnabled: false,
     outstandingReminderInterval: "7",
@@ -334,7 +353,7 @@ const defaults: SettingsState = {
       "Dear #CompanyName, this is a reminder that payment of #InvoiceNumber (of #Balance) is due today. It might be busy with your work, but it would be appreciated if you could look into this. Please let me know if you have any queries.",
   },
   gmail: {
-    fromName: "Prestige Store",
+    fromName: "",
     fromEmail: "",
     replyTo: "",
     smtpHost: "smtp.gmail.com",
@@ -344,7 +363,7 @@ const defaults: SettingsState = {
     paymentMail: true,
   },
   whatsapp: {
-    displayName: "Prestige Store",
+    displayName: "",
     number: "",
     pairingBrandCode: "",
     invoiceMessage:
@@ -452,7 +471,12 @@ function SettingsPage() {
   // preselected section — a category push-navigates into its own screen,
   // matching the reference app's drill-down list instead of a permanent
   // desktop-style split view.
-  const [active, setActive] = useState<ActiveKey | null>(null);
+  const search = Route.useSearch();
+  const navigate = useNavigate();
+  const active = (search.section as ActiveKey | undefined) ?? null;
+  const setActive = (key: ActiveKey | null) => {
+    navigate({ to: "/settings", search: (key ? { section: key } : {}) as never });
+  };
   const [query, setQuery] = useState("");
   const [settings, setSettings] = useState<SettingsState>(defaults);
   const [loading, setLoading] = useState(true);
@@ -807,7 +831,7 @@ function BusinessPanel({ data, set }: PanelProps) {
         <TextField label="GSTIN" value={data.gstin} onChange={(v) => set("gstin", v)} />
         <TextField label="PAN" value={data.pan} onChange={(v) => set("pan", v)} />
         <TextField label="State" value={data.state} onChange={(v) => set("state", v)} />
-        <TextField label="Country" value={data.country} onChange={(v) => set("country", v)} />
+        <SelectField label="Country" value={data.country || "Pakistan"} onChange={(v) => set("country", v)} options={COUNTRIES} />
         <TextAreaField label="Full business address" value={data.address} onChange={(v) => set("address", v)} />
       </Grid>
       <div className="grid gap-3 md:grid-cols-2">
@@ -1056,7 +1080,7 @@ function NumberingPanel({ data, set }: PanelProps) {
           Currency code and symbol are set in one place — Tax &amp; Discount — so this page only controls the amount-in-words wording and number/date format, not the currency itself.
         </div>
         <Grid>
-          <TextField label="Country" value={data.country} onChange={(v) => set("country", v)} />
+          <SelectField label="Country" value={data.country || "Pakistan"} onChange={(v) => set("country", v)} options={COUNTRIES} />
           <TextField label="Currency major unit" value={data.currencyMajorUnit} onChange={(v) => set("currencyMajorUnit", v)} placeholder="e.g. Dollar / Euro / Rupee" />
           <TextField label="Currency minor unit" value={data.currencyMinorUnit} onChange={(v) => set("currencyMinorUnit", v)} placeholder="e.g. Cent / Paisa" />
           <TextField label="Separator (amount in words)" value={data.separator} onChange={(v) => set("separator", v)} />
