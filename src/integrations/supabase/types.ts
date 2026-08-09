@@ -806,12 +806,17 @@ export type Database = {
           created_at: string
           created_by: string | null
           date: string
+          discount_mode: string
+          discount_value: number
           id: string
           items: Json
+          notes: string | null
           number: string
+          shipping_amount: number
           status: string
           supplier_id: string | null
           supplier_name: string
+          tax_rate: number
           total: number
           updated_at: string
           tenant_id: string
@@ -820,12 +825,17 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           date: string
+          discount_mode?: string
+          discount_value?: number
           id?: string
           items?: Json
+          notes?: string | null
           number?: string
+          shipping_amount?: number
           status?: string
           supplier_id?: string | null
           supplier_name?: string
+          tax_rate?: number
           total?: number
           updated_at?: string
           tenant_id?: string
@@ -834,12 +844,17 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           date?: string
+          discount_mode?: string
+          discount_value?: number
           id?: string
           items?: Json
+          notes?: string | null
           number?: string
+          shipping_amount?: number
           status?: string
           supplier_id?: string | null
           supplier_name?: string
+          tax_rate?: number
           total?: number
           updated_at?: string
           tenant_id?: string
@@ -896,13 +911,18 @@ export type Database = {
           created_at: string
           created_by: string | null
           date: string
+          discount_mode: string
+          discount_value: number
           id: string
           items: Json
+          notes: string | null
           number: string
           paid: number
+          shipping_amount: number
           status: string
           supplier_id: string | null
           supplier_name: string
+          tax_rate: number
           total: number
           updated_at: string
           tenant_id: string
@@ -911,13 +931,18 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           date?: string
+          discount_mode?: string
+          discount_value?: number
           id?: string
           items?: Json
+          notes?: string | null
           number?: string
           paid?: number
+          shipping_amount?: number
           status?: string
           supplier_id?: string | null
           supplier_name: string
+          tax_rate?: number
           total?: number
           updated_at?: string
           tenant_id?: string
@@ -926,13 +951,18 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           date?: string
+          discount_mode?: string
+          discount_value?: number
           id?: string
           items?: Json
+          notes?: string | null
           number?: string
           paid?: number
+          shipping_amount?: number
           status?: string
           supplier_id?: string | null
           supplier_name?: string
+          tax_rate?: number
           total?: number
           updated_at?: string
           tenant_id?: string
