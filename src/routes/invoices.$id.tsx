@@ -1,9 +1,10 @@
 import { createFileRoute, Link, useParams } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
-import { Printer, ArrowLeft, Sparkles, Download, MessageCircle } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Printer, ArrowLeft, Sparkles, Download, MessageCircle, CheckCircle2, CheckCheck, XCircle, Clock, RotateCw } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useStore } from "@/lib/store";
 import { calcInvoiceTotals, fmt, getCurrencySymbol } from "@/lib/dummy-data";
@@ -13,6 +14,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { sendAndLogWhatsApp } from "@/lib/whatsapp";
 import { templateSettingsDefaults } from "@/routes/settings";
 import { toast } from "sonner";
+
+const waStatusMeta = {
+  sent: { icon: CheckCircle2, tone: "border-accent/40 text-accent", label: "Sent" },
+  delivered: { icon: CheckCheck, tone: "border-accent/40 text-accent", label: "Delivered" },
+  read: { icon: CheckCheck, tone: "border-primary/40 text-primary", label: "Read" },
+  failed: { icon: XCircle, tone: "border-destructive/40 text-destructive", label: "Failed" },
+  pending: { icon: Clock, tone: "border-gold/40 text-gold-foreground", label: "Pending" },
+} as const;
 
 export const Route = createFileRoute("/invoices/$id")({
   head: () => ({ meta: [
@@ -25,10 +34,18 @@ export const Route = createFileRoute("/invoices/$id")({
 
 function InvoiceView() {
   const { id } = useParams({ from: "/invoices/$id" });
-  const { getInvoice, customers } = useStore();
+  const { getInvoice, customers, whatsappLogs } = useStore();
   const inv = getInvoice(id);
+  const [resendingLogId, setResendingLogId] = useState<string | null>(null);
   const [waPrompt, setWaPrompt] = useState(false);
   const [waSending, setWaSending] = useState(false);
+  // Print previously fired window.print() unconditionally the instant it
+  // was clicked, at the same moment as opening the WhatsApp confirmation —
+  // the native print dialog and the custom prompt both popped up together.
+  // This tracks whether the prompt was opened BY the Print button, so
+  // printing happens once the prompt is resolved (Send or Not now) instead
+  // of racing it.
+  const printAfterPrompt = useRef(false);
   const [business, setBusiness] = useState<Record<string, any>>({});
   const [bank, setBank] = useState<Record<string, any>>({});
   const [labels, setLabels] = useState<Record<string, string>>({});
@@ -80,6 +97,30 @@ function InvoiceView() {
   const L = (key: string, fallback: string) => labels[key] || fallback;
 
   const customer = inv ? customers.find((c) => c.id === inv.customerId) : undefined;
+
+  // Every WhatsApp attempt for THIS invoice, newest first — previously this
+  // history only existed on the separate, un-filtered WhatsApp Monitoring
+  // page, so there was no way to tell "did this specific invoice actually
+  // go out?" without leaving the invoice and searching by number there.
+  const waHistory = useMemo(
+    () => whatsappLogs.filter((l) => l.referenceId === id).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    [whatsappLogs, id],
+  );
+
+  const resendWaLog = async (log: (typeof waHistory)[number]) => {
+    if (!log.messageText) return toast.error("No message text on file to resend");
+    setResendingLogId(log.id);
+    try {
+      const result = await sendAndLogWhatsApp({
+        customerId: log.customerId, customerName: log.customerName, toNumbers: [log.whatsappNumber],
+        message: log.messageText, messageType: log.messageType, referenceId: log.referenceId, referenceNumber: log.referenceNumber,
+      });
+      if (result.ok) toast.success("Resent");
+      else toast.error(result.error || "Could not resend");
+    } finally {
+      setResendingLogId(null);
+    }
+  };
 
   // jsPDF's default font can't render most non-ASCII currency glyphs (₹
   // came out as a garbled superscript-1) — fall back to a plain-ASCII
@@ -154,7 +195,15 @@ function InvoiceView() {
     } finally {
       setWaSending(false);
       setWaPrompt(false);
+      if (printAfterPrompt.current) { printAfterPrompt.current = false; window.print(); }
     }
+  };
+
+  // "Not now" on the WhatsApp prompt should still print when the prompt was
+  // opened by the Print button — declining WhatsApp isn't declining to print.
+  const dismissWaPrompt = () => {
+    setWaPrompt(false);
+    if (printAfterPrompt.current) { printAfterPrompt.current = false; window.print(); }
   };
 
   // Fires once, right after a fresh invoice is created (invoices.new.tsx
@@ -208,7 +257,7 @@ function InvoiceView() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Not now</AlertDialogCancel>
+            <AlertDialogCancel onClick={dismissWaPrompt}>Not now</AlertDialogCancel>
             <AlertDialogAction onClick={sendWhatsApp} disabled={waSending}>{waSending ? "Sending…" : "Send"}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -225,8 +274,10 @@ function InvoiceView() {
           <Button
             onClick={() => {
               if (customer?.whatsapp || customer?.whatsapp2) {
-                if (waSettings.sendInvoice) void sendWhatsApp();
-                else setWaPrompt(true);
+                printAfterPrompt.current = true;
+                if (waSettings.sendInvoice) { void sendWhatsApp(); return; }
+                setWaPrompt(true);
+                return;
               }
               window.print();
             }}
@@ -430,6 +481,41 @@ function InvoiceView() {
           </div>
         )}
       </article>
+
+      {waHistory.length > 0 && (
+        <div className="no-print mt-4 rounded-2xl border bg-card p-4">
+          <div className="mb-3 flex items-center gap-2 font-display font-semibold">
+            <MessageCircle className="h-4 w-4 text-primary" />WhatsApp history
+          </div>
+          <ul className="space-y-2">
+            {waHistory.map((log) => {
+              const meta = waStatusMeta[log.status] ?? waStatusMeta.pending;
+              const Icon = meta.icon;
+              return (
+                <li key={log.id} className="rounded-lg border p-3 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className={meta.tone}><Icon className="mr-1 h-3 w-3" />{meta.label}</Badge>
+                      <span className="text-muted-foreground">{log.whatsappNumber}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">{new Date(log.createdAt).toLocaleString()}</span>
+                      {log.status === "failed" && (
+                        <Button size="sm" variant="outline" disabled={resendingLogId === log.id} onClick={() => resendWaLog(log)}>
+                          <RotateCw className="mr-1.5 h-3.5 w-3.5" />{resendingLogId === log.id ? "Resending…" : "Resend"}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  {log.status === "failed" && log.errorMessage && (
+                    <div className="mt-1.5 text-xs text-destructive">Reason: {log.errorMessage}</div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
