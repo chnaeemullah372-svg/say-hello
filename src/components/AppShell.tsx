@@ -1,11 +1,11 @@
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { Moon, Sun, Search, Bell, LogOut, Settings } from "lucide-react";
+import { Moon, Sun, Bell, LogOut, Settings } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
+import { GlobalSearch } from "./GlobalSearch";
 import { useTheme } from "@/lib/theme";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { setCurrencySymbol } from "@/lib/dummy-data";
@@ -87,10 +87,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <SidebarInset className="min-w-0">
         <header className="sticky top-0 z-30 flex h-16 items-center gap-2 border-b bg-background/80 px-3 backdrop-blur sm:px-4">
           <SidebarTrigger className="h-9 w-9 rounded-xl hover:bg-muted [&_svg]:h-5 [&_svg]:w-5" />
-          <div className="relative ml-1 hidden max-w-sm flex-1 sm:block">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Search invoices, customers, products…" className="h-9 pl-9" />
-          </div>
+          <GlobalSearch />
           <div className="ml-auto flex items-center gap-1">
             <div className="mr-2 hidden text-right sm:block">
               <div className="text-xs font-medium leading-tight">{user?.name}</div>
