@@ -460,6 +460,14 @@ function SettingsPage() {
 
   const activeCategory = useMemo(() => categories.find((c) => c.key === active), [active]);
 
+  // Drilling into a section (or back out to the list) used to keep whatever
+  // scroll offset the list had -- opening a card near the bottom of a long
+  // list landed the panel's own header/Save button off-screen above the
+  // fold, since the page never scrolled back to the top of the new view.
+  useEffect(() => {
+    window.scrollTo({ top: 0 });
+  }, [active]);
+
   // Blueprint's "Searchable" principle: typing a keyword like "tax" or
   // "staff" should jump straight to the relevant setting instead of making
   // someone scan every group by eye.
@@ -500,7 +508,7 @@ function SettingsPage() {
       if (!mounted) return;
       setLoading(false);
       if (error) {
-        toast.error(error.message);
+        toast.error(friendlyErrorMessage(error, "Could not load settings"));
         return;
       }
       const next = structuredClone(defaults) as SettingsState;
@@ -532,7 +540,7 @@ function SettingsPage() {
       .maybeSingle();
     if (readError) {
       setSaving(null);
-      toast.error(readError.message);
+      toast.error(friendlyErrorMessage(readError, "Could not save settings"));
       return;
     }
 
@@ -548,7 +556,7 @@ function SettingsPage() {
 
     setSaving(null);
     if (result.error) {
-      toast.error(result.error.message);
+      toast.error(friendlyErrorMessage(result.error, "Could not save settings"));
       return;
     }
     toast.success(`${activeCategory?.title ?? "Settings"} saved`);
@@ -827,7 +835,7 @@ function InvoicePanel({ data, set }: PanelProps) {
         <TextField label="Invoice title" value={data.title} onChange={(v) => set("title", v)} />
         <TextField label="Copy label" value={data.duplicateLabel} onChange={(v) => set("duplicateLabel", v)} />
         <TextField label="Default due days" value={data.defaultDueDays} onChange={(v) => set("defaultDueDays", v)} type="number" />
-        <SelectField label="Invoice type" value={data.invoiceType} onChange={(v) => set("invoiceType", v)} options={["gst", "bill-of-supply", "proforma", "retail", "export"]} />
+        <SelectField label="Invoice type" value={data.invoiceType} onChange={(v) => set("invoiceType", v)} options={["gst", "bill-of-supply", "proforma", "retail", "export"]} optionLabels={{ gst: "GST" }} />
       </Grid>
       <SettingBlock title="Visible invoice columns" icon={ListChecks}>
         <ToggleGrid>
@@ -871,7 +879,7 @@ function TaxPanel({ data, set }: PanelProps) {
           </select>
         </div>
         <TextField label="Currency symbol (auto-set, editable)" value={data.symbol} onChange={(v) => set("symbol", v)} />
-        <SelectField label="Interstate GST" value={data.interstateTax} onChange={(v) => set("interstateTax", v)} options={["auto", "igst", "cgst-sgst"]} />
+        <SelectField label="Interstate GST" value={data.interstateTax} onChange={(v) => set("interstateTax", v)} options={["auto", "igst", "cgst-sgst"]} optionLabels={{ igst: "IGST", "cgst-sgst": "CGST-SGST" }} />
       </Grid>
 
       <SettingBlock title="Discount setting" icon={Percent}>
@@ -896,7 +904,7 @@ function TaxPanel({ data, set }: PanelProps) {
         </div>
         <div className="space-y-2">
           {taxList.map((t) => (
-            <div key={t.id} className="grid grid-cols-[1fr_90px_auto_auto_auto] items-center gap-2 rounded-lg border bg-card p-2">
+            <div key={t.id} className="grid grid-cols-1 items-center gap-2 rounded-lg border bg-card p-2 sm:grid-cols-[1fr_90px_auto_auto_auto]">
               <Input value={t.name} onChange={(e) => updateTax(t.id, { name: e.target.value })} placeholder="Tax name" />
               <Input type="number" value={t.pct} onChange={(e) => updateTax(t.id, { pct: e.target.value })} placeholder="%" />
               <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -1341,6 +1349,9 @@ function UsersPanel({ data, set }: PanelProps) {
           </div>
           <Button asChild><Link to="/team"><ShieldCheck className="mr-1.5 h-4 w-4" />Open Admin Control</Link></Button>
         </div>
+      </div>
+      <div className="rounded-lg border bg-muted/25 p-3 text-xs text-muted-foreground">
+        These are saved as reference defaults only — they don't apply themselves to new invites or existing staff yet. To actually restrict what a specific team member can do, set their per-module permissions from Admin Control's "Permissions" button.
       </div>
       <Grid>
         <SelectField label="Default role for new users" value={data.defaultRole} onChange={(v) => set("defaultRole", v)} options={["staff", "cashier", "manager", "admin"]} />
@@ -2017,7 +2028,7 @@ function HomeScreenPanel({ data, set }: PanelProps) {
   ];
   return (
     <Panel>
-      <PanelHeader icon={LayoutDashboard} title="Home Screen" subtitle="Customize what you see on the home screen. Set widgets to show monthly or yearly data." />
+      <PanelHeader icon={LayoutDashboard} title="Home Screen" subtitle="Customize what you see on the home screen. Set widgets to show monthly or all-time data." />
       <div className="grid gap-2">
         {widgets.map(([toggleKey, rangeKey, label]) => (
           <div key={toggleKey} className="flex items-center justify-between gap-3 rounded-lg border bg-card p-3">
@@ -2067,6 +2078,9 @@ function SecurityPanel({ data, set }: PanelProps) {
   return (
     <Panel>
       <PanelHeader icon={LockKeyhole} title="Security and login" subtitle="Password login, Google login, session timeout and audit controls." />
+      <div className="rounded-lg border bg-muted/25 p-3 text-xs text-muted-foreground">
+        These controls are saved but not yet enforced anywhere in the app — turning off Google login, for example, won't currently block it. Real access control lives in Team &amp; Access today; this panel is reserved for a future login/session-security pass.
+      </div>
       <Grid>
         <TextField label="Session timeout minutes" value={data.sessionTimeout} onChange={(v) => set("sessionTimeout", v)} type="number" />
       </Grid>
