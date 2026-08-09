@@ -29,6 +29,7 @@ function POPage() {
 
   return (
     <DocumentBoard
+      moduleKey="purchaseOrders"
       title="Purchase Orders"
       subtitle={`${purchaseOrders.length} purchase orders on file`}
       partyLabel="Supplier"

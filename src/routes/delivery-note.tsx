@@ -27,6 +27,7 @@ function DeliveryNotePage() {
 
   return (
     <DocumentBoard
+      moduleKey="deliveryNotes"
       title="Delivery Notes"
       subtitle={`${deliveryNotes.length} delivery notes on file`}
       partyLabel="Customer"

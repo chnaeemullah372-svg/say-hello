@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Receipt, Pencil, Trash2 } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { fmt } from "@/lib/dummy-data";
+import { useStaffPermissions } from "@/lib/permissions";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/expenses")({
@@ -28,6 +29,10 @@ const CATEGORIES = ["Rent", "Utilities", "Salaries", "Transport", "Supplies", "M
 
 function ExpensesPage() {
   const { expenses, addExpense, updateExpense, deleteExpense, accounts, updateAccount } = useStore();
+  const { can } = useStaffPermissions();
+  const canCreate = can("expenses", "create");
+  const canEdit = can("expenses", "edit");
+  const canDelete = can("expenses", "delete");
   const paymentAccounts = accounts.filter((a) => a.accountType === "payment");
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -103,7 +108,9 @@ function ExpensesPage() {
         subtitle="Record shop, staff and operational spending"
         action={
           <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setEditingId(null); }}>
-            <DialogTrigger asChild><Button onClick={startAdd}><Plus className="mr-1.5 h-4 w-4" />Add Expense</Button></DialogTrigger>
+            {canCreate && (
+              <DialogTrigger asChild><Button onClick={startAdd}><Plus className="mr-1.5 h-4 w-4" />Add Expense</Button></DialogTrigger>
+            )}
             <DialogContent className="sm:max-w-md">
               <DialogHeader><DialogTitle>{editingId ? "Edit Expense" : "New Expense"}</DialogTitle></DialogHeader>
               <div className="grid gap-3">
@@ -177,12 +184,16 @@ function ExpensesPage() {
                   <td className="px-6 py-3 text-muted-foreground">{accounts.find((a) => a.id === e.accountId)?.name ?? "—"}</td>
                   <td className="px-6 py-3 text-right font-semibold">{fmt(e.amount)}</td>
                   <td className="px-6 py-3 text-right">
-                    <button type="button" onClick={() => startEdit(e.id)} className="mr-2 text-muted-foreground hover:text-primary"><Pencil className="h-4 w-4" /></button>
-                    <button
-                      type="button"
-                      onClick={() => setDeleteTarget(e.id)}
-                      className="text-destructive"
-                    ><Trash2 className="h-4 w-4" /></button>
+                    {canEdit && (
+                      <button type="button" onClick={() => startEdit(e.id)} className="mr-2 text-muted-foreground hover:text-primary"><Pencil className="h-4 w-4" /></button>
+                    )}
+                    {canDelete && (
+                      <button
+                        type="button"
+                        onClick={() => setDeleteTarget(e.id)}
+                        className="text-destructive"
+                      ><Trash2 className="h-4 w-4" /></button>
+                    )}
                   </td>
                 </tr>
               ))}

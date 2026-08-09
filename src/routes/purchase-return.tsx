@@ -46,6 +46,7 @@ function PurchaseReturnPage() {
 
   return (
     <DocumentBoard
+      moduleKey="purchaseReturns"
       title="Purchase Returns"
       subtitle={`${purchaseReturns.length} purchase returns on file`}
       partyLabel="Supplier"

@@ -59,6 +59,7 @@ function PurchasesPage() {
 
   return (
     <DocumentBoard
+      moduleKey="purchases"
       title="Purchases"
       subtitle={`${purchases.length} purchase bills on file`}
       partyLabel="Supplier"

@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { PageHeader } from "@/components/PageHeader";
 import { fmt, type InvoiceItem } from "@/lib/dummy-data";
 import { useStore } from "@/lib/store";
+import { useStaffPermissions } from "@/lib/permissions";
 import { toast } from "sonner";
 
 export type DocRow = {
@@ -43,7 +44,7 @@ export type PartyOption = { id: string; name: string; balance?: number };
 
 export function DocumentBoard({
   title, subtitle, partyLabel, secondDateLabel, addLabel, rows, parties, statusOptions, partyType = "client",
-  convertLabel, onConvert, showTax = true, rateField = "price",
+  convertLabel, onConvert, showTax = true, rateField = "price", moduleKey,
   onCreate, onUpdate, onDelete,
 }: {
   title: string;
@@ -63,11 +64,18 @@ export function DocumentBoard({
   /** Which product field to default a picked item's rate from — sale price
    * for sales-side documents, purchase cost for purchase-side ones. */
   rateField?: "price" | "purchaseRate";
+  /** Staff-permissions module key for this document type (e.g. "estimates").
+   * Omit to leave this board ungated (matches the previous behavior). */
+  moduleKey?: string;
   onCreate: (row: Omit<DocRow, "id" | "number">) => Promise<unknown>;
   onUpdate: (id: string, patch: Partial<DocRow>) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 }) {
   const { addCustomer, updateCustomer, products, addProduct } = useStore();
+  const { can } = useStaffPermissions();
+  const canCreate = !moduleKey || can(moduleKey, "create");
+  const canEdit = !moduleKey || can(moduleKey, "edit");
+  const canDelete = !moduleKey || can(moduleKey, "delete");
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [quickEditingId, setQuickEditingId] = useState<string | null>(null);
   const [quickName, setQuickName] = useState("");
@@ -231,7 +239,9 @@ export function DocumentBoard({
         subtitle={subtitle}
         action={
           <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setEditingId(null); }}>
-            <DialogTrigger asChild><Button onClick={startAdd}><Plus className="mr-1.5 h-4 w-4" />{addLabel}</Button></DialogTrigger>
+            {canCreate && (
+              <DialogTrigger asChild><Button onClick={startAdd}><Plus className="mr-1.5 h-4 w-4" />{addLabel}</Button></DialogTrigger>
+            )}
             <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
               <DialogHeader><DialogTitle>{editingId ? `Edit ${title.slice(0, -1)}` : addLabel}</DialogTitle></DialogHeader>
               <div className="grid gap-4">
@@ -435,16 +445,20 @@ export function DocumentBoard({
                 {onConvert && r.convertedId && (
                   <Badge variant="outline" className="border-accent/40 text-accent">Converted</Badge>
                 )}
-                <button type="button" onClick={() => startEdit(r)} className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-primary">
-                  <Pencil className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDeleteTarget(r.id)}
-                  className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                {canEdit && (
+                  <button type="button" onClick={() => startEdit(r)} className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-primary">
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                )}
+                {canDelete && (
+                  <button
+                    type="button"
+                    onClick={() => setDeleteTarget(r.id)}
+                    className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
               </CardContent>
             </Card>
           );

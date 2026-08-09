@@ -60,6 +60,7 @@ function EstimatesPage() {
 
   return (
     <DocumentBoard
+      moduleKey="estimates"
       title="Estimates"
       subtitle={`${estimates.length} estimates on file`}
       partyLabel="Customer"

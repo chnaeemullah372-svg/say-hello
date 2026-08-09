@@ -80,6 +80,7 @@ function SaleOrderPage() {
 
   return (
     <DocumentBoard
+      moduleKey="saleOrders"
       title="Sale Orders"
       subtitle={`${saleOrders.length} orders on file`}
       partyLabel="Customer"

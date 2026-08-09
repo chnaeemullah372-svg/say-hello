@@ -44,6 +44,14 @@ const PERMISSION_MODULES: { key: string; label: string }[] = [
   { key: "invoices", label: "Invoices" },
   { key: "customers", label: "Customers" },
   { key: "products", label: "Products" },
+  { key: "estimates", label: "Estimates" },
+  { key: "saleOrders", label: "Sale Orders" },
+  { key: "purchaseOrders", label: "Purchase Orders" },
+  { key: "purchases", label: "Purchases" },
+  { key: "deliveryNotes", label: "Delivery Notes" },
+  { key: "saleReturns", label: "Sale Returns" },
+  { key: "purchaseReturns", label: "Purchase Returns" },
+  { key: "expenses", label: "Expenses" },
 ];
 
 const PERMISSION_ACTIONS: { key: keyof ModulePermission; label: string }[] = [
@@ -342,9 +350,9 @@ function TeamPage() {
           {permLoading ? (
             <div className="py-8 text-center text-sm text-muted-foreground">Loading…</div>
           ) : (
-            <div className="overflow-x-auto py-2">
+            <div className="max-h-[60vh] overflow-y-auto overflow-x-auto py-2">
               <table className="w-full text-sm">
-                <thead className="text-xs uppercase tracking-wide text-muted-foreground">
+                <thead className="sticky top-0 bg-background text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th className="py-2 text-left">Module</th>
                     {PERMISSION_ACTIONS.map((a) => <th key={a.key} className="py-2 text-center">{a.label}</th>)}
