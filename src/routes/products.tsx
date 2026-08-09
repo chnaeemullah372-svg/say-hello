@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useStore } from "@/lib/store";
 import { fmt, type ItemType, type Product } from "@/lib/dummy-data";
+import { useStaffPermissions } from "@/lib/permissions";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/products")({
@@ -45,6 +46,9 @@ type SortOption = (typeof SORT_OPTIONS)[number];
 
 function ProductsPage() {
   const { products, addProduct, updateProduct } = useStore();
+  const { can } = useStaffPermissions();
+  const canCreate = can("products", "create");
+  const canEdit = can("products", "edit");
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -153,12 +157,19 @@ function ProductsPage() {
         subtitle={`${products.length} items in catalog`}
         action={
           <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setEditingId(null); }}>
-            <DialogTrigger asChild><Button onClick={startAdd}><Plus className="mr-1.5 h-4 w-4" />Add Item</Button></DialogTrigger>
+            {canCreate && (
+              <DialogTrigger asChild><Button onClick={startAdd}><Plus className="mr-1.5 h-4 w-4" />Add Item</Button></DialogTrigger>
+            )}
             <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
               <DialogHeader><DialogTitle>{editingId ? "Edit item" : "Product / Service"}</DialogTitle></DialogHeader>
               <div className="grid gap-4">
-                <div className="grid grid-cols-3 gap-1.5 rounded-lg border bg-muted/40 p-1">
-                  {(["product", "service", "composite"] as ItemType[]).map((t) => (
+                {/* "Composite" used to be offered here with no way to
+                    actually define which component products make it up —
+                    selecting it only swapped a badge. Not offering it as a
+                    choice until it's a real bill-of-materials feature is
+                    more honest than a type that does nothing. */}
+                <div className="grid grid-cols-2 gap-1.5 rounded-lg border bg-muted/40 p-1">
+                  {(["product", "service"] as ItemType[]).map((t) => (
                     <button
                       key={t} type="button"
                       onClick={() => setForm({ ...form, itemType: t })}
@@ -290,9 +301,11 @@ function ProductsPage() {
                   <span className="flex items-center gap-1.5">
                     <Calendar className="h-3.5 w-3.5" /> {p.itemType === "service" ? "Service item" : `Alert at ${p.lowStockAt}`}
                   </span>
-                  <button type="button" onClick={() => startEdit(p)} className="flex items-center gap-1 text-primary hover:underline">
-                    <Pencil className="h-3 w-3" />Edit
-                  </button>
+                  {canEdit && (
+                    <button type="button" onClick={() => startEdit(p)} className="flex items-center gap-1 text-primary hover:underline">
+                      <Pencil className="h-3 w-3" />Edit
+                    </button>
+                  )}
                 </div>
               </CardContent>
             </Card>

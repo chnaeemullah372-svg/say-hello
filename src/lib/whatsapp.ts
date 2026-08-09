@@ -39,6 +39,7 @@ export async function sendAndLogWhatsApp(params: {
   if (numbers.length === 0) return { ok: false, error: "No WhatsApp number on file for this customer" };
 
   const { data: userData } = await supabase.auth.getUser();
+  const { data: profile } = await supabase.from("profiles").select("tenant_id").eq("user_id", userData.user?.id ?? "").maybeSingle();
   let lastError: string | undefined;
   let anyOk = false;
 
@@ -57,8 +58,40 @@ export async function sendAndLogWhatsApp(params: {
       status: result.ok ? "sent" : "failed",
       error_message: result.error || null,
       created_by: userData.user?.id,
+      tenant_id: profile?.tenant_id,
     });
   }
 
   return anyOk ? { ok: true } : { ok: false, error: lastError };
+}
+
+const ORDER_STATUS_TEMPLATE_KEYS: Record<string, { modeKey: string; messageKey: string }> = {
+  booked: { modeKey: "orderBookedMode", messageKey: "orderBookedMessage" },
+  processing: { modeKey: "orderProcessingMode", messageKey: "orderProcessingMessage" },
+  completed: { modeKey: "orderCompletedMode", messageKey: "orderCompletedMessage" },
+  cancelled: { modeKey: "orderCancelledMode", messageKey: "orderCancelledMessage" },
+};
+
+/**
+ * Fires the Settings -> WhatsApp -> Order Management template for a sale
+ * order's new status. These templates and the WhatsApp/SMS channel choice
+ * per status already existed in Settings but were never wired to anything
+ * that actually sends — this is that wiring. SMS isn't a real channel
+ * anywhere else in the app either (no SMS provider is integrated), so a
+ * status configured for "sms" is a silent no-op rather than a fake send;
+ * only "whatsapp" actually delivers.
+ */
+export async function sendOrderStatusUpdate(
+  status: string,
+  orderNumber: string,
+  toNumbers: (string | undefined | null)[],
+  waSettings: Record<string, any>,
+): Promise<WhatsAppSendResult | null> {
+  const keys = ORDER_STATUS_TEMPLATE_KEYS[status];
+  if (!keys) return null;
+  if (waSettings[keys.modeKey] !== "whatsapp") return null;
+  const template = (waSettings[keys.messageKey] as string) || "";
+  if (!template.trim()) return null;
+  const message = template.replace(/#OrderNo/g, orderNumber);
+  return sendAndLogWhatsApp({ toNumbers, message, messageType: "order_status", referenceNumber: orderNumber });
 }

@@ -8,10 +8,13 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useStore } from "@/lib/store";
-import { fmt } from "@/lib/dummy-data";
-import type { AccountType } from "@/lib/dummy-data";
+import { fmt, type Account, type AccountType } from "@/lib/dummy-data";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/funds")({
@@ -23,8 +26,11 @@ export const Route = createFileRoute("/funds")({
 });
 
 function FundsPage() {
-  const { accounts, addAccount, deleteAccount, addFundTransfer } = useStore();
+  const { accounts, addAccount, deleteAccount, addFundTransfer, payments, expenses } = useStore();
   const total = accounts.reduce((s, a) => s + a.currentBalance, 0);
+  const [deleteTarget, setDeleteTarget] = useState<Account | null>(null);
+  const accountInUse = (a: Account) =>
+    payments.some((p) => p.method === a.name) || expenses.some((e) => e.accountId === a.id);
 
   const [addOpen, setAddOpen] = useState(false);
   const [name, setName] = useState("");
@@ -153,7 +159,7 @@ function FundsPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge variant="outline" className="capitalize">{a.accountType}</Badge>
-                  <button type="button" onClick={async () => { try { await deleteAccount(a.id); toast.success("Deleted"); } catch (err) { toast.error(err instanceof Error ? err.message : "Could not delete"); } }} className="text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
+                  <button type="button" onClick={() => setDeleteTarget(a)} className="text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
                 </div>
               </div>
               <div className="mt-4 truncate font-display text-base font-semibold">{a.name}</div>
@@ -163,6 +169,32 @@ function FundsPage() {
           </Card>
         ))}
       </div>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => { if (!o) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {deleteTarget?.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget && accountInUse(deleteTarget)
+                ? "Payments or expenses already reference this account — deleting it won't remove them, but they'll no longer resolve back to a real account here."
+                : "This can't be undone."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                if (!deleteTarget) return;
+                try { await deleteAccount(deleteTarget.id); toast.success("Deleted"); }
+                catch (err) { toast.error(err instanceof Error ? err.message : "Could not delete"); }
+                finally { setDeleteTarget(null); }
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

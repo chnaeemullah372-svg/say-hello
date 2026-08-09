@@ -1,5 +1,5 @@
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { Moon, Sun, Search, Bell, LogOut, Settings, ShieldCheck } from "lucide-react";
+import { Moon, Sun, Search, Bell, LogOut, Settings } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
@@ -61,12 +61,32 @@ export function AppShell({ children }: { children: ReactNode }) {
     navigate({ to: "/login" });
   };
 
+  // A brand-new business sits here until the platform's Main Admin approves
+  // it — everything else in the app (customers, invoices, WhatsApp…) stays
+  // hidden until then. Platform admins skip this even for their own
+  // business, since they're the ones doing the approving.
+  if (!user?.isPlatformAdmin && user?.businessStatus !== "active") {
+    const message =
+      user?.businessStatus === "rejected" ? "This business account was not approved."
+      : user?.businessStatus === "suspended" ? "This business account has been suspended."
+      : "Your business account is awaiting approval. We'll notify you once it's active.";
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <div className="max-w-md text-center">
+          <h1 className="font-display text-xl font-semibold">{user?.businessName || "Your business"}</h1>
+          <p className="mt-3 text-sm text-muted-foreground">{message}</p>
+          <Button variant="outline" className="mt-6" onClick={handleLogout}>Sign out</Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset className="min-w-0">
-        <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-background/80 px-3 backdrop-blur sm:px-4">
-          <SidebarTrigger />
+        <header className="sticky top-0 z-30 flex h-16 items-center gap-2 border-b bg-background/80 px-3 backdrop-blur sm:px-4">
+          <SidebarTrigger className="h-9 w-9 rounded-xl hover:bg-muted [&_svg]:h-5 [&_svg]:w-5" />
           <div className="relative ml-1 hidden max-w-sm flex-1 sm:block">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input placeholder="Search invoices, customers, products…" className="h-9 pl-9" />
@@ -76,21 +96,19 @@ export function AppShell({ children }: { children: ReactNode }) {
               <div className="text-xs font-medium leading-tight">{user?.name}</div>
               <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{user?.role}</div>
             </div>
-            <Button variant="ghost" size="icon" aria-label="Notifications" className="relative">
-              <Bell className="h-4 w-4" />
-              <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-gold" />
+            <Button variant="ghost" size="icon" aria-label="Notifications" className="relative h-10 w-10 rounded-xl hover:bg-muted">
+              <Bell className="h-5 w-5" />
+              <span className="absolute right-2.5 top-2.5 h-1.5 w-1.5 rounded-full bg-gold" />
             </Button>
-            <Button variant="ghost" size="icon" aria-label="Admin control" onClick={() => navigate({ to: "/team" })}>
-              <ShieldCheck className="h-4 w-4" />
+            <Button variant="ghost" size="icon" aria-label="Settings" className="h-10 w-10 rounded-xl hover:bg-muted" onClick={() => navigate({ to: "/settings" })}>
+              <Settings className="h-5 w-5" />
             </Button>
-            <Button variant="ghost" size="icon" aria-label="Settings" onClick={() => navigate({ to: "/settings" })}>
-              <Settings className="h-4 w-4" />
+            <Button variant="ghost" size="icon" aria-label="Toggle theme" className="h-10 w-10 rounded-xl hover:bg-muted" onClick={toggle}>
+              {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
-            <Button variant="ghost" size="icon" aria-label="Toggle theme" onClick={toggle}>
-              {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            </Button>
-            <Button variant="ghost" size="icon" aria-label="Log out" onClick={handleLogout}>
-              <LogOut className="h-4 w-4" />
+            <div className="mx-0.5 h-6 w-px bg-border" />
+            <Button variant="ghost" size="icon" aria-label="Log out" className="h-10 w-10 rounded-xl hover:bg-destructive/10 hover:text-destructive" onClick={handleLogout}>
+              <LogOut className="h-5 w-5" />
             </Button>
           </div>
         </header>

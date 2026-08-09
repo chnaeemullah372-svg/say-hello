@@ -14,25 +14,34 @@ const MIN_GAP_MS = 23 * 60 * 60 * 1000; // 23h buffer absorbs tick jitter
 
 let started = false;
 
+// This gate is platform-wide (across every business), not any one
+// business's own setting — it lives in its own tiny service-role-only
+// table instead of app_settings, which is now unique per (tenant_id,
+// setting_key) and would match one row per business for this key.
+const SCHEDULER_STATE_KEY = "due_reminders_heartbeat";
+
 async function tick() {
   try {
     const { data } = await supabaseAdmin
-      .from("app_settings")
-      .select("setting_value")
-      .eq("setting_key", "settings.notifications")
+      .from("scheduler_state")
+      .select("value")
+      .eq("key", SCHEDULER_STATE_KEY)
       .maybeSingle();
-    const notif = (data?.setting_value as Record<string, unknown>) ?? {};
-    const lastRunAt = notif.lastReminderRunAt ? new Date(notif.lastReminderRunAt as string).getTime() : 0;
+    const state = (data?.value as Record<string, unknown>) ?? {};
+    const lastRunAt = state.lastReminderRunAt ? new Date(state.lastReminderRunAt as string).getTime() : 0;
     if (Date.now() - lastRunAt < MIN_GAP_MS) return;
 
     const { runDueReminderCheck } = await import("@/lib/due-reminders.server");
     const stats = await runDueReminderCheck();
     console.log(`[due-reminders] checked=${stats.checked} sent=${stats.sent} skipped=${stats.skipped} failed=${stats.failed}`);
 
+    const { runSubscriptionBillingCheck } = await import("@/lib/subscription-billing.server");
+    const subStats = await runSubscriptionBillingCheck();
+    console.log(`[subscription-billing] billed=${subStats.billed} failed=${subStats.failed}`);
+
     await supabaseAdmin
-      .from("app_settings")
-      .update({ setting_value: { ...notif, lastReminderRunAt: new Date().toISOString() } })
-      .eq("setting_key", "settings.notifications");
+      .from("scheduler_state")
+      .upsert({ key: SCHEDULER_STATE_KEY, value: { lastReminderRunAt: new Date().toISOString() } }, { onConflict: "key" });
   } catch (err) {
     console.error("[due-reminders] tick failed:", err);
   }

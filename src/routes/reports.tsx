@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { monthlySales, topProducts, fmt, calcInvoiceTotals, type Customer, type Invoice, type Purchase, type Product, type Expense, type Payment, type SaleOrder } from "@/lib/dummy-data";
+import { fmt, calcInvoiceTotals, type Customer, type Invoice, type Purchase, type Product, type Expense, type Payment, type SaleOrder, type SaleReturn, type PurchaseReturn, type Commission } from "@/lib/dummy-data";
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useStore } from "@/lib/store";
 import { ChevronRight, FileSpreadsheet, Printer, Search } from "lucide-react";
@@ -35,7 +35,7 @@ function dateRange(dates: string[]): [string, string] {
 }
 
 function invoiceWithTotals(inv: Invoice) {
-  const t = calcInvoiceTotals(inv.items, inv.taxRate, inv.discountMode, inv.discountValue, inv.shippingAmount);
+  const t = calcInvoiceTotals(inv.items, inv.taxRate, inv.discountMode, inv.discountValue, inv.shippingAmount, inv.taxInclusive);
   return { ...inv, ...t, balance: t.total - inv.paid };
 }
 
@@ -45,7 +45,7 @@ function invoiceWithTotals(inv: Invoice) {
 function buildReport(
   section: string,
   item: string,
-  store: { invoices: Invoice[]; purchases: Purchase[]; customers: Customer[]; products: Product[]; expenses: Expense[]; payments: Payment[]; saleOrders: SaleOrder[] },
+  store: { invoices: Invoice[]; purchases: Purchase[]; customers: Customer[]; products: Product[]; expenses: Expense[]; payments: Payment[]; saleOrders: SaleOrder[]; saleReturns: SaleReturn[]; purchaseReturns: PurchaseReturn[]; commissions: Commission[] },
 ): ReportTable {
   const invoices = store.invoices.map(invoiceWithTotals);
   const customerName = (id?: string) => store.customers.find((c) => c.id === id)?.name ?? "-";
@@ -134,11 +134,12 @@ function buildReport(
     case "Client Ledger / Transactions::Client Ledger / Transactions": {
       const rows = store.customers.filter((c) => c.partyType !== "supplier");
       return {
-        columns: ["Client", "Phone", "Invoices", "Total Billed", "Balance"],
+        columns: ["Client", "Phone", "Invoices", "Opening Balance", "Total Billed", "Payment Received", "Balance"],
         rows: rows.map((c) => {
           const own = invoices.filter((i) => i.customerId === c.id);
           const billed = own.reduce((s, i) => s + i.total, 0);
-          return [c.name, c.phone || "-", String(own.length), fmt(billed), fmt(c.balance)];
+          const received = store.payments.filter((p) => own.some((i) => i.number === p.invoiceNumber)).reduce((s, p) => s + p.amount, 0);
+          return [c.name, c.phone || "-", String(own.length), fmt(c.openingBalance ?? 0), fmt(billed), fmt(received), fmt(c.balance)];
         }),
         total: rows.reduce((s, c) => s + c.balance, 0),
         dateFrom: "-", dateTo: "-",
@@ -148,8 +149,12 @@ function buildReport(
     case "Client Ledger / Transactions::Client/Supplier Overall Report": {
       const rows = store.customers;
       return {
-        columns: ["Name", "Type", "Region", "Balance", "Payable"],
-        rows: rows.map((c) => [c.name, c.partyType, c.region || "-", fmt(c.balance), fmt(c.payableBalance ?? 0)]),
+        columns: ["Name", "Type", "Region", "Opening Balance", "Payment Received", "Balance", "Payable"],
+        rows: rows.map((c) => {
+          const own = invoices.filter((i) => i.customerId === c.id);
+          const received = store.payments.filter((p) => own.some((i) => i.number === p.invoiceNumber)).reduce((s, p) => s + p.amount, 0);
+          return [c.name, c.partyType, c.region || "-", fmt(c.openingBalance ?? 0), fmt(received), fmt(c.balance), fmt(c.payableBalance ?? 0)];
+        }),
         total: rows.reduce((s, c) => s + c.balance, 0),
         dateFrom: "-", dateTo: "-",
       };
@@ -234,16 +239,28 @@ function buildReport(
     }
 
     case "Other Reports::Profit / Loss": {
+      // Sales returns and commissions were never subtracted, and purchase
+      // returns never added back — so any shop paying agent commissions or
+      // processing returns saw a profit figure that was systematically
+      // too high.
       const sales = invoices.reduce((s, i) => s + i.total, 0);
+      const salesReturns = store.saleReturns.reduce((s, r) => s + r.total, 0);
       const purchaseCost = store.purchases.reduce((s, p) => s + p.total, 0);
+      const purchaseReturns = store.purchaseReturns.reduce((s, r) => s + r.total, 0);
       const expenseCost = store.expenses.reduce((s, e) => s + e.amount, 0);
-      const profit = sales - purchaseCost - expenseCost;
+      const commissionCost = store.commissions.reduce((s, c) => s + c.commission, 0);
+      const netSales = sales - salesReturns;
+      const netPurchases = purchaseCost - purchaseReturns;
+      const profit = netSales - netPurchases - expenseCost - commissionCost;
       return {
         columns: ["Line", "Amount"],
         rows: [
           ["Sales", fmt(sales)],
+          ["Sales Returns", fmt(-salesReturns)],
           ["Purchases", fmt(-purchaseCost)],
+          ["Purchase Returns", fmt(purchaseReturns)],
           ["Expenses", fmt(-expenseCost)],
+          ["Commissions", fmt(-commissionCost)],
           ["Net Profit / Loss", fmt(profit)],
         ],
         total: profit,
@@ -272,16 +289,25 @@ function buildReport(
     }
 
     case "Other Reports::Client wise Profit / Loss": {
+      // This used to show Billed/Collected/Outstanding with no cost or
+      // margin at all despite the report's name, and a permanently
+      // hardcoded 0 total regardless of the data shown.
+      let grandProfit = 0;
       const rows = store.customers.filter((c) => c.partyType !== "supplier").map((c) => {
         const own = invoices.filter((i) => i.customerId === c.id);
         const revenue = own.reduce((s, i) => s + i.total, 0);
-        const collected = own.reduce((s, i) => s + i.paid, 0);
-        return [c.name, fmt(revenue), fmt(collected), fmt(revenue - collected)];
+        const cost = own.reduce((s, i) => s + i.items.reduce((is, it) => {
+          const product = store.products.find((p) => p.id === it.productId || p.name === it.name);
+          return is + it.qty * (product?.purchaseRate ?? 0);
+        }, 0), 0);
+        const profit = revenue - cost;
+        grandProfit += profit;
+        return [c.name, fmt(revenue), fmt(cost), fmt(profit)];
       });
       return {
-        columns: ["Client", "Billed", "Collected", "Outstanding"],
+        columns: ["Client", "Billed", "Cost", "Profit / Loss"],
         rows,
-        total: 0,
+        total: grandProfit,
         dateFrom: "-", dateTo: "-",
       };
     }
@@ -302,6 +328,34 @@ function ReportsPage() {
     { name: "Outstanding", value: outstanding },
   ];
   const report = selectedReport ? buildReport(selectedReport.section, selectedReport.item, store) : null;
+
+  // These two charts used to render from a hardcoded sample array shipped
+  // with the app — the exact same numbers forever, regardless of anything
+  // actually sold. Both are now grouped from real invoice data.
+  const monthlySales = (() => {
+    const byMonth = new Map<string, number>();
+    for (const i of invoices) {
+      const key = i.date.slice(0, 7); // YYYY-MM
+      byMonth.set(key, (byMonth.get(key) ?? 0) + i.total);
+    }
+    return [...byMonth.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(-6)
+      .map(([key, sales]) => ({ month: new Date(`${key}-01T00:00:00`).toLocaleDateString("en-US", { month: "short" }), sales }));
+  })();
+
+  const topProducts = (() => {
+    const byProduct = new Map<string, number>();
+    for (const i of store.invoices) {
+      for (const it of i.items) {
+        byProduct.set(it.name, (byProduct.get(it.name) ?? 0) + it.qty * it.rate * (1 - it.discount / 100));
+      }
+    }
+    return [...byProduct.entries()]
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 5)
+      .map(([name, sales]) => ({ name, sales }));
+  })();
 
   return (
     <div className="space-y-6">
@@ -338,7 +392,7 @@ function ReportsPage() {
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
                 <XAxis dataKey="month" stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
                 <YAxis stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(v) => `${v/1000}k`} />
-                <Tooltip contentStyle={{ background: "var(--color-popover)", border: "1px solid var(--color-border)", borderRadius: 8 }} />
+                <Tooltip formatter={(v: number) => fmt(v)} contentStyle={{ background: "var(--color-popover)", border: "1px solid var(--color-border)", borderRadius: 8 }} />
                 <Bar dataKey="sales" fill="var(--color-primary)" radius={[8, 8, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -353,8 +407,8 @@ function ReportsPage() {
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" horizontal={false} />
                 <XAxis type="number" stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(v) => `${v/1000}k`} />
                 <YAxis type="category" dataKey="name" stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} width={100} />
-                <Tooltip contentStyle={{ background: "var(--color-popover)", border: "1px solid var(--color-border)", borderRadius: 8 }} />
-                <Bar dataKey="value" fill="var(--color-accent)" radius={[0, 8, 8, 0]} />
+                <Tooltip formatter={(v: number) => fmt(v)} contentStyle={{ background: "var(--color-popover)", border: "1px solid var(--color-border)", borderRadius: 8 }} />
+                <Bar dataKey="sales" fill="var(--color-accent)" radius={[0, 8, 8, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>

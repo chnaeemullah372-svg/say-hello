@@ -85,6 +85,8 @@ export type Invoice = {
   dueDate: string;
   items: InvoiceItem[];
   taxRate: number; // %
+  taxEnabled: boolean;
+  taxInclusive: boolean;
   discountMode?: "rate" | "flat";
   discountValue?: number;
   shippingAmount?: number;
@@ -126,7 +128,7 @@ export type FundTransfer = {
   date: string;
 };
 
-export type WhatsAppLogStatus = "pending" | "sent" | "failed";
+export type WhatsAppLogStatus = "pending" | "sent" | "delivered" | "read" | "failed";
 export type WhatsAppLog = {
   id: string;
   customerId?: string;
@@ -141,7 +143,7 @@ export type WhatsAppLog = {
   createdAt: string;
 };
 
-export type EstimateStatus = "open" | "accepted" | "declined" | "expired";
+export type EstimateStatus = "open" | "followup" | "negotiation" | "not_interested" | "accepted";
 export type Estimate = {
   id: string;
   number: string;
@@ -155,6 +157,7 @@ export type Estimate = {
   shippingAmount?: number;
   notes?: string;
   status: EstimateStatus;
+  invoiceId?: string;
 };
 
 export type SaleOrderStatus = "booked" | "processing" | "completed" | "cancelled";
@@ -171,6 +174,7 @@ export type SaleOrder = {
   shippingAmount?: number;
   notes?: string;
   status: SaleOrderStatus;
+  invoiceId?: string;
 };
 
 export type Expense = {
@@ -179,11 +183,13 @@ export type Expense = {
   description?: string;
   amount: number;
   date: string;
+  accountId?: string;
 };
 
 export type PurchaseStatus = "paid" | "partial" | "unpaid";
 export type Purchase = {
   id: string;
+  number: string;
   supplierId?: string;
   supplierName: string;
   items: InvoiceItem[];
@@ -203,6 +209,7 @@ export type PurchaseOrder = {
   items: InvoiceItem[];
   total: number;
   status: PurchaseOrderStatus;
+  billId?: string;
 };
 
 export type DeliveryNoteStatus = "pending" | "delivered" | "cancelled";
@@ -300,12 +307,12 @@ export const invoicesSeed: Invoice[] = [
       { productId: "p1", name: "Premium Cotton Shirt", qty: 5, rate: 1299, discount: 5 },
       { productId: "p7", name: "Leather Wallet", qty: 3, rate: 1499, discount: 0 },
     ],
-    taxRate: 18, paid: 6000, status: "partial",
+    taxRate: 18, taxEnabled: true, taxInclusive: false, paid: 6000, status: "partial",
   },
   {
     id: "i2", number: "INV-2026-0141", customerId: "c2", date: "2026-06-28", dueDate: "2026-07-12",
     items: [{ productId: "p2", name: "Wireless Earbuds Pro", qty: 4, rate: 3499, discount: 10 }],
-    taxRate: 18, paid: 14855, status: "paid",
+    taxRate: 18, taxEnabled: true, taxInclusive: false, paid: 14855, status: "paid",
   },
   {
     id: "i3", number: "INV-2026-0140", customerId: "c4", date: "2026-06-25", dueDate: "2026-07-09",
@@ -313,17 +320,17 @@ export const invoicesSeed: Invoice[] = [
       { productId: "p5", name: "Office Chair Deluxe", qty: 2, rate: 8999, discount: 0 },
       { productId: "p6", name: "LED Desk Lamp", qty: 4, rate: 1899, discount: 5 },
     ],
-    taxRate: 18, paid: 0, status: "unpaid",
+    taxRate: 18, taxEnabled: true, taxInclusive: false, paid: 0, status: "unpaid",
   },
   {
     id: "i4", number: "INV-2026-0139", customerId: "c3", date: "2026-06-22", dueDate: "2026-07-06",
     items: [{ productId: "p3", name: "Basmati Rice 5kg", qty: 20, rate: 749, discount: 3 }],
-    taxRate: 5, paid: 10000, status: "partial",
+    taxRate: 5, taxEnabled: true, taxInclusive: false, paid: 10000, status: "partial",
   },
   {
     id: "i5", number: "INV-2026-0138", customerId: "c6", date: "2026-06-20", dueDate: "2026-07-04",
     items: [{ productId: "p8", name: "Organic Green Tea 250g", qty: 12, rate: 349, discount: 0 }],
-    taxRate: 5, paid: 4398, status: "paid",
+    taxRate: 5, taxEnabled: true, taxInclusive: false, paid: 4398, status: "paid",
   },
 ];
 
@@ -358,6 +365,7 @@ export function calcInvoiceTotals(
   discountMode: "rate" | "flat" = "rate",
   discountValue = 0,
   shippingAmount = 0,
+  taxInclusive = false,
 ) {
   const subtotal = items.reduce((s, it) => s + it.qty * it.rate, 0);
   const lineDiscount = items.reduce((s, it) => s + (it.qty * it.rate * it.discount) / 100, 0);
@@ -370,11 +378,14 @@ export function calcInvoiceTotals(
   const globalDiscount = discountMode === "rate" ? (afterLineDiscount * discountValue) / 100 : discountValue;
   const discount = lineDiscount + globalDiscount;
   const taxable = Math.max(0, afterLineDiscount - globalDiscount);
-  const tax = (taxable * taxRate) / 100;
+  // Inclusive tax is already baked into item prices — it must be EXTRACTED
+  // from the taxable amount for reporting, not added on top of it, or the
+  // customer would be charged tax twice. Exclusive tax adds on top as usual.
+  const tax = taxInclusive && taxRate > 0 ? taxable - taxable / (1 + taxRate / 100) : (taxable * taxRate) / 100;
   // Shipping is part of the Total shown while creating an invoice; every
   // other screen recomputed the total from items/tax/discount alone and
   // silently dropped it, understating the total everywhere except create.
-  const total = taxable + tax + shippingAmount;
+  const total = taxInclusive ? taxable + shippingAmount : taxable + tax + shippingAmount;
   return { subtotal, discount, tax, total };
 }
 
@@ -392,5 +403,9 @@ export function getCurrencySymbol() {
 }
 
 export function fmt(n: number) {
-  return `${currencySymbol} ${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  // Negating a zero total (e.g. fmt(-someReturnsThatHappenToBeZero)) produces
+  // JS's -0, which toLocaleString renders as "-0.00" — a stray minus sign
+  // in front of nothing that reads as a mistake on a financial statement.
+  // Adding 0 collapses -0 back to 0 per IEEE 754 without touching any other value.
+  return `${currencySymbol} ${(n + 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }

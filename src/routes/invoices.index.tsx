@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { useStore } from "@/lib/store";
 import { calcInvoiceTotals, fmt } from "@/lib/dummy-data";
 import { StatusPill } from "@/components/StatusPill";
+import { useStaffPermissions } from "@/lib/permissions";
 
 export const Route = createFileRoute("/invoices/")({
   head: () => ({ meta: [
@@ -32,6 +33,10 @@ type Filter = "all" | "paid" | "partial" | "unpaid";
 
 function InvoiceList() {
   const { invoices, customers, deleteInvoice } = useStore();
+  const { can } = useStaffPermissions();
+  const canEdit = can("invoices", "edit");
+  const canDelete = can("invoices", "delete");
+  const canCreate = can("invoices", "create");
   const navigate = useNavigate();
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
@@ -51,7 +56,7 @@ function InvoiceList() {
   const enriched = useMemo(
     () => invoices.map((i) => ({
       ...i,
-      ...calcInvoiceTotals(i.items, i.taxRate, i.discountMode, i.discountValue, i.shippingAmount),
+      ...calcInvoiceTotals(i.items, i.taxRate, i.discountMode, i.discountValue, i.shippingAmount, i.taxInclusive),
       customer: customers.find((c) => c.id === i.customerId),
     })),
     [invoices, customers],
@@ -90,15 +95,13 @@ function InvoiceList() {
   }
 
   function handleWhatsApp(row: (typeof enriched)[number]) {
-    const phone = (row.customer?.whatsapp || row.customer?.phone || "").replace(/[^\d]/g, "");
-    const msg = encodeURIComponent(
-      `Hello ${row.customer?.name ?? ""},\nInvoice ${row.number} — Total ${fmt(row.total)}, Balance ${fmt(row.total - row.paid)}.\nThank you!`,
-    );
-    if (!phone) {
-      toast.error("No WhatsApp/phone on file for this customer");
-      return;
-    }
-    window.open(`https://wa.me/${phone}?text=${msg}`, "_blank");
+    // Route through the invoice detail page's own send flow instead of a
+    // plain wa.me link — that's the app's real WhatsApp integration (it
+    // attaches the actual invoice PDF, applies the configured message
+    // template, and logs the attempt to WhatsApp Monitoring / this
+    // invoice's Check History). A bare wa.me link did none of that and
+    // silently depended on the device having its own WhatsApp session.
+    navigate({ to: "/invoices/$id", params: { id: row.id }, search: { send: 1 } as never });
   }
 
   return (
@@ -107,9 +110,11 @@ function InvoiceList() {
         title="Invoices"
         subtitle={`${invoices.length} total · ${fmt(outstanding)} outstanding`}
         action={
-          <Button asChild size="sm">
-            <Link to="/invoices/new"><PlusCircle className="mr-1.5 h-4 w-4" />New Invoice</Link>
-          </Button>
+          canCreate ? (
+            <Button asChild size="sm">
+              <Link to="/invoices/new"><PlusCircle className="mr-1.5 h-4 w-4" />New Invoice</Link>
+            </Button>
+          ) : undefined
         }
       />
 
@@ -215,14 +220,18 @@ function InvoiceList() {
                     <div className="flex items-center justify-end gap-1">
                       <ActionBtn label="View" icon={<Eye className="h-4 w-4" />}
                         onClick={() => navigate({ to: "/invoices/$id", params: { id: r.id } })} />
-                      <ActionBtn label="Edit" icon={<Pencil className="h-4 w-4" />}
-                        onClick={() => navigate({ to: "/invoices/new", search: { edit: r.id } as never })} />
+                      {canEdit && (
+                        <ActionBtn label="Edit" icon={<Pencil className="h-4 w-4" />}
+                          onClick={() => navigate({ to: "/invoices/new", search: { edit: r.id } as never })} />
+                      )}
                       <ActionBtn label="Print" icon={<Printer className="h-4 w-4" />}
                         onClick={() => handlePrint(r.id)} />
                       <ActionBtn label="WhatsApp" icon={<MessageCircle className="h-4 w-4" />}
                         onClick={() => handleWhatsApp(r)} />
-                      <ActionBtn label="Delete" icon={<Trash2 className="h-4 w-4" />}
-                        onClick={() => setToDelete(r.id)} danger />
+                      {canDelete && (
+                        <ActionBtn label="Delete" icon={<Trash2 className="h-4 w-4" />}
+                          onClick={() => setToDelete(r.id)} danger />
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -267,8 +276,10 @@ function InvoiceList() {
               <div className="flex flex-wrap gap-1.5 pt-1">
                 <MobileAction label="View" icon={<Eye className="h-3.5 w-3.5" />}
                   onClick={() => navigate({ to: "/invoices/$id", params: { id: r.id } })} />
-                <MobileAction label="Edit" icon={<Pencil className="h-3.5 w-3.5" />}
-                  onClick={() => navigate({ to: "/invoices/new", search: { edit: r.id } as never })} />
+                {canEdit && (
+                  <MobileAction label="Edit" icon={<Pencil className="h-3.5 w-3.5" />}
+                    onClick={() => navigate({ to: "/invoices/new", search: { edit: r.id } as never })} />
+                )}
                 <MobileAction label="Print" icon={<Printer className="h-3.5 w-3.5" />}
                   onClick={() => handlePrint(r.id)} />
                 <MobileAction label="WhatsApp" icon={<MessageCircle className="h-3.5 w-3.5" />}
@@ -283,10 +294,14 @@ function InvoiceList() {
                     <DropdownMenuItem onClick={() => navigate({ to: "/invoices/$id", params: { id: r.id } })}>
                       <Eye className="mr-2 h-4 w-4" />View / Review
                     </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setToDelete(r.id)}>
-                      <Trash2 className="mr-2 h-4 w-4" />Delete
-                    </DropdownMenuItem>
+                    {canDelete && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setToDelete(r.id)}>
+                          <Trash2 className="mr-2 h-4 w-4" />Delete
+                        </DropdownMenuItem>
+                      </>
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>

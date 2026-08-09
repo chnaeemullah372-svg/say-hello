@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { Plus, Repeat, Trash2 } from "lucide-react";
+import { Plus, Repeat, Trash2, Pause, Play, Ban, Zap } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useStore } from "@/lib/store";
 import { fmt } from "@/lib/dummy-data";
 import type { SubscriptionStatus } from "@/lib/dummy-data";
+import { friendlyErrorMessage } from "@/lib/friendly-error";
 import { toast } from "sonner";
+import { runSubscriptionBillingNow } from "@/lib/subscription-billing-actions";
 
 export const Route = createFileRoute("/subscriptions")({
   head: () => ({ meta: [
@@ -29,9 +31,10 @@ const tone: Record<SubscriptionStatus, string> = {
 };
 
 function SubsPage() {
-  const { subscriptions, customers, addSubscription, deleteSubscription } = useStore();
+  const { subscriptions, customers, addSubscription, updateSubscription, deleteSubscription } = useStore();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [billingNow, setBillingNow] = useState(false);
   const [customerId, setCustomerId] = useState("");
   const [planName, setPlanName] = useState("");
   const [amount, setAmount] = useState(0);
@@ -55,12 +58,30 @@ function SubsPage() {
     }
   };
 
+  const runBillingNow = async () => {
+    setBillingNow(true);
+    try {
+      const stats = await runSubscriptionBillingNow();
+      if (stats.billed > 0) toast.success(`Billed ${stats.billed} subscription${stats.billed > 1 ? "s" : ""}`);
+      else toast.info("No subscriptions are due for billing right now");
+      if (stats.failed > 0) toast.error(`${stats.failed} could not be billed`);
+    } catch (err) {
+      toast.error(friendlyErrorMessage(err, "Could not run billing check"));
+    } finally {
+      setBillingNow(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Subscriptions"
-        subtitle="Recurring invoices for retainer & AMC customers"
+        subtitle="Recurring invoices for retainer & AMC customers — billed automatically once a day, or on demand below"
         action={
+          <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={runBillingNow} disabled={billingNow}>
+            <Zap className="mr-1.5 h-4 w-4" />{billingNow ? "Checking…" : "Run billing check now"}
+          </Button>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild><Button><Plus className="mr-1.5 h-4 w-4" />New Subscription</Button></DialogTrigger>
             <DialogContent className="sm:max-w-md">
@@ -92,6 +113,7 @@ function SubsPage() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+          </div>
         }
       />
 
@@ -134,6 +156,25 @@ function SubsPage() {
                 <div><div className="text-muted-foreground">Amount</div><div className="mt-1 font-semibold text-foreground">{fmt(s.amount)}</div></div>
                 <div><div className="text-muted-foreground">Cycle</div><div className="mt-1 font-semibold capitalize text-foreground">{s.billingCycle}</div></div>
                 <div><div className="text-muted-foreground">Next</div><div className="mt-1 font-semibold text-foreground">{s.nextBillingDate ?? "—"}</div></div>
+              </div>
+              {/* The Paused/Cancelled badges above used to be unreachable —
+                  nothing anywhere ever set them. */}
+              <div className="mt-3 flex gap-2 border-t pt-3">
+                {s.status !== "active" && (
+                  <Button size="sm" variant="outline" className="flex-1" onClick={async () => { try { await updateSubscription(s.id, { status: "active" }); toast.success("Resumed"); } catch (err) { toast.error(err instanceof Error ? err.message : "Could not resume"); } }}>
+                    <Play className="mr-1.5 h-3.5 w-3.5" />Resume
+                  </Button>
+                )}
+                {s.status === "active" && (
+                  <Button size="sm" variant="outline" className="flex-1" onClick={async () => { try { await updateSubscription(s.id, { status: "paused" }); toast.success("Paused"); } catch (err) { toast.error(err instanceof Error ? err.message : "Could not pause"); } }}>
+                    <Pause className="mr-1.5 h-3.5 w-3.5" />Pause
+                  </Button>
+                )}
+                {s.status !== "cancelled" && (
+                  <Button size="sm" variant="outline" className="flex-1 text-destructive hover:text-destructive" onClick={async () => { try { await updateSubscription(s.id, { status: "cancelled" }); toast.success("Cancelled"); } catch (err) { toast.error(err instanceof Error ? err.message : "Could not cancel"); } }}>
+                    <Ban className="mr-1.5 h-3.5 w-3.5" />Cancel
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>

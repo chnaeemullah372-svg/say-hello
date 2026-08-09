@@ -26,11 +26,6 @@ export type Subscription = {
   status: "active" | "paused" | "cancelled";
 };
 
-export type Commission = {
-  id: string; salesperson: string; period: string; sales: number;
-  ratePct: number; commission: number; status: "pending" | "paid";
-};
-
 export type TeamMember = {
   id: string; name: string; email: string; role: "Owner" | "Manager" | "Cashier" | "Accountant";
   status: "active" | "invited"; lastActive: string;
@@ -77,23 +72,9 @@ export const subscriptionsSeed: Subscription[] = [
   { id: "s4", customer: "Bright Electronics", plan: "AMC — devices", amount: 24000, cycle: "Yearly", nextBilling: "2027-01-10", status: "active" },
 ];
 
-export const commissionsSeed: Commission[] = [
-  { id: "cm1", salesperson: "Priya Sharma", period: "Jun 2026", sales: 486000, ratePct: 4, commission: 19440, status: "paid" },
-  { id: "cm2", salesperson: "Amit Verma", period: "Jun 2026", sales: 218000, ratePct: 3, commission: 6540, status: "paid" },
-  { id: "cm3", salesperson: "Priya Sharma", period: "Jul 2026", sales: 132000, ratePct: 4, commission: 5280, status: "pending" },
-  { id: "cm4", salesperson: "Amit Verma", period: "Jul 2026", sales: 74000, ratePct: 3, commission: 2220, status: "pending" },
-];
-
 export const teamSeed: TeamMember[] = [
   { id: "t1", name: "Rajesh Kumar", email: "owner@prestige.store", role: "Owner", status: "active", lastActive: "Just now" },
   { id: "t2", name: "Priya Sharma", email: "priya@prestige.store", role: "Manager", status: "active", lastActive: "2h ago" },
   { id: "t3", name: "Amit Verma", email: "amit@prestige.store", role: "Cashier", status: "active", lastActive: "Yesterday" },
   { id: "t4", name: "Neha Iyer", email: "neha@prestige.store", role: "Accountant", status: "invited", lastActive: "—" },
 ];
-
-export const ROLE_PERMISSIONS: Record<string, string[]> = {
-  Admin: ["Full access", "Manage users", "View reports", "Delete records", "Change settings"],
-  Manager: ["Create invoices", "Manage inventory", "View reports", "Manage customers"],
-  Cashier: ["Create invoices", "Record payments", "View own reports"],
-  Staff: ["View assigned modules", "Create basic entries", "Update own work"],
-};

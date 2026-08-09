@@ -1,11 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
 import { AlertTriangle, Package, TrendingUp } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useStore } from "@/lib/store";
-import { fmt } from "@/lib/dummy-data";
+import { fmt, type Product } from "@/lib/dummy-data";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/inventory")({
@@ -16,10 +21,39 @@ export const Route = createFileRoute("/inventory")({
   component: InventoryPage,
 });
 
+type AdjustMode = "add" | "remove" | "set";
+
 function InventoryPage() {
-  const { products } = useStore();
+  const { products, updateProduct } = useStore();
   const low = products.filter(p => p.stock <= p.lowStockAt);
   const totalValue = products.reduce((s, p) => s + p.stock * p.price, 0);
+
+  const [target, setTarget] = useState<Product | null>(null);
+  const [mode, setMode] = useState<AdjustMode>("add");
+  const [qty, setQty] = useState(0);
+  const [saving, setSaving] = useState(false);
+
+  const openAdjust = (p: Product) => { setTarget(p); setMode("add"); setQty(0); };
+
+  const resultingStock = target
+    ? mode === "add" ? target.stock + qty : mode === "remove" ? target.stock - qty : qty
+    : 0;
+
+  const saveAdjustment = async () => {
+    if (!target) return;
+    if (mode !== "set" && qty <= 0) return toast.error("Enter a quantity greater than zero");
+    if (resultingStock < 0) return toast.error("Stock can't go below zero");
+    setSaving(true);
+    try {
+      await updateProduct(target.id, { stock: resultingStock });
+      toast.success(`${target.name} stock ${mode === "set" ? "set to" : mode === "add" ? "increased to" : "reduced to"} ${resultingStock}`);
+      setTarget(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not adjust stock");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -74,7 +108,7 @@ function InventoryPage() {
                         : <Badge variant="outline" className="border-accent/30 text-accent">Healthy</Badge>}
                     </td>
                     <td className="px-6 py-3 text-right">
-                      <Button size="sm" variant="ghost" onClick={() => toast.info(`Adjust stock — demo`)}>Adjust</Button>
+                      <Button size="sm" variant="ghost" onClick={() => openAdjust(p)}>Adjust</Button>
                     </td>
                   </tr>
                 );
@@ -83,6 +117,37 @@ function InventoryPage() {
           </table>
         </CardContent>
       </Card>
+
+      <Dialog open={!!target} onOpenChange={(o) => { if (!o) setTarget(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader><DialogTitle>Adjust stock — {target?.name}</DialogTitle></DialogHeader>
+          <div className="grid gap-3">
+            <p className="text-sm text-muted-foreground">Current stock: <span className="font-semibold text-foreground">{target?.stock} {target?.unit}</span></p>
+            <div className="grid gap-1.5">
+              <Label>Type</Label>
+              <Select value={mode} onValueChange={(v) => setMode(v as AdjustMode)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="add">Add stock (received / found)</SelectItem>
+                  <SelectItem value="remove">Remove stock (damaged / lost)</SelectItem>
+                  <SelectItem value="set">Set exact stock (recount)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-1.5">
+              <Label>{mode === "set" ? "New stock level" : "Quantity"}</Label>
+              <Input type="number" min={0} value={qty} onChange={(e) => setQty(Math.max(0, +e.target.value || 0))} />
+            </div>
+            <div className="rounded-lg border bg-muted/30 px-3 py-2 text-sm">
+              Resulting stock: <span className="font-semibold">{Math.max(0, resultingStock)} {target?.unit}</span>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setTarget(null)}>Cancel</Button>
+            <Button onClick={saveAdjustment} disabled={saving}>{saving ? "Saving…" : "Save adjustment"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

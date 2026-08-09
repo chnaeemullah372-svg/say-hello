@@ -2,14 +2,18 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { supabase } from "@/integrations/supabase/client";
 
 type AppRole = "admin" | "manager" | "cashier" | "staff";
-export type AuthUser = { id: string; name: string; role: AppRole; email: string };
+type BusinessStatus = "pending" | "active" | "rejected" | "suspended";
+export type AuthUser = {
+  id: string; name: string; role: AppRole; email: string;
+  tenantId: string; businessName: string; businessStatus: BusinessStatus; isPlatformAdmin: boolean;
+};
 
 type AuthCtx = {
   user: AuthUser | null;
   isAuthenticated: boolean;
   ready: boolean;
   login: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
-  signup: (name: string, email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  signup: (name: string, email: string, password: string, businessName: string) => Promise<{ ok: boolean; error?: string }>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 };
@@ -33,7 +37,7 @@ async function ensureProfileAndRole(): Promise<AuthUser | null> {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("status, full_name")
+    .select("status, full_name, tenant_id")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -42,28 +46,39 @@ async function ensureProfileAndRole(): Promise<AuthUser | null> {
     return null;
   }
 
-  const { data: existingRole } = await supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", user.id)
-    .maybeSingle();
+  // A profile with no tenant yet means signup_create_business() hasn't run
+  // for this user (should only happen for a brand-new signup mid-flight —
+  // the app shows nothing useful without a business, so treat it the same
+  // as "not logged in" rather than crashing on a null tenantId downstream).
+  const tenantId = profile?.tenant_id as string | undefined;
+  if (!tenantId) return null;
 
+  const [{ data: existingRole }, { data: business }, { data: platformAdminRow }] = await Promise.all([
+    supabase.from("user_roles").select("role").eq("user_id", user.id).maybeSingle(),
+    supabase.from("businesses").select("name, status").eq("id", tenantId).maybeSingle(),
+    supabase.from("platform_admins").select("user_id").eq("user_id", user.id).maybeSingle(),
+  ]);
+
+  // Every new business gets its admin role atomically via the
+  // signup_create_business() RPC at signup time — a tenant with a
+  // business but no role row is an anomaly (not an expected first-run
+  // state anymore), so this only exists as a narrow safety net.
   let role = existingRole?.role as AppRole | undefined;
-
   if (!role) {
-    // Security fix: previously every new sign-up was auto-granted "admin",
-    // meaning anyone who created an account got full admin access. Now only
-    // the very first user in the whole system (bootstrapping the owner
-    // account) becomes admin automatically; everyone after that starts as
-    // "staff" and must be promoted by an existing admin from the Team page.
-    const { count } = await supabase.from("user_roles").select("id", { count: "exact", head: true });
-    const isFirstUser = (count ?? 0) === 0;
-    const roleToAssign: AppRole = isFirstUser ? "admin" : "staff";
-    const { error } = await supabase.from("user_roles").insert({ user_id: user.id, role: roleToAssign });
-    if (!error) role = roleToAssign;
+    const { error } = await supabase.from("user_roles").insert({ user_id: user.id, role: "staff", tenant_id: tenantId });
+    if (!error) role = "staff";
   }
 
-  return { id: user.id, name: profile?.full_name || displayName, email: user.email, role: roleLabel(role || "staff") };
+  return {
+    id: user.id,
+    name: profile?.full_name || displayName,
+    email: user.email,
+    role: roleLabel(role || "staff"),
+    tenantId,
+    businessName: business?.name ?? "",
+    businessStatus: (business?.status as BusinessStatus | undefined) ?? "pending",
+    isPlatformAdmin: !!platformAdminRow,
+  };
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -140,7 +155,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const signup = async (name: string, email: string, password: string) => {
+  const signup = async (name: string, email: string, password: string, businessName: string) => {
     try {
       const { error } = await supabase.auth.signUp({
         email: email.trim(),
@@ -148,6 +163,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         options: { data: { full_name: name.trim() || email.trim().split("@")[0] } },
       });
       if (error) return { ok: false, error: error.message };
+      // Creates the new (pending) business + this user's admin role for it,
+      // in one transaction — see signup_create_business() in the multi-tenant
+      // foundation migration. Every sign-up gets its own isolated business.
+      const { error: rpcError } = await supabase.rpc("signup_create_business", { p_business_name: businessName.trim() });
+      if (rpcError) return { ok: false, error: rpcError.message };
       await refreshUser();
       return { ok: true };
     } catch (error) {

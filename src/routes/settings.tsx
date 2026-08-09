@@ -1,11 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
+  ArrowLeft,
   ArrowLeftRight,
   Banknote,
   Bell,
   Boxes,
   Building2,
+  ChevronDown,
   ChevronRight,
   Check,
   Copy,
@@ -15,6 +17,7 @@ import {
   FileSignature,
   FileText,
   Hash,
+  History,
   Image,
   Landmark,
   LayoutDashboard,
@@ -33,6 +36,7 @@ import {
   ReceiptText,
   RefreshCw,
   Save,
+  Search,
   Send,
   ShieldCheck,
   Smartphone,
@@ -71,7 +75,9 @@ import {
   type WAStatus,
 } from "@/lib/whatsapp-actions";
 import { runDueReminderCheckNow } from "@/lib/due-reminders-actions";
-import { setCurrencySymbol, type AccountType } from "@/lib/dummy-data";
+import { friendlyErrorMessage } from "@/lib/friendly-error";
+import { sendAndLogWhatsApp } from "@/lib/whatsapp";
+import { setCurrencySymbol, fmt, type AccountType } from "@/lib/dummy-data";
 import { CURRENCIES } from "@/lib/currencies";
 import { useTheme } from "@/lib/theme";
 import { toast } from "sonner";
@@ -168,6 +174,8 @@ const defaults: SettingsState = {
     country: "India",
     showLogo: true,
     showBusinessStamp: true,
+    logoUrl: "",
+    stampUrl: "",
   },
   invoice: {
     title: "TAX INVOICE",
@@ -236,7 +244,7 @@ const defaults: SettingsState = {
     expenseNext: "220",
     subscriptionPrefix: "SUB-",
     subscriptionNext: "1",
-    productionPrefix: "PR-",
+    productionPrefix: "PRD-",
     productionNext: "1",
     businessLicenceName: "GSTIN",
     country: "Pakistan",
@@ -338,19 +346,10 @@ const defaults: SettingsState = {
   whatsapp: {
     displayName: "Prestige Store",
     number: "",
-    provider: "shoib",
-    shoibApiBase: "https://hatelecom.xyz/api",
-    shoibUsername: "",
-    shoibPassword: "",
-    shoibToken: "",
-    connectionStatus: "disconnected",
     pairingBrandCode: "",
     invoiceMessage:
       "Hello {customer}, your invoice {invoice_no} of {amount} is ready. Please find the copy attached.",
-    reminderMessage:
-      "Hello {customer}, payment of {amount} is pending for invoice {invoice_no}.",
     sendInvoice: false,
-    sendReminder: false,
     sendPaymentThanks: true,
     orderBookedMode: "whatsapp",
     orderBookedMessage: "Dear Customer, your order #OrderNo is booked successfully. Thanks",
@@ -449,12 +448,46 @@ const categories: Category[] = [
 function SettingsPage() {
   const { user } = useAuth();
   const { theme, toggle } = useTheme();
-  const [active, setActive] = useState<ActiveKey>("business");
+  // Starts on the list (like a mobile Settings app's home screen), not a
+  // preselected section — a category push-navigates into its own screen,
+  // matching the reference app's drill-down list instead of a permanent
+  // desktop-style split view.
+  const [active, setActive] = useState<ActiveKey | null>(null);
+  const [query, setQuery] = useState("");
   const [settings, setSettings] = useState<SettingsState>(defaults);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<SectionKey | null>(null);
 
-  const activeCategory = useMemo(() => categories.find((c) => c.key === active) ?? categories[0], [active]);
+  const activeCategory = useMemo(() => categories.find((c) => c.key === active), [active]);
+
+  // Blueprint's "Searchable" principle: typing a keyword like "tax" or
+  // "staff" should jump straight to the relevant setting instead of making
+  // someone scan every group by eye.
+  const filteredCategories = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return categories;
+    return categories.filter((c) => c.title.toLowerCase().includes(q) || c.subtitle.toLowerCase().includes(q));
+  }, [query]);
+
+  // A couple of rows show their live state right on the list (like Zoho's
+  // "Currency: USD" rows) instead of a static description for everything —
+  // cheap to fetch, and it turns the list into a glance-able dashboard
+  // instead of a plain menu.
+  const [waRowStatus, setWaRowStatus] = useState<string | null>(null);
+  useEffect(() => {
+    if (user?.role !== "admin") return;
+    supabase.from("whatsapp_session").select("status").maybeSingle()
+      .then(({ data }) => setWaRowStatus((data?.status as string) ?? "disconnected"));
+  }, [user?.role]);
+
+  const rowBadge = (key: ActiveKey): { label: string; tone: string } | null => {
+    if (key === "whatsapp" && user?.role === "admin" && waRowStatus) {
+      return waRowStatus === "connected"
+        ? { label: "Connected", tone: "border-accent/40 bg-accent/10 text-accent" }
+        : { label: "Not connected", tone: "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400" };
+    }
+    return null;
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -487,12 +520,14 @@ function SettingsPage() {
     setSettings((current) => ({ ...current, [section]: { ...current[section], [field]: value } }));
   };
 
+  const [auditRefresh, setAuditRefresh] = useState(0);
+
   const saveSection = async (section: SectionKey) => {
     setSaving(section);
     const settingKey = `settings.${section}`;
     const { data: existing, error: readError } = await supabase
       .from("app_settings")
-      .select("id")
+      .select("id, setting_value")
       .eq("setting_key", settingKey)
       .maybeSingle();
     if (readError) {
@@ -505,6 +540,7 @@ function SettingsPage() {
       setting_key: settingKey,
       setting_value: settings[section],
       updated_by: user?.id ?? null,
+      tenant_id: user?.tenantId,
     };
     const result = existing?.id
       ? await supabase.from("app_settings").update(payload).eq("id", existing.id)
@@ -515,9 +551,73 @@ function SettingsPage() {
       toast.error(result.error.message);
       return;
     }
-    toast.success(`${activeCategory.title} saved`);
+    toast.success(`${activeCategory?.title ?? "Settings"} saved`);
     if (section === "tax" && settings.tax.symbol) setCurrencySymbol(settings.tax.symbol);
+    // Best-effort — a settings save should never fail because the audit
+    // insert had a hiccup, so this is fire-and-forget rather than awaited.
+    if (user?.tenantId && user?.id) {
+      supabase.from("settings_audit_log").insert({
+        tenant_id: user.tenantId, actor_user_id: user.id, module: section, action: "update",
+        before_value: existing?.setting_value ?? null, after_value: settings[section],
+      }).then(({ error: auditError }) => {
+        if (auditError) console.warn("Settings audit log insert failed:", auditError.message);
+        setAuditRefresh((n) => n + 1);
+      });
+    }
   };
+
+  if (active && activeCategory) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-3 rounded-lg border bg-card p-4">
+          <Button variant="ghost" size="icon" className="shrink-0" onClick={() => setActive(null)} aria-label="Back to all settings">
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <div className={`grid h-12 w-12 shrink-0 place-items-center rounded-lg ring-1 ${activeCategory.tone}`}>
+            <activeCategory.icon className="h-6 w-6" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h1 className="font-display text-xl font-bold leading-tight">{activeCategory.title}</h1>
+            <p className="text-sm text-muted-foreground">{activeCategory.subtitle}</p>
+          </div>
+          {active !== "accounts" && active !== "fundManagement" && active !== "import" && (
+            <Button onClick={() => saveSection(active as SectionKey)} disabled={saving === active}>
+              {saving === active ? <RefreshCw className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}
+              Save
+            </Button>
+          )}
+        </div>
+
+        {active === "business" && <BusinessPanel data={settings.business} set={(k, v) => setField("business", k, v)} />}
+        {active === "invoice" && <InvoicePanel data={settings.invoice} set={(k, v) => setField("invoice", k, v)} />}
+        {active === "tax" && <TaxPanel data={settings.tax} set={(k, v) => setField("tax", k, v)} />}
+        {active === "terms" && <TermsPanel data={settings.terms} set={(k, v) => setField("terms", k, v)} />}
+        {active === "accounts" && <AccountsPanel />}
+        {active === "fundManagement" && <FundManagementPanel />}
+        {active === "import" && <ImportLinkPanel />}
+        {active === "numbering" && <NumberingPanel data={settings.numbering} set={(k, v) => setField("numbering", k, v)} />}
+        {active === "print" && <PrintPanel data={settings.print} set={(k, v) => setField("print", k, v)} />}
+        {active === "renameFields" && <RenameFieldsPanel data={settings.renameFields} set={(k, v) => setField("renameFields", k, v)} />}
+        {active === "customFields" && <CustomFieldsPanel data={settings.customFields} set={(v) => setField("customFields", "fields", v)} />}
+        {active === "templateSettings" && <TemplateSettingsPanel data={settings.templateSettings} set={(k, v) => setField("templateSettings", k, v)} />}
+        {active === "items" && <ItemsPanel data={settings.items} set={(k, v) => setField("items", k, v)} />}
+        {active === "payment" && <PaymentPanel data={settings.payment} set={(k, v) => setField("payment", k, v)} />}
+        {active === "bank" && <BankPanel data={settings.bank} set={(k, v) => setField("bank", k, v)} />}
+        {active === "users" && <UsersPanel data={settings.users} set={(k, v) => setField("users", k, v)} />}
+        {active === "notifications" && <NotificationsPanel data={settings.notifications} set={(k, v) => setField("notifications", k, v)} />}
+        {active === "gmail" && <GmailPanel data={settings.gmail} set={(k, v) => setField("gmail", k, v)} />}
+        {active === "whatsapp" && <WhatsAppPanel data={settings.whatsapp} set={(k, v) => setField("whatsapp", k, v)} isAdmin={user?.role === "admin"} />}
+        {active === "backup" && <BackupPanel data={settings.backup} set={(k, v) => setField("backup", k, v)} />}
+        {active === "homeScreen" && <HomeScreenPanel data={settings.homeScreen} set={(k, v) => setField("homeScreen", k, v)} />}
+        {active === "appearance" && <AppearancePanel data={settings.appearance} set={(k, v) => setField("appearance", k, v)} theme={theme} toggleTheme={toggle} />}
+        {active === "security" && <SecurityPanel data={settings.security} set={(k, v) => setField("security", k, v)} />}
+
+        {active !== "accounts" && active !== "fundManagement" && active !== "import" && (
+          <AuditTrail module={active} refreshKey={auditRefresh} />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
@@ -531,97 +631,155 @@ function SettingsPage() {
         }
       />
 
+      <div className="flex items-center gap-3 rounded-lg border bg-card p-4">
+        {settings.business.logoUrl ? (
+          <img src={settings.business.logoUrl as string} alt="Logo" className="h-12 w-12 shrink-0 rounded-lg object-contain bg-muted" />
+        ) : (
+          <div className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+            <Store className="h-6 w-6" />
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <div className="truncate font-display text-lg font-bold">{(settings.business.businessName as string) || "Your Business"}</div>
+          <div className="text-xs capitalize text-muted-foreground">Signed in as {user?.role ?? "staff"}</div>
+        </div>
+      </div>
+
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard icon={FileText} label="Invoice controls" value="42+" />
         <StatCard icon={UserCog} label="Admin access" value={user?.role ?? "staff"} />
-        <StatCard icon={MessageCircle} label="WhatsApp" value="Ready" />
+        <StatCard icon={MessageCircle} label="WhatsApp" value={waRowStatus === "connected" ? "Connected" : "Ready"} />
         <StatCard icon={Mail} label="Gmail" value="Secure" />
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
-        <Card className="xl:sticky xl:top-20 xl:self-start">
-          <CardContent className="p-3">
-            <div className="mb-2 flex items-center justify-between px-2 py-1">
-              <div>
-                <div className="font-display text-base font-semibold">All settings</div>
-                <div className="text-xs text-muted-foreground">Tap any option to edit</div>
-              </div>
-              {loading && <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />}
+      <Card>
+        <CardContent className="p-3">
+          <div className="mb-3 flex items-center justify-between gap-2 px-1 py-1">
+            <div>
+              <div className="font-display text-base font-semibold">All settings</div>
+              <div className="text-xs text-muted-foreground">Tap any option to open it</div>
             </div>
-            <div className="space-y-4">
-              {SETTINGS_GROUPS.map((group) => (
-                <div key={group}>
-                  <div className="mb-1.5 px-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{group}</div>
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-1">
-                    {categories.filter((c) => c.group === group).map((category) => (
-                      <button
-                        key={category.key}
-                        type="button"
-                        onClick={() => setActive(category.key)}
-                        className={`group flex min-h-[88px] items-center gap-3.5 rounded-lg border p-3.5 text-left transition hover:bg-muted/60 xl:min-h-0 ${active === category.key ? "border-primary bg-primary/5 shadow-sm" : "bg-card"}`}
-                      >
-                        <span className={`grid h-12 w-12 shrink-0 place-items-center rounded-lg ring-1 ${category.tone}`}>
-                          <category.icon className="h-6 w-6" />
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="flex items-center gap-1.5">
-                            <span className="truncate text-sm font-semibold leading-tight">{category.title}</span>
-                            {category.badge && <Badge variant="secondary" className="hidden px-1.5 py-0 text-[10px] sm:inline-flex">{category.badge}</Badge>}
-                          </span>
-                          <span className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-muted-foreground">{category.subtitle}</span>
-                        </span>
-                        <ChevronRight className="hidden h-5 w-5 shrink-0 text-muted-foreground xl:block" />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="min-w-0 space-y-4">
-          <div className="flex items-center gap-3 rounded-lg border bg-card p-4">
-            <div className={`grid h-12 w-12 shrink-0 place-items-center rounded-lg ring-1 ${activeCategory.tone}`}>
-              <activeCategory.icon className="h-6 w-6" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <h1 className="font-display text-xl font-bold leading-tight">{activeCategory.title}</h1>
-              <p className="text-sm text-muted-foreground">{activeCategory.subtitle}</p>
-            </div>
-            {active !== "accounts" && active !== "fundManagement" && active !== "import" && (
-              <Button onClick={() => saveSection(active as SectionKey)} disabled={saving === active}>
-                {saving === active ? <RefreshCw className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}
-                Save
-              </Button>
-            )}
+            {loading && <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />}
           </div>
+          <div className="relative mb-4">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              className="h-11 pl-10"
+              placeholder="Search settings — try “tax”, “staff”, “reminder”…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+          {filteredCategories.length === 0 ? (
+            <div className="py-10 text-center text-sm text-muted-foreground">No settings match "{query}".</div>
+          ) : (
+            <div className="space-y-4">
+              {SETTINGS_GROUPS.map((group) => {
+                const items = filteredCategories.filter((c) => c.group === group);
+                if (!items.length) return null;
+                return (
+                  <div key={group}>
+                    <div className="sticky top-16 z-10 mb-1.5 bg-card px-1 py-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{group}</div>
+                    <div className="space-y-1.5">
+                      {items.map((category) => {
+                        const badge = rowBadge(category.key);
+                        return (
+                          <button
+                            key={category.key}
+                            type="button"
+                            onClick={() => setActive(category.key)}
+                            className="group flex w-full items-center gap-3.5 rounded-lg border bg-card p-3.5 text-left transition hover:border-primary/40 hover:bg-muted/60"
+                          >
+                            <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-lg ring-1 ${category.tone}`}>
+                              <category.icon className="h-5 w-5" />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="flex items-center gap-1.5">
+                                <span className="truncate text-sm font-semibold leading-tight">{category.title}</span>
+                                {badge ? (
+                                  <Badge variant="outline" className={`px-1.5 py-0 text-[10px] ${badge.tone}`}>{badge.label}</Badge>
+                                ) : category.badge ? (
+                                  <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">{category.badge}</Badge>
+                                ) : null}
+                              </span>
+                              <span className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-muted-foreground">{category.subtitle}</span>
+                            </span>
+                            <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition group-hover:translate-x-0.5" />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
-          {active === "business" && <BusinessPanel data={settings.business} set={(k, v) => setField("business", k, v)} />}
-          {active === "invoice" && <InvoicePanel data={settings.invoice} set={(k, v) => setField("invoice", k, v)} />}
-          {active === "tax" && <TaxPanel data={settings.tax} set={(k, v) => setField("tax", k, v)} />}
-          {active === "terms" && <TermsPanel data={settings.terms} set={(k, v) => setField("terms", k, v)} />}
-          {active === "accounts" && <AccountsPanel />}
-          {active === "fundManagement" && <FundManagementPanel />}
-          {active === "import" && <ImportLinkPanel />}
-          {active === "numbering" && <NumberingPanel data={settings.numbering} set={(k, v) => setField("numbering", k, v)} />}
-          {active === "print" && <PrintPanel data={settings.print} set={(k, v) => setField("print", k, v)} />}
-          {active === "renameFields" && <RenameFieldsPanel data={settings.renameFields} set={(k, v) => setField("renameFields", k, v)} />}
-          {active === "customFields" && <CustomFieldsPanel data={settings.customFields} set={(v) => setField("customFields", "fields", v)} />}
-          {active === "templateSettings" && <TemplateSettingsPanel data={settings.templateSettings} set={(k, v) => setField("templateSettings", k, v)} />}
-          {active === "items" && <ItemsPanel data={settings.items} set={(k, v) => setField("items", k, v)} />}
-          {active === "payment" && <PaymentPanel data={settings.payment} set={(k, v) => setField("payment", k, v)} />}
-          {active === "bank" && <BankPanel data={settings.bank} set={(k, v) => setField("bank", k, v)} />}
-          {active === "users" && <UsersPanel data={settings.users} set={(k, v) => setField("users", k, v)} />}
-          {active === "notifications" && <NotificationsPanel data={settings.notifications} set={(k, v) => setField("notifications", k, v)} />}
-          {active === "gmail" && <GmailPanel data={settings.gmail} set={(k, v) => setField("gmail", k, v)} />}
-          {active === "whatsapp" && <WhatsAppPanel data={settings.whatsapp} set={(k, v) => setField("whatsapp", k, v)} isAdmin={user?.role === "admin"} />}
-          {active === "backup" && <BackupPanel data={settings.backup} set={(k, v) => setField("backup", k, v)} />}
-          {active === "homeScreen" && <HomeScreenPanel data={settings.homeScreen} set={(k, v) => setField("homeScreen", k, v)} />}
-          {active === "appearance" && <AppearancePanel data={settings.appearance} set={(k, v) => setField("appearance", k, v)} theme={theme} toggleTheme={toggle} />}
-          {active === "security" && <SecurityPanel data={settings.security} set={(k, v) => setField("security", k, v)} />}
+export function AuditTrail({ module, refreshKey }: { module: string; refreshKey: number }) {
+  const { user } = useAuth();
+  const [open, setOpen] = useState(false);
+  const [rows, setRows] = useState<{ id: string; actor: string; action: string; created_at: string }[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!open || user?.role !== "admin") return;
+    setLoading(true);
+    supabase
+      .from("settings_audit_log")
+      .select("id, actor_user_id, action, created_at")
+      .eq("module", module)
+      .order("created_at", { ascending: false })
+      .limit(10)
+      .then(async ({ data }) => {
+        const entries = data ?? [];
+        const actorIds = [...new Set(entries.map((e) => e.actor_user_id).filter((id): id is string => !!id))];
+        const { data: profileRows } = actorIds.length
+          ? await supabase.from("profiles").select("user_id, full_name, email").in("user_id", actorIds)
+          : { data: [] as { user_id: string; full_name: string | null; email: string | null }[] };
+        const nameByUser = new Map((profileRows ?? []).map((p) => [p.user_id, p.full_name || p.email || "Team member"]));
+        setRows(entries.map((e) => ({
+          id: e.id, action: e.action, created_at: e.created_at,
+          actor: !e.actor_user_id ? "Deleted user" : e.actor_user_id === user?.id ? "You" : (nameByUser.get(e.actor_user_id) ?? "Team member"),
+        })));
+        setLoading(false);
+      });
+  }, [open, module, refreshKey, user?.role, user?.id]);
+
+  if (user?.role !== "admin") return null;
+
+  return (
+    <div className="rounded-lg border">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-sm font-medium text-muted-foreground hover:text-foreground"
+      >
+        <span className="flex items-center gap-2"><History className="h-3.5 w-3.5" />View change history</span>
+        <ChevronDown className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="border-t px-4 py-3">
+          {loading ? (
+            <div className="py-3 text-center text-xs text-muted-foreground">Loading…</div>
+          ) : rows.length === 0 ? (
+            <div className="py-3 text-center text-xs text-muted-foreground">No changes recorded yet for this section.</div>
+          ) : (
+            <ul className="space-y-2 text-xs">
+              {rows.map((r) => (
+                <li key={r.id} className="flex items-center justify-between gap-2 text-muted-foreground">
+                  <span><span className="font-medium text-foreground">{r.actor}</span> updated this section</span>
+                  <span>{new Date(r.created_at).toLocaleString()}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -645,8 +803,8 @@ function BusinessPanel({ data, set }: PanelProps) {
         <TextAreaField label="Full business address" value={data.address} onChange={(v) => set("address", v)} />
       </Grid>
       <div className="grid gap-3 md:grid-cols-2">
-        <UploadBox icon={Image} title="Business logo" subtitle="Used in invoice header" />
-        <UploadBox icon={Stamp} title="Shop stamp" subtitle="Optional stamp image" />
+        <UploadBox icon={Image} title="Business logo" subtitle="Used in invoice header" value={data.logoUrl} assetKey="logo" onUploaded={(url) => set("logoUrl", url)} />
+        <UploadBox icon={Stamp} title="Shop stamp" subtitle="Optional stamp image" value={data.stampUrl} assetKey="stamp" onUploaded={(url) => set("stampUrl", url)} />
       </div>
       <ToggleGrid>
         <ToggleField label="Show logo on invoice" checked={data.showLogo} onChange={(v) => set("showLogo", v)} />
@@ -1209,7 +1367,7 @@ function NotificationsPanel({ data, set }: PanelProps) {
       setLastResult(stats);
       toast.success(`Checked ${stats.checked} invoice(s) — ${stats.sent} sent, ${stats.skipped} skipped, ${stats.failed} failed`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not run the reminder check");
+      toast.error(friendlyErrorMessage(err, "Could not run the reminder check"));
     } finally {
       setChecking(false);
     }
@@ -1319,6 +1477,22 @@ function WhatsAppPanel({ data, set, isAdmin }: PanelProps & { isAdmin: boolean }
   const [brandInput, setBrandInput] = useState(data.pairingBrandCode ?? "");
   const [brandSaving, setBrandSaving] = useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
+  const [testPhone, setTestPhone] = useState("");
+  const [testSending, setTestSending] = useState(false);
+  const [recentLogs, setRecentLogs] = useState<{ id: string; whatsapp_number: string; message_type: string; status: string; created_at: string }[]>([]);
+  const [checking, setChecking] = useState(false);
+
+  const loadRecentActivity = () => {
+    if (!isAdmin) return;
+    supabase
+      .from("whatsapp_logs")
+      .select("id, whatsapp_number, message_type, status, created_at")
+      .order("created_at", { ascending: false })
+      .limit(10)
+      .then(({ data }) => setRecentLogs(data ?? []));
+  };
+
+  useEffect(() => { loadRecentActivity(); }, [isAdmin]);
 
   const refresh = async () => {
     try {
@@ -1326,7 +1500,13 @@ function WhatsAppPanel({ data, set, isAdmin }: PanelProps & { isAdmin: boolean }
       setWa(state);
       return state;
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not read WhatsApp status");
+      // This runs on a 2.5s background poll (see below) -- toasting on every
+      // failed tick used to stack unlimited error toasts on top of the panel
+      // (and each one visually blocks the header Save button/icons while
+      // present) for as long as the status endpoint kept failing. The status
+      // badge already communicates "not connected" -- a background health
+      // check failing repeatedly doesn't need a toast per tick, only a log.
+      console.warn("WhatsApp status check failed:", err instanceof Error ? err.message : err);
       return null;
     }
   };
@@ -1398,6 +1578,23 @@ function WhatsAppPanel({ data, set, isAdmin }: PanelProps & { isAdmin: boolean }
     if (state) { setResetOpen(false); setMode("qr"); }
   };
 
+  const sendTestMessage = async () => {
+    if (!testPhone.trim()) return toast.error("Enter a WhatsApp number to send the test to");
+    setTestSending(true);
+    try {
+      const result = await sendAndLogWhatsApp({
+        toNumbers: [testPhone],
+        message: "This is a test message from CN Invoice — your WhatsApp connection is working.",
+        messageType: "other",
+      });
+      if (result.ok) toast.success(`Test message sent to ${testPhone}`);
+      else toast.error(result.error || "Test message failed to send");
+      loadRecentActivity();
+    } finally {
+      setTestSending(false);
+    }
+  };
+
   return (
     <Panel>
       <PanelHeader icon={MessageCircle} title="WhatsApp" subtitle="Link this app's own WhatsApp number to send invoices and reminders directly — no third-party gateway." />
@@ -1408,11 +1605,20 @@ function WhatsAppPanel({ data, set, isAdmin }: PanelProps & { isAdmin: boolean }
       )}
       {isAdmin && (
         <div className="rounded-lg border bg-card p-4">
-          <div className="mb-3 flex items-center justify-between">
+          <div className="mb-3 flex items-center justify-between gap-2">
             <span className="font-semibold">Connection</span>
-            <Badge variant="outline" className={wa?.status === "connected" ? "border-accent/40 text-accent" : "border-muted-foreground/30 text-muted-foreground"}>
-              {wa ? statusLabel[wa.status] : "Checking…"}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className={wa?.status === "connected" ? "border-accent/40 text-accent" : "border-muted-foreground/30 text-muted-foreground"}>
+                {wa ? statusLabel[wa.status] : "Checking…"}
+              </Badge>
+              <Button
+                type="button" variant="ghost" size="sm"
+                onClick={async () => { setChecking(true); await refresh(); setChecking(false); }}
+                disabled={checking}
+              >
+                <RefreshCw className={`mr-1 h-3.5 w-3.5 ${checking ? "animate-spin" : ""}`} />Check connection
+              </Button>
+            </div>
           </div>
 
           {wa?.status === "connected" ? (
@@ -1473,7 +1679,57 @@ function WhatsAppPanel({ data, set, isAdmin }: PanelProps & { isAdmin: boolean }
             </fieldset>
           )}
 
-          {wa?.lastError && <div className="mt-3 text-sm text-destructive">{wa.lastError}</div>}
+          {wa?.lastError && (
+            <div className="mt-3 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+              <span className="font-semibold">Last error: </span>{wa.lastError}
+            </div>
+          )}
+        </div>
+      )}
+
+      {isAdmin && wa?.status === "connected" && (
+        <div className="rounded-lg border bg-card p-4">
+          <div className="mb-1 font-semibold">Send test message</div>
+          <p className="mb-3 text-xs text-muted-foreground">Confirm the connection actually works end-to-end by sending yourself (or any number) a quick test.</p>
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="grid gap-1.5">
+              <Label>WhatsApp number</Label>
+              <Input value={testPhone} onChange={(e) => setTestPhone(e.target.value)} placeholder="923001234567" className="w-48" />
+            </div>
+            <Button type="button" variant="outline" onClick={sendTestMessage} disabled={testSending}>
+              <Send className="mr-1.5 h-4 w-4" />{testSending ? "Sending…" : "Send test message"}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {isAdmin && (
+        <div className="rounded-lg border bg-card p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <span className="font-semibold">Recent activity</span>
+            <Button type="button" variant="ghost" size="sm" onClick={loadRecentActivity}><RefreshCw className="mr-1.5 h-3.5 w-3.5" />Refresh</Button>
+          </div>
+          {recentLogs.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No WhatsApp messages sent yet.</p>
+          ) : (
+            <ul className="space-y-1.5 text-xs">
+              {recentLogs.map((log) => (
+                <li key={log.id} className="flex items-center justify-between gap-2 rounded-md border px-2.5 py-1.5">
+                  <span className="min-w-0 truncate">
+                    <span className="font-medium">{log.whatsapp_number}</span>
+                    <span className="text-muted-foreground"> · {humanize(log.message_type)}</span>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-2">
+                    <Badge variant="outline" className={log.status === "sent" || log.status === "delivered" || log.status === "read" ? "border-accent/40 text-accent capitalize" : "border-destructive/40 text-destructive capitalize"}>
+                      {log.status}
+                    </Badge>
+                    <span className="text-muted-foreground">{new Date(log.created_at).toLocaleString()}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="mt-2 text-[11px] text-muted-foreground">Full history with retry and delivery details lives on the WhatsApp Monitoring page.</p>
         </div>
       )}
 
@@ -1524,16 +1780,27 @@ function WhatsAppPanel({ data, set, isAdmin }: PanelProps & { isAdmin: boolean }
       </Dialog>
 
       <SettingBlock title="Message templates" icon={MessageCircle}>
-        <TextAreaField label="Invoice message" value={data.invoiceMessage} onChange={(v) => set("invoiceMessage", v)} />
-        <TextAreaField label="Payment reminder message" value={data.reminderMessage} onChange={(v) => set("reminderMessage", v)} />
+        <TextAreaField label="Invoice message — use {customer}, {invoice_no}, {amount}" value={data.invoiceMessage} onChange={(v) => set("invoiceMessage", v)} />
+        <TemplatePreview
+          template={data.invoiceMessage}
+          vars={{ "{customer}": "Rahul Sharma", "{invoice_no}": "INV-2026-00042", "{amount}": fmt(12500) }}
+        />
+        <p className="text-xs text-muted-foreground">
+          Looking for the payment reminder message? That's set in <span className="font-medium">Settings → Notifications</span> under
+          "Outstanding payment reminder" — it sends on the schedule you configure there, not from here.
+        </p>
       </SettingBlock>
       <ToggleGrid>
         <ToggleField label="Send invoice on WhatsApp" checked={data.sendInvoice} onChange={(v) => set("sendInvoice", v)} />
-        <ToggleField label="Send due reminders" checked={data.sendReminder} onChange={(v) => set("sendReminder", v)} />
-        <ToggleField label="Thank-you after payment" checked={data.sendPaymentThanks} onChange={(v) => set("sendPaymentThanks", v)} />
+        <ToggleField label="Thank-you after payment (coming soon)" checked={data.sendPaymentThanks} onChange={(v) => set("sendPaymentThanks", v)} />
       </ToggleGrid>
 
       <SettingBlock title="Order Management — status message templates" icon={MessageCircle}>
+        <p className="mb-3 text-xs text-muted-foreground">
+          These fire automatically on Sale Orders when its status changes to Booked, Processing, Completed or
+          Cancelled — set a status to "Normal SMS" to skip sending automatically for it (no SMS provider is
+          connected yet, so that choice is a safe no-op rather than a fake send).
+        </p>
         <div className="space-y-3">
           {statuses.map(([modeKey, msgKey, label]) => (
             <div key={modeKey} className="rounded-lg border bg-card p-3">
@@ -1549,6 +1816,7 @@ function WhatsAppPanel({ data, set, isAdmin }: PanelProps & { isAdmin: boolean }
                 </div>
               </div>
               <Textarea rows={2} value={data[msgKey] ?? ""} onChange={(e) => set(msgKey, e.target.value)} />
+              <TemplatePreview template={data[msgKey] ?? ""} vars={{ "#OrderNo": "SO-2026-00017" }} />
             </div>
           ))}
         </div>
@@ -1883,6 +2151,19 @@ function ToggleField({ label, checked, onChange }: { label: string; checked: str
   );
 }
 
+// Renders exactly what a customer will receive, substituting the same
+// placeholders the real send path replaces — so an admin can catch a typo
+// or a missing variable before it goes out live, instead of after.
+function TemplatePreview({ template, vars }: { template: string; vars: Record<string, string> }) {
+  const rendered = Object.entries(vars).reduce((text, [token, value]) => text.split(token).join(value), template || "");
+  return (
+    <div className="mt-2 rounded-lg border border-dashed bg-muted/30 p-3">
+      <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Preview</div>
+      <div className="whitespace-pre-wrap text-sm">{rendered || <span className="text-muted-foreground">Nothing to preview yet.</span>}</div>
+    </div>
+  );
+}
+
 function SettingBlock({ title, icon: Icon, children }: { title: string; icon: typeof Store; children: ReactNode }) {
   return (
     <div className="rounded-lg border p-4">
@@ -1892,14 +2173,49 @@ function SettingBlock({ title, icon: Icon, children }: { title: string; icon: ty
   );
 }
 
-function UploadBox({ icon: Icon, title, subtitle }: { icon: typeof Store; title: string; subtitle: string }) {
+function UploadBox({
+  icon: Icon, title, subtitle, value, assetKey, onUploaded,
+}: {
+  icon: typeof Store; title: string; subtitle: string;
+  value: string; assetKey: "logo" | "stamp"; onUploaded: (url: string) => void;
+}) {
+  const { user } = useAuth();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const pick = async (file: File) => {
+    if (!user?.tenantId) return;
+    setUploading(true);
+    try {
+      const ext = file.name.split(".").pop() || "png";
+      const path = `${user.tenantId}/${assetKey}.${ext}`;
+      const { error } = await supabase.storage.from("business-assets").upload(path, file, { upsert: true, contentType: file.type });
+      if (error) throw error;
+      const { data } = supabase.storage.from("business-assets").getPublicUrl(path);
+      onUploaded(`${data.publicUrl}?v=${Date.now()}`);
+      toast.success(`${title} uploaded`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : `Could not upload ${title.toLowerCase()}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
   return (
     <div className="flex items-center justify-between gap-3 rounded-lg border border-dashed p-4">
       <div className="flex items-center gap-3">
-        <div className="grid h-10 w-10 place-items-center rounded-lg bg-muted text-muted-foreground"><Icon className="h-5 w-5" /></div>
-        <div><div className="font-medium">{title}</div><div className="text-xs text-muted-foreground">{subtitle}</div></div>
+        {value ? (
+          <img src={value} alt={title} className="h-10 w-10 rounded-lg object-contain bg-muted" />
+        ) : (
+          <div className="grid h-10 w-10 place-items-center rounded-lg bg-muted text-muted-foreground"><Icon className="h-5 w-5" /></div>
+        )}
+        <div><div className="font-medium">{title}</div><div className="text-xs text-muted-foreground">{value ? "Uploaded — tap to replace" : subtitle}</div></div>
       </div>
-      <Button variant="outline" size="sm"><Upload className="mr-1.5 h-3.5 w-3.5" />Upload</Button>
+      <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) void pick(f); e.target.value = ""; }} />
+      <Button variant="outline" size="sm" disabled={uploading} onClick={() => fileRef.current?.click()}>
+        <Upload className="mr-1.5 h-3.5 w-3.5" />{uploading ? "Uploading…" : "Upload"}
+      </Button>
     </div>
   );
 }

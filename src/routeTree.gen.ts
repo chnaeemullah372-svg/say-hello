@@ -22,6 +22,7 @@ import { Route as PurchaseReturnRouteImport } from './routes/purchase-return'
 import { Route as PurchaseOrdersRouteImport } from './routes/purchase-orders'
 import { Route as ProductsRouteImport } from './routes/products'
 import { Route as ProductionEntryRouteImport } from './routes/production-entry'
+import { Route as PlatformAdminRouteImport } from './routes/platform-admin'
 import { Route as PaymentsRouteImport } from './routes/payments'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as InventoryRouteImport } from './routes/inventory'
@@ -101,6 +102,11 @@ const ProductsRoute = ProductsRouteImport.update({
 const ProductionEntryRoute = ProductionEntryRouteImport.update({
   id: '/production-entry',
   path: '/production-entry',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlatformAdminRoute = PlatformAdminRouteImport.update({
+  id: '/platform-admin',
+  path: '/platform-admin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PaymentsRoute = PaymentsRouteImport.update({
@@ -192,6 +198,7 @@ export interface FileRoutesByFullPath {
   '/inventory': typeof InventoryRoute
   '/login': typeof LoginRoute
   '/payments': typeof PaymentsRoute
+  '/platform-admin': typeof PlatformAdminRoute
   '/production-entry': typeof ProductionEntryRoute
   '/products': typeof ProductsRoute
   '/purchase-orders': typeof PurchaseOrdersRoute
@@ -222,6 +229,7 @@ export interface FileRoutesByTo {
   '/inventory': typeof InventoryRoute
   '/login': typeof LoginRoute
   '/payments': typeof PaymentsRoute
+  '/platform-admin': typeof PlatformAdminRoute
   '/production-entry': typeof ProductionEntryRoute
   '/products': typeof ProductsRoute
   '/purchase-orders': typeof PurchaseOrdersRoute
@@ -253,6 +261,7 @@ export interface FileRoutesById {
   '/inventory': typeof InventoryRoute
   '/login': typeof LoginRoute
   '/payments': typeof PaymentsRoute
+  '/platform-admin': typeof PlatformAdminRoute
   '/production-entry': typeof ProductionEntryRoute
   '/products': typeof ProductsRoute
   '/purchase-orders': typeof PurchaseOrdersRoute
@@ -285,6 +294,7 @@ export interface FileRouteTypes {
     | '/inventory'
     | '/login'
     | '/payments'
+    | '/platform-admin'
     | '/production-entry'
     | '/products'
     | '/purchase-orders'
@@ -315,6 +325,7 @@ export interface FileRouteTypes {
     | '/inventory'
     | '/login'
     | '/payments'
+    | '/platform-admin'
     | '/production-entry'
     | '/products'
     | '/purchase-orders'
@@ -345,6 +356,7 @@ export interface FileRouteTypes {
     | '/inventory'
     | '/login'
     | '/payments'
+    | '/platform-admin'
     | '/production-entry'
     | '/products'
     | '/purchase-orders'
@@ -376,6 +388,7 @@ export interface RootRouteChildren {
   InventoryRoute: typeof InventoryRoute
   LoginRoute: typeof LoginRoute
   PaymentsRoute: typeof PaymentsRoute
+  PlatformAdminRoute: typeof PlatformAdminRoute
   ProductionEntryRoute: typeof ProductionEntryRoute
   ProductsRoute: typeof ProductsRoute
   PurchaseOrdersRoute: typeof PurchaseOrdersRoute
@@ -485,6 +498,13 @@ declare module '@tanstack/react-router' {
       path: '/production-entry'
       fullPath: '/production-entry'
       preLoaderRoute: typeof ProductionEntryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/platform-admin': {
+      id: '/platform-admin'
+      path: '/platform-admin'
+      fullPath: '/platform-admin'
+      preLoaderRoute: typeof PlatformAdminRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/payments': {
@@ -608,6 +628,7 @@ const rootRouteChildren: RootRouteChildren = {
   InventoryRoute: InventoryRoute,
   LoginRoute: LoginRoute,
   PaymentsRoute: PaymentsRoute,
+  PlatformAdminRoute: PlatformAdminRoute,
   ProductionEntryRoute: ProductionEntryRoute,
   ProductsRoute: ProductsRoute,
   PurchaseOrdersRoute: PurchaseOrdersRoute,

@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
 import type { Customer, Product, Invoice, Payment, InvoiceItem, Estimate, SaleOrder, PurchaseOrder, Account, FundTransfer, DeliveryNote, SaleReturn, PurchaseReturn, ProductionEntry, Subscription, Commission, WhatsAppLog, Expense, Purchase } from "./dummy-data";
+import { calcInvoiceTotals } from "./dummy-data";
 
 type Store = {
   customers: Customer[];
@@ -71,7 +72,7 @@ type Store = {
   addExpense: (e: Omit<Expense, "id">) => Promise<Expense>;
   updateExpense: (id: string, patch: Partial<Expense>) => Promise<void>;
   deleteExpense: (id: string) => Promise<void>;
-  addPurchase: (p: Omit<Purchase, "id">) => Promise<Purchase>;
+  addPurchase: (p: Omit<Purchase, "id" | "number">) => Promise<Purchase>;
   updatePurchase: (id: string, patch: Partial<Purchase>) => Promise<void>;
   deletePurchase: (id: string) => Promise<void>;
   getCustomer: (id: string) => Customer | undefined;
@@ -160,6 +161,8 @@ function invoiceFromRow(row: any): Invoice {
     dueDate: row.due_date ?? "",
     items: (row.items ?? []) as InvoiceItem[],
     taxRate: Number(row.tax_rate ?? 0),
+    taxEnabled: row.tax_enabled ?? true,
+    taxInclusive: row.tax_inclusive ?? false,
     discountMode: (row.discount_mode as Invoice["discountMode"]) ?? "rate",
     discountValue: Number(row.discount_value ?? 0),
     shippingAmount: Number(row.shipping_amount ?? 0),
@@ -199,6 +202,7 @@ function estimateFromRow(row: any): Estimate {
     shippingAmount: Number(row.shipping_amount ?? 0),
     notes: row.notes ?? undefined,
     status: row.status as Estimate["status"],
+    invoiceId: row.invoice_id ?? undefined,
   };
 }
 
@@ -216,6 +220,7 @@ function saleOrderFromRow(row: any): SaleOrder {
     shippingAmount: Number(row.shipping_amount ?? 0),
     notes: row.notes ?? undefined,
     status: row.status as SaleOrder["status"],
+    invoiceId: row.invoice_id ?? undefined,
   };
 }
 
@@ -229,6 +234,7 @@ function purchaseOrderFromRow(row: any): PurchaseOrder {
     items: (row.items ?? []) as InvoiceItem[],
     total: Number(row.total ?? 0),
     status: row.status as PurchaseOrder["status"],
+    billId: row.bill_id ?? undefined,
   };
 }
 
@@ -304,20 +310,36 @@ function whatsAppLogFromRow(row: any): WhatsAppLog {
 function expenseFromRow(row: any): Expense {
   return {
     id: row.id, category: row.category, description: row.description ?? undefined,
-    amount: Number(row.amount ?? 0), date: row.date,
+    amount: Number(row.amount ?? 0), date: row.date, accountId: row.account_id ?? undefined,
   };
 }
 
 function purchaseFromRow(row: any): Purchase {
   return {
-    id: row.id, supplierId: row.supplier_id ?? undefined, supplierName: row.supplier_name ?? "",
+    id: row.id, number: row.number ?? "", supplierId: row.supplier_id ?? undefined, supplierName: row.supplier_name ?? "",
     items: (row.items ?? []) as InvoiceItem[], total: Number(row.total ?? 0), paid: Number(row.paid ?? 0),
     date: row.date, status: row.status,
   };
 }
 
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const { isAuthenticated, ready } = useAuth();
+  const { isAuthenticated, ready, user } = useAuth();
+  const tenantId = user?.tenantId;
+
+  // Reads/increments this tenant's configured prefix+next-number for a
+  // document type as one atomic, locked step (see next_document_number()
+  // in the numbering migration) — returns undefined when that type has no
+  // custom numbering configured, so the caller falls back to the DB's own
+  // default sequence.
+  const nextDocNumber = async (docType: string): Promise<string | undefined> => {
+    if (!tenantId) return undefined;
+    try {
+      const { data } = await supabase.rpc("next_document_number", { p_doc_type: docType, p_tenant_id: tenantId });
+      return (data as string | null) ?? undefined;
+    } catch {
+      return undefined;
+    }
+  };
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -461,6 +483,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         balance: c.balance ?? c.openingBalance ?? 0,
         payable_balance: c.payableBalance ?? 0,
         created_by: userData.user?.id,
+        tenant_id: tenantId,
       }).select().single();
       if (error || !data) throw new Error(error?.message || "Could not save customer");
       const nc = customerFromRow(data);
@@ -544,6 +567,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         image_url: p.imageUrl || null,
         warehouse: p.warehouse || null,
         created_by: userData.user?.id,
+        tenant_id: tenantId,
       }).select().single();
       if (error || !data) throw new Error(error?.message || "Could not save product");
       const np = productFromRow(data);
@@ -594,6 +618,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         due_date: i.dueDate || null,
         items: i.items as unknown as import("@/integrations/supabase/types").Json,
         tax_rate: i.taxRate,
+        tax_enabled: i.taxEnabled,
+        tax_inclusive: i.taxInclusive,
         discount_mode: i.discountMode ?? "rate",
         discount_value: i.discountValue ?? 0,
         shipping_amount: i.shippingAmount ?? 0,
@@ -606,6 +632,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         commission_agent: i.commissionAgent || null,
         status: i.status,
         created_by: userData.user?.id,
+        tenant_id: tenantId,
       }).select().single();
       if (error || !data) throw new Error(error?.message || "Could not save invoice");
       const ni = invoiceFromRow(data);
@@ -622,6 +649,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         method: p.method,
         date: p.date,
         created_by: userData.user?.id,
+        tenant_id: tenantId,
       }).select().single();
       if (error || !data) throw new Error(error?.message || "Could not record payment");
       const np = paymentFromRow(data);
@@ -642,6 +670,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (patch.dueDate !== undefined) dbPatch.due_date = patch.dueDate || null;
       if (patch.items !== undefined) dbPatch.items = patch.items;
       if (patch.taxRate !== undefined) dbPatch.tax_rate = patch.taxRate;
+      if (patch.taxEnabled !== undefined) dbPatch.tax_enabled = patch.taxEnabled;
+      if (patch.taxInclusive !== undefined) dbPatch.tax_inclusive = patch.taxInclusive;
       if (patch.discountMode !== undefined) dbPatch.discount_mode = patch.discountMode;
       if (patch.discountValue !== undefined) dbPatch.discount_value = patch.discountValue;
       if (patch.shippingAmount !== undefined) dbPatch.shipping_amount = patch.shippingAmount;
@@ -693,6 +723,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           await supabase.from("commissions").delete().in("id", relatedCommissionIds);
           setCommissions((prev) => prev.filter((c) => !relatedCommissionIds.includes(c.id)));
         }
+
+        // The invoice's own contribution to the client's balance, and the
+        // stock it took out when sold, never unwound on delete either —
+        // both were left permanently wrong, the same orphaned-side-effect
+        // bug the payment/commission cleanup above already fixes.
+        const customer = customers.find((c) => c.id === inv.customerId);
+        if (customer) {
+          const { total } = calcInvoiceTotals(inv.items, inv.taxRate, inv.discountMode, inv.discountValue, inv.shippingAmount, inv.taxInclusive);
+          const outstanding = total - inv.paid;
+          if (outstanding !== 0) {
+            const { data } = await supabase.from("customers").update({ balance: customer.balance - outstanding }).eq("id", customer.id).select().single();
+            if (data) setCustomers((prev) => prev.map((c) => (c.id === customer.id ? customerFromRow(data) : c)));
+          }
+        }
+        for (const it of inv.items) {
+          if (!it.productId) continue;
+          const p = products.find((x) => x.id === it.productId);
+          if (p) {
+            const { data } = await supabase.from("products").update({ stock: p.stock + it.qty }).eq("id", p.id).select().single();
+            if (data) setProducts((prev) => prev.map((x) => (x.id === p.id ? productFromRow(data) : x)));
+          }
+        }
       }
 
       const { error } = await supabase.from("invoices").delete().eq("id", id);
@@ -702,7 +754,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     addEstimate: async (e) => {
       const { data: userData } = await supabase.auth.getUser();
+      const number = await nextDocNumber("estimate");
       const { data, error } = await supabase.from("estimates").insert({
+        ...(number ? { number } : {}),
         customer_id: e.customerId || null,
         date: e.date,
         valid_until: e.validUntil || null,
@@ -714,6 +768,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         notes: e.notes || null,
         status: e.status,
         created_by: userData.user?.id,
+        tenant_id: tenantId,
       }).select().single();
       if (error || !data) throw new Error(error?.message || "Could not save estimate");
       const ne = estimateFromRow(data);
@@ -732,6 +787,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (patch.shippingAmount !== undefined) dbPatch.shipping_amount = patch.shippingAmount;
       if (patch.notes !== undefined) dbPatch.notes = patch.notes;
       if (patch.status !== undefined) dbPatch.status = patch.status;
+      if (patch.invoiceId !== undefined) dbPatch.invoice_id = patch.invoiceId || null;
       const { data, error } = await supabase.from("estimates").update(dbPatch as any).eq("id", id).select().single();
       if (error) throw new Error(error.message);
       if (data) {
@@ -747,7 +803,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     addSaleOrder: async (s) => {
       const { data: userData } = await supabase.auth.getUser();
+      const number = await nextDocNumber("saleOrder");
       const { data, error } = await supabase.from("sale_orders").insert({
+        ...(number ? { number } : {}),
         customer_id: s.customerId || null,
         date: s.date,
         delivery_date: s.deliveryDate || null,
@@ -759,6 +817,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         notes: s.notes || null,
         status: s.status,
         created_by: userData.user?.id,
+        tenant_id: tenantId,
       }).select().single();
       if (error || !data) throw new Error(error?.message || "Could not save sale order");
       const ns = saleOrderFromRow(data);
@@ -777,6 +836,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (patch.shippingAmount !== undefined) dbPatch.shipping_amount = patch.shippingAmount;
       if (patch.notes !== undefined) dbPatch.notes = patch.notes;
       if (patch.status !== undefined) dbPatch.status = patch.status;
+      if (patch.invoiceId !== undefined) dbPatch.invoice_id = patch.invoiceId || null;
       const { data, error } = await supabase.from("sale_orders").update(dbPatch as any).eq("id", id).select().single();
       if (error) throw new Error(error.message);
       if (data) {
@@ -792,7 +852,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     addPurchaseOrder: async (p) => {
       const { data: userData } = await supabase.auth.getUser();
+      const number = await nextDocNumber("purchaseOrder");
       const { data, error } = await supabase.from("purchase_orders").insert({
+        ...(number ? { number } : {}),
         supplier_id: p.supplierId || null,
         supplier_name: p.supplierName,
         date: p.date,
@@ -800,6 +862,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         total: p.total,
         status: p.status,
         created_by: userData.user?.id,
+        tenant_id: tenantId,
       }).select().single();
       if (error || !data) throw new Error(error?.message || "Could not save purchase order");
       const np = purchaseOrderFromRow(data);
@@ -814,6 +877,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (patch.items !== undefined) dbPatch.items = patch.items;
       if (patch.total !== undefined) dbPatch.total = patch.total;
       if (patch.status !== undefined) dbPatch.status = patch.status;
+      if (patch.billId !== undefined) dbPatch.bill_id = patch.billId || null;
       const { data, error } = await supabase.from("purchase_orders").update(dbPatch as any).eq("id", id).select().single();
       if (error) throw new Error(error.message);
       if (data) {
@@ -836,6 +900,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         opening_date: a.openingDate,
         current_balance: a.openingBalance,
         created_by: userData.user?.id,
+        tenant_id: tenantId,
       }).select().single();
       if (error || !data) throw new Error(error?.message || "Could not save account");
       const na = accountFromRow(data);
@@ -872,22 +937,36 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         remarks: f.remarks || null,
         date: f.date,
         created_by: userData.user?.id,
+        tenant_id: tenantId,
       }).select().single();
       if (error || !data) throw new Error(error?.message || "Could not record transfer");
-      const nf = fundTransferFromRow(data);
-      setFundTransfers((prev) => [nf, ...prev]);
 
-      // Move the balance between the two accounts
+      // Move the balance between the two accounts. A transfer that debits
+      // one account and then fails to credit the other used to still show
+      // as "complete" in the ledger with the books quietly out of balance
+      // — check both legs, and if the credit fails, undo the debit and the
+      // ledger row rather than leave a half-applied transfer on file.
       const from = accounts.find((a) => a.id === f.fromAccountId);
       const to = accounts.find((a) => a.id === f.toAccountId);
       if (from) {
-        const { data: d1 } = await supabase.from("accounts").update({ current_balance: from.currentBalance - f.amount } as any).eq("id", from.id).select().single();
-        if (d1) setAccounts((prev) => prev.map((a) => (a.id === from.id ? accountFromRow(d1) : a)));
+        const { data: d1, error: e1 } = await supabase.from("accounts").update({ current_balance: from.currentBalance - f.amount } as any).eq("id", from.id).select().single();
+        if (e1 || !d1) {
+          await supabase.from("fund_transfers").delete().eq("id", data.id);
+          throw new Error(e1?.message || "Could not debit the source account — transfer cancelled");
+        }
+        setAccounts((prev) => prev.map((a) => (a.id === from.id ? accountFromRow(d1) : a)));
       }
       if (to) {
-        const { data: d2 } = await supabase.from("accounts").update({ current_balance: to.currentBalance + f.amount } as any).eq("id", to.id).select().single();
-        if (d2) setAccounts((prev) => prev.map((a) => (a.id === to.id ? accountFromRow(d2) : a)));
+        const { data: d2, error: e2 } = await supabase.from("accounts").update({ current_balance: to.currentBalance + f.amount } as any).eq("id", to.id).select().single();
+        if (e2 || !d2) {
+          if (from) await supabase.from("accounts").update({ current_balance: from.currentBalance } as any).eq("id", from.id);
+          await supabase.from("fund_transfers").delete().eq("id", data.id);
+          throw new Error(e2?.message || "Could not credit the destination account — transfer rolled back");
+        }
+        setAccounts((prev) => prev.map((a) => (a.id === to.id ? accountFromRow(d2) : a)));
       }
+      const nf = fundTransferFromRow(data);
+      setFundTransfers((prev) => [nf, ...prev]);
       return nf;
     },
 
@@ -897,12 +976,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const from = accounts.find((a) => a.id === transfer.fromAccountId);
         const to = accounts.find((a) => a.id === transfer.toAccountId);
         if (from) {
-          const { data: d1 } = await supabase.from("accounts").update({ current_balance: from.currentBalance + transfer.amount } as any).eq("id", from.id).select().single();
-          if (d1) setAccounts((prev) => prev.map((a) => (a.id === from.id ? accountFromRow(d1) : a)));
+          const { data: d1, error: e1 } = await supabase.from("accounts").update({ current_balance: from.currentBalance + transfer.amount } as any).eq("id", from.id).select().single();
+          if (e1 || !d1) throw new Error(e1?.message || "Could not reverse the source account's balance — transfer not deleted");
+          setAccounts((prev) => prev.map((a) => (a.id === from.id ? accountFromRow(d1) : a)));
         }
         if (to) {
-          const { data: d2 } = await supabase.from("accounts").update({ current_balance: to.currentBalance - transfer.amount } as any).eq("id", to.id).select().single();
-          if (d2) setAccounts((prev) => prev.map((a) => (a.id === to.id ? accountFromRow(d2) : a)));
+          const { data: d2, error: e2 } = await supabase.from("accounts").update({ current_balance: to.currentBalance - transfer.amount } as any).eq("id", to.id).select().single();
+          if (e2 || !d2) {
+            if (from) await supabase.from("accounts").update({ current_balance: from.currentBalance } as any).eq("id", from.id);
+            throw new Error(e2?.message || "Could not reverse the destination account's balance — transfer not deleted");
+          }
+          setAccounts((prev) => prev.map((a) => (a.id === to.id ? accountFromRow(d2) : a)));
         }
       }
       const { error } = await supabase.from("fund_transfers").delete().eq("id", id);
@@ -912,7 +996,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     addDeliveryNote: async (d) => {
       const { data: userData } = await supabase.auth.getUser();
+      const number = await nextDocNumber("deliveryNote");
       const { data, error } = await supabase.from("delivery_notes").insert({
+        ...(number ? { number } : {}),
         customer_id: d.customerId || null, date: d.date, items: d.items as unknown as import("@/integrations/supabase/types").Json,
         notes: d.notes || null, status: d.status, created_by: userData.user?.id,
       }).select().single();
@@ -940,7 +1026,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     addSaleReturn: async (s) => {
       const { data: userData } = await supabase.auth.getUser();
+      const number = await nextDocNumber("saleReturn");
       const { data, error } = await supabase.from("sale_returns").insert({
+        ...(number ? { number } : {}),
         customer_id: s.customerId || null, date: s.date, items: s.items as unknown as import("@/integrations/supabase/types").Json,
         total: s.total, notes: s.notes || null, status: s.status, created_by: userData.user?.id,
       }).select().single();
@@ -969,7 +1057,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     addPurchaseReturn: async (p) => {
       const { data: userData } = await supabase.auth.getUser();
+      const number = await nextDocNumber("purchaseReturn");
       const { data, error } = await supabase.from("purchase_returns").insert({
+        ...(number ? { number } : {}),
         supplier_id: p.supplierId || null, date: p.date, items: p.items as unknown as import("@/integrations/supabase/types").Json,
         total: p.total, notes: p.notes || null, status: p.status, created_by: userData.user?.id,
       }).select().single();
@@ -998,7 +1088,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     addProductionEntry: async (p) => {
       const { data: userData } = await supabase.auth.getUser();
+      const number = await nextDocNumber("production");
       const { data, error } = await supabase.from("production_entries").insert({
+        ...(number ? { number } : {}),
         product_name: p.productName, date: p.date, items: p.items as unknown as import("@/integrations/supabase/types").Json,
         quantity_produced: p.quantityProduced, notes: p.notes || null, status: p.status, created_by: userData.user?.id,
       }).select().single();
@@ -1031,6 +1123,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         customer_id: s.customerId || null, plan_name: s.planName, amount: s.amount,
         billing_cycle: s.billingCycle, status: s.status, next_billing_date: s.nextBillingDate || null,
         created_by: userData.user?.id,
+        tenant_id: tenantId,
       }).select().single();
       if (error || !data) throw new Error(error?.message || "Could not save subscription");
       const n = subscriptionFromRow(data);
@@ -1087,8 +1180,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const { data: userData } = await supabase.auth.getUser();
       const { data, error } = await supabase.from("expenses").insert({
         category: e.category, description: e.description || null, amount: e.amount, date: e.date,
-        created_by: userData.user?.id,
-      }).select().single();
+        account_id: e.accountId || null, created_by: userData.user?.id,
+      } as any).select().single();
       if (error || !data) throw new Error(error?.message || "Could not save expense");
       const n = expenseFromRow(data);
       setExpenses((prev) => [n, ...prev]);
@@ -1100,6 +1193,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (patch.description !== undefined) dbPatch.description = patch.description || null;
       if (patch.amount !== undefined) dbPatch.amount = patch.amount;
       if (patch.date !== undefined) dbPatch.date = patch.date;
+      if (patch.accountId !== undefined) dbPatch.account_id = patch.accountId || null;
       const { data, error } = await supabase.from("expenses").update(dbPatch as any).eq("id", id).select().single();
       if (error) throw new Error(error.message);
       if (data) setExpenses((prev) => prev.map((x) => (x.id === id ? expenseFromRow(data) : x)));
@@ -1112,7 +1206,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     addPurchase: async (p) => {
       const { data: userData } = await supabase.auth.getUser();
+      const number = await nextDocNumber("purchase");
       const { data, error } = await supabase.from("purchases").insert({
+        ...(number ? { number } : {}),
         supplier_id: p.supplierId || null, supplier_name: p.supplierName,
         items: p.items as unknown as import("@/integrations/supabase/types").Json,
         total: p.total, paid: p.paid, date: p.date, status: p.status, created_by: userData.user?.id,
@@ -1150,7 +1246,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     getCustomer: (id) => customers.find((c) => c.id === id),
     getInvoice: (id) => invoices.find((i) => i.id === id || i.number === id),
   }), [customers, products, invoices, payments, estimates, saleOrders, purchaseOrders, accounts, fundTransfers,
-      deliveryNotes, saleReturns, purchaseReturns, productionEntries, subscriptions, commissions, whatsappLogs, expenses, purchases, loading]);
+      deliveryNotes, saleReturns, purchaseReturns, productionEntries, subscriptions, commissions, whatsappLogs, expenses, purchases, loading, tenantId]);
 
   return <StoreCtx.Provider value={value}>{children}</StoreCtx.Provider>;
 }
