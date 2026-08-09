@@ -29,15 +29,16 @@ import { Route as InventoryRouteImport } from './routes/inventory'
 import { Route as ImportRouteImport } from './routes/import'
 import { Route as FundsRouteImport } from './routes/funds'
 import { Route as ExpensesRouteImport } from './routes/expenses'
-import { Route as EstimatesRouteImport } from './routes/estimates'
 import { Route as DeliveryNoteRouteImport } from './routes/delivery-note'
 import { Route as CustomersRouteImport } from './routes/customers'
 import { Route as CommissionsRouteImport } from './routes/commissions'
 import { Route as AgentRouteImport } from './routes/agent'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as InvoicesIndexRouteImport } from './routes/invoices.index'
+import { Route as EstimatesIndexRouteImport } from './routes/estimates.index'
 import { Route as InvoicesNewRouteImport } from './routes/invoices.new'
 import { Route as InvoicesIdRouteImport } from './routes/invoices.$id'
+import { Route as EstimatesNewRouteImport } from './routes/estimates.new'
 
 const WhatsappLogsRoute = WhatsappLogsRouteImport.update({
   id: '/whatsapp-logs',
@@ -139,11 +140,6 @@ const ExpensesRoute = ExpensesRouteImport.update({
   path: '/expenses',
   getParentRoute: () => rootRouteImport,
 } as any)
-const EstimatesRoute = EstimatesRouteImport.update({
-  id: '/estimates',
-  path: '/estimates',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const DeliveryNoteRoute = DeliveryNoteRouteImport.update({
   id: '/delivery-note',
   path: '/delivery-note',
@@ -174,6 +170,11 @@ const InvoicesIndexRoute = InvoicesIndexRouteImport.update({
   path: '/invoices/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const EstimatesIndexRoute = EstimatesIndexRouteImport.update({
+  id: '/estimates/',
+  path: '/estimates/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const InvoicesNewRoute = InvoicesNewRouteImport.update({
   id: '/invoices/new',
   path: '/invoices/new',
@@ -184,6 +185,11 @@ const InvoicesIdRoute = InvoicesIdRouteImport.update({
   path: '/invoices/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const EstimatesNewRoute = EstimatesNewRouteImport.update({
+  id: '/estimates/new',
+  path: '/estimates/new',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -191,7 +197,6 @@ export interface FileRoutesByFullPath {
   '/commissions': typeof CommissionsRoute
   '/customers': typeof CustomersRoute
   '/delivery-note': typeof DeliveryNoteRoute
-  '/estimates': typeof EstimatesRoute
   '/expenses': typeof ExpensesRoute
   '/funds': typeof FundsRoute
   '/import': typeof ImportRoute
@@ -212,8 +217,10 @@ export interface FileRoutesByFullPath {
   '/subscriptions': typeof SubscriptionsRoute
   '/team': typeof TeamRoute
   '/whatsapp-logs': typeof WhatsappLogsRoute
+  '/estimates/new': typeof EstimatesNewRoute
   '/invoices/$id': typeof InvoicesIdRoute
   '/invoices/new': typeof InvoicesNewRoute
+  '/estimates/': typeof EstimatesIndexRoute
   '/invoices/': typeof InvoicesIndexRoute
 }
 export interface FileRoutesByTo {
@@ -222,7 +229,6 @@ export interface FileRoutesByTo {
   '/commissions': typeof CommissionsRoute
   '/customers': typeof CustomersRoute
   '/delivery-note': typeof DeliveryNoteRoute
-  '/estimates': typeof EstimatesRoute
   '/expenses': typeof ExpensesRoute
   '/funds': typeof FundsRoute
   '/import': typeof ImportRoute
@@ -243,8 +249,10 @@ export interface FileRoutesByTo {
   '/subscriptions': typeof SubscriptionsRoute
   '/team': typeof TeamRoute
   '/whatsapp-logs': typeof WhatsappLogsRoute
+  '/estimates/new': typeof EstimatesNewRoute
   '/invoices/$id': typeof InvoicesIdRoute
   '/invoices/new': typeof InvoicesNewRoute
+  '/estimates': typeof EstimatesIndexRoute
   '/invoices': typeof InvoicesIndexRoute
 }
 export interface FileRoutesById {
@@ -254,7 +262,6 @@ export interface FileRoutesById {
   '/commissions': typeof CommissionsRoute
   '/customers': typeof CustomersRoute
   '/delivery-note': typeof DeliveryNoteRoute
-  '/estimates': typeof EstimatesRoute
   '/expenses': typeof ExpensesRoute
   '/funds': typeof FundsRoute
   '/import': typeof ImportRoute
@@ -275,8 +282,10 @@ export interface FileRoutesById {
   '/subscriptions': typeof SubscriptionsRoute
   '/team': typeof TeamRoute
   '/whatsapp-logs': typeof WhatsappLogsRoute
+  '/estimates/new': typeof EstimatesNewRoute
   '/invoices/$id': typeof InvoicesIdRoute
   '/invoices/new': typeof InvoicesNewRoute
+  '/estimates/': typeof EstimatesIndexRoute
   '/invoices/': typeof InvoicesIndexRoute
 }
 export interface FileRouteTypes {
@@ -287,7 +296,6 @@ export interface FileRouteTypes {
     | '/commissions'
     | '/customers'
     | '/delivery-note'
-    | '/estimates'
     | '/expenses'
     | '/funds'
     | '/import'
@@ -308,8 +316,10 @@ export interface FileRouteTypes {
     | '/subscriptions'
     | '/team'
     | '/whatsapp-logs'
+    | '/estimates/new'
     | '/invoices/$id'
     | '/invoices/new'
+    | '/estimates/'
     | '/invoices/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -318,7 +328,6 @@ export interface FileRouteTypes {
     | '/commissions'
     | '/customers'
     | '/delivery-note'
-    | '/estimates'
     | '/expenses'
     | '/funds'
     | '/import'
@@ -339,8 +348,10 @@ export interface FileRouteTypes {
     | '/subscriptions'
     | '/team'
     | '/whatsapp-logs'
+    | '/estimates/new'
     | '/invoices/$id'
     | '/invoices/new'
+    | '/estimates'
     | '/invoices'
   id:
     | '__root__'
@@ -349,7 +360,6 @@ export interface FileRouteTypes {
     | '/commissions'
     | '/customers'
     | '/delivery-note'
-    | '/estimates'
     | '/expenses'
     | '/funds'
     | '/import'
@@ -370,8 +380,10 @@ export interface FileRouteTypes {
     | '/subscriptions'
     | '/team'
     | '/whatsapp-logs'
+    | '/estimates/new'
     | '/invoices/$id'
     | '/invoices/new'
+    | '/estimates/'
     | '/invoices/'
   fileRoutesById: FileRoutesById
 }
@@ -381,7 +393,6 @@ export interface RootRouteChildren {
   CommissionsRoute: typeof CommissionsRoute
   CustomersRoute: typeof CustomersRoute
   DeliveryNoteRoute: typeof DeliveryNoteRoute
-  EstimatesRoute: typeof EstimatesRoute
   ExpensesRoute: typeof ExpensesRoute
   FundsRoute: typeof FundsRoute
   ImportRoute: typeof ImportRoute
@@ -402,8 +413,10 @@ export interface RootRouteChildren {
   SubscriptionsRoute: typeof SubscriptionsRoute
   TeamRoute: typeof TeamRoute
   WhatsappLogsRoute: typeof WhatsappLogsRoute
+  EstimatesNewRoute: typeof EstimatesNewRoute
   InvoicesIdRoute: typeof InvoicesIdRoute
   InvoicesNewRoute: typeof InvoicesNewRoute
+  EstimatesIndexRoute: typeof EstimatesIndexRoute
   InvoicesIndexRoute: typeof InvoicesIndexRoute
 }
 
@@ -549,13 +562,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ExpensesRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/estimates': {
-      id: '/estimates'
-      path: '/estimates'
-      fullPath: '/estimates'
-      preLoaderRoute: typeof EstimatesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/delivery-note': {
       id: '/delivery-note'
       path: '/delivery-note'
@@ -598,6 +604,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InvoicesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/estimates/': {
+      id: '/estimates/'
+      path: '/estimates'
+      fullPath: '/estimates/'
+      preLoaderRoute: typeof EstimatesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/invoices/new': {
       id: '/invoices/new'
       path: '/invoices/new'
@@ -612,6 +625,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InvoicesIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/estimates/new': {
+      id: '/estimates/new'
+      path: '/estimates/new'
+      fullPath: '/estimates/new'
+      preLoaderRoute: typeof EstimatesNewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -621,7 +641,6 @@ const rootRouteChildren: RootRouteChildren = {
   CommissionsRoute: CommissionsRoute,
   CustomersRoute: CustomersRoute,
   DeliveryNoteRoute: DeliveryNoteRoute,
-  EstimatesRoute: EstimatesRoute,
   ExpensesRoute: ExpensesRoute,
   FundsRoute: FundsRoute,
   ImportRoute: ImportRoute,
@@ -642,8 +661,10 @@ const rootRouteChildren: RootRouteChildren = {
   SubscriptionsRoute: SubscriptionsRoute,
   TeamRoute: TeamRoute,
   WhatsappLogsRoute: WhatsappLogsRoute,
+  EstimatesNewRoute: EstimatesNewRoute,
   InvoicesIdRoute: InvoicesIdRoute,
   InvoicesNewRoute: InvoicesNewRoute,
+  EstimatesIndexRoute: EstimatesIndexRoute,
   InvoicesIndexRoute: InvoicesIndexRoute,
 }
 export const routeTree = rootRouteImport

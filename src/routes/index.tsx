@@ -21,7 +21,7 @@ export const Route = createFileRoute("/")({
 
 const quickActions = [
   { label: "New Invoice", to: "/invoices/new" as const, icon: PlusCircle },
-  { label: "New Estimate", to: "/estimates" as const, icon: FileText },
+  { label: "New Estimate", to: "/estimates/new" as const, icon: FileText },
   { label: "New Payment", to: "/payments" as const, icon: Wallet },
 ];
 
