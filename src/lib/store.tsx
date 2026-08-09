@@ -232,9 +232,14 @@ function purchaseOrderFromRow(row: any): PurchaseOrder {
     supplierName: row.supplier_name ?? "",
     date: row.date,
     items: (row.items ?? []) as InvoiceItem[],
+    taxRate: Number(row.tax_rate ?? 0),
+    discountMode: row.discount_mode ?? "rate",
+    discountValue: Number(row.discount_value ?? 0),
+    shippingAmount: Number(row.shipping_amount ?? 0),
     total: Number(row.total ?? 0),
     status: row.status as PurchaseOrder["status"],
     billId: row.bill_id ?? undefined,
+    notes: row.notes ?? undefined,
   };
 }
 
@@ -861,6 +866,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         supplier_name: p.supplierName,
         date: p.date,
         items: p.items as unknown as import("@/integrations/supabase/types").Json,
+        tax_rate: p.taxRate ?? 0, discount_mode: p.discountMode ?? "rate", discount_value: p.discountValue ?? 0,
+        shipping_amount: p.shippingAmount ?? 0, notes: p.notes || null,
         total: p.total,
         status: p.status,
         created_by: userData.user?.id,
@@ -877,6 +884,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (patch.supplierName !== undefined) dbPatch.supplier_name = patch.supplierName;
       if (patch.date !== undefined) dbPatch.date = patch.date;
       if (patch.items !== undefined) dbPatch.items = patch.items;
+      if (patch.taxRate !== undefined) dbPatch.tax_rate = patch.taxRate;
+      if (patch.discountMode !== undefined) dbPatch.discount_mode = patch.discountMode;
+      if (patch.discountValue !== undefined) dbPatch.discount_value = patch.discountValue;
+      if (patch.shippingAmount !== undefined) dbPatch.shipping_amount = patch.shippingAmount;
+      if (patch.notes !== undefined) dbPatch.notes = patch.notes || null;
       if (patch.total !== undefined) dbPatch.total = patch.total;
       if (patch.status !== undefined) dbPatch.status = patch.status;
       if (patch.billId !== undefined) dbPatch.bill_id = patch.billId || null;
