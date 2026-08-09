@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useParams } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Printer, ArrowLeft, Sparkles, Download, MessageCircle, CheckCircle2, CheckCheck, XCircle, Clock, RotateCw } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -54,6 +54,7 @@ function InvoiceView() {
   const [printSettings, setPrintSettings] = useState<Record<string, any>>({});
   const [numbering, setNumbering] = useState<Record<string, any>>({});
   const [waSettings, setWaSettings] = useState<Record<string, any>>({});
+  const [colorTheme, setColorTheme] = useState("prestige");
   const autoSentRef = useRef(false);
 
   useEffect(() => {
@@ -69,7 +70,8 @@ function InvoiceView() {
       supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.print").maybeSingle(),
       supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.numbering").maybeSingle(),
       supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.whatsapp").maybeSingle(),
-    ]).then(([b, bk, rf, ts, cf, pr, nb, wa]) => {
+      supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.appearance").maybeSingle(),
+    ]).then(([b, bk, rf, ts, cf, pr, nb, wa, ap]) => {
       if (b.data?.setting_value) setBusiness(b.data.setting_value as Record<string, any>);
       if (bk.data?.setting_value) setBank(bk.data.setting_value as Record<string, any>);
       if (rf.data?.setting_value) setLabels(rf.data.setting_value as Record<string, string>);
@@ -79,8 +81,25 @@ function InvoiceView() {
       if (pr.data?.setting_value) setPrintSettings(pr.data.setting_value as Record<string, any>);
       if (nb.data?.setting_value) setNumbering(nb.data.setting_value as Record<string, any>);
       if (wa.data?.setting_value) setWaSettings(wa.data.setting_value as Record<string, any>);
+      const appearance = ap.data?.setting_value as { colorTheme?: string } | undefined;
+      if (appearance?.colorTheme) setColorTheme(appearance.colorTheme);
     });
   }, []);
+
+  // Settings -> Appearance -> Color theme was saved but never actually
+  // changed anything — these are the same hues the sidebar/chart palette
+  // already uses (styles.css), scoped here to just the printed document
+  // instead of re-theming the whole app shell.
+  const DOCUMENT_THEMES: Record<string, { primary: string; accent: string }> = {
+    prestige: { primary: "oklch(0.38 0.09 165)", accent: "oklch(0.55 0.11 165)" },
+    emerald: { primary: "oklch(0.45 0.16 150)", accent: "oklch(0.62 0.17 150)" },
+    blue: { primary: "oklch(0.45 0.16 250)", accent: "oklch(0.55 0.16 245)" },
+    gold: { primary: "oklch(0.5 0.13 80)", accent: "oklch(0.7 0.14 85)" },
+  };
+  const documentThemeStyle = (() => {
+    const t = DOCUMENT_THEMES[colorTheme] ?? DOCUMENT_THEMES.prestige;
+    return { "--primary": t.primary, "--color-primary": t.primary, "--accent": t.accent, "--color-accent": t.accent } as CSSProperties;
+  })();
 
   // The paper size / orientation / margins picked in Settings -> Page &
   // Print never actually reached the printed output before — there was no
@@ -288,7 +307,7 @@ function InvoiceView() {
       </div>
 
       {/* Print area */}
-      <article className="print-area relative rounded-2xl border bg-card p-6 shadow-sm sm:p-10">
+      <article className="print-area relative rounded-2xl border bg-card p-6 shadow-sm sm:p-10" style={documentThemeStyle}>
         <header className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 border-b pb-6">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
