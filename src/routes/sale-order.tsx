@@ -1,7 +1,10 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { useStore } from "@/lib/store";
 import { DocumentBoard, type DocRow } from "@/components/DocumentBoard";
 import type { SaleOrder } from "@/lib/dummy-data";
+import { supabase } from "@/integrations/supabase/client";
+import { sendOrderStatusUpdate } from "@/lib/whatsapp";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/sale-order")({
@@ -22,6 +25,25 @@ const statusOptions = [
 function SaleOrderPage() {
   const { saleOrders, customers, addSaleOrder, updateSaleOrder, deleteSaleOrder, addInvoice } = useStore();
   const nav = useNavigate();
+  const [waSettings, setWaSettings] = useState<Record<string, any>>({});
+
+  useEffect(() => {
+    supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.whatsapp").maybeSingle()
+      .then(({ data }) => { if (data?.setting_value) setWaSettings(data.setting_value as Record<string, any>); });
+  }, []);
+
+  // Order Management's per-status WhatsApp templates existed in Settings
+  // but never actually fired on a real status change — this sends the
+  // matching template (if that status's channel is set to WhatsApp) the
+  // moment a sale order's status changes, same trigger point regardless of
+  // whether the change came from the board's dropdown or Convert-to-Invoice.
+  const notifyStatusChange = (order: SaleOrder, newStatus: string) => {
+    if (newStatus === order.status) return;
+    const customer = customers.find((c) => c.id === order.customerId);
+    sendOrderStatusUpdate(newStatus, order.number, [customer?.whatsapp, customer?.whatsapp2], waSettings)
+      .then((result) => { if (result && !result.ok) toast.error(`Order status message failed: ${result.error}`); })
+      .catch(() => {});
+  };
 
   const rows: DocRow[] = saleOrders.map((s) => ({
     id: s.id, number: s.number, partyId: s.customerId, date: s.date, secondDate: s.deliveryDate,
@@ -47,6 +69,8 @@ function SaleOrderPage() {
         status: "unpaid",
       });
       await updateSaleOrder(row.id, { status: "completed", invoiceId: inv.id });
+      const order = saleOrders.find((s) => s.id === row.id);
+      if (order) notifyStatusChange(order, "completed");
       toast.success(`Converted to invoice ${inv.number}`);
       nav({ to: "/invoices/$id", params: { id: inv.id } });
     } catch (err) {
@@ -70,10 +94,14 @@ function SaleOrderPage() {
         customerId: row.partyId, date: row.date, deliveryDate: row.secondDate ?? "",
         items: row.items, taxRate: row.taxRate, status: row.status as SaleOrder["status"], notes: row.notes,
       })}
-      onUpdate={(id, patch) => updateSaleOrder(id, {
-        customerId: patch.partyId, date: patch.date, deliveryDate: patch.secondDate,
-        items: patch.items, taxRate: patch.taxRate, status: patch.status as SaleOrder["status"] | undefined, notes: patch.notes,
-      })}
+      onUpdate={(id, patch) => {
+        const order = saleOrders.find((s) => s.id === id);
+        if (order && patch.status) notifyStatusChange(order, patch.status);
+        return updateSaleOrder(id, {
+          customerId: patch.partyId, date: patch.date, deliveryDate: patch.secondDate,
+          items: patch.items, taxRate: patch.taxRate, status: patch.status as SaleOrder["status"] | undefined, notes: patch.notes,
+        });
+      }}
       onDelete={(id) => deleteSaleOrder(id)}
     />
   );

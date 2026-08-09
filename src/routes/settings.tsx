@@ -1786,9 +1786,10 @@ function WhatsAppPanel({ data, set, isAdmin }: PanelProps & { isAdmin: boolean }
       </ToggleGrid>
 
       <SettingBlock title="Order Management — status message templates" icon={MessageCircle}>
-        <p className="mb-3 text-xs text-amber-600 dark:text-amber-400">
-          Coming soon — these templates are saved but not yet auto-sent when an order's status changes. Only the
-          Invoice message and message templates above are live today.
+        <p className="mb-3 text-xs text-muted-foreground">
+          These fire automatically on Sale Orders when its status changes to Booked, Processing, Completed or
+          Cancelled — set a status to "Normal SMS" to skip sending automatically for it (no SMS provider is
+          connected yet, so that choice is a safe no-op rather than a fake send).
         </p>
         <div className="space-y-3">
           {statuses.map(([modeKey, msgKey, label]) => (
