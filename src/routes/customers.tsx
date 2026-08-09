@@ -41,12 +41,28 @@ const emptyForm = {
 };
 
 function CustomersPage() {
-  const { customers, addCustomer, updateCustomer } = useStore();
+  const { customers, addCustomer, updateCustomer, invoices, purchases } = useStore();
   const { can } = useStaffPermissions();
   const canCreate = can("customers", "create");
   const canEdit = can("customers", "edit");
   const [q, setQ] = useState("");
-  const [sortBy, setSortBy] = useState<"name" | "balance">("name");
+  const [sortBy, setSortBy] = useState<"name" | "balance" | "unpaid">("name");
+
+  // How many of a contact's documents still have money outstanding — shown
+  // as a badge on each row (matches the reference app's "X Unpaid" chip),
+  // so an admin can spot who to chase without opening every card.
+  const unpaidCountByCustomer = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const inv of invoices) {
+      if (inv.status === "paid") continue;
+      map.set(inv.customerId, (map.get(inv.customerId) ?? 0) + 1);
+    }
+    for (const p of purchases) {
+      if (p.status === "paid" || !p.supplierId) continue;
+      map.set(p.supplierId, (map.get(p.supplierId) ?? 0) + 1);
+    }
+    return map;
+  }, [invoices, purchases]);
   const [tab, setTab] = useState<Tab>("client");
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -90,8 +106,12 @@ function CustomersPage() {
     // bug) understated the total and mis-ordered the list the moment the
     // "Both" tab mixed suppliers in.
     const rowAmount = (c: Customer) => (c.partyType === "supplier" ? (c.payableBalance ?? 0) : c.balance);
-    return [...list].sort((a, b) => (sortBy === "balance" ? rowAmount(b) - rowAmount(a) : a.name.localeCompare(b.name)));
-  }, [visible, q, sortBy]);
+    return [...list].sort((a, b) => {
+      if (sortBy === "balance") return rowAmount(b) - rowAmount(a);
+      if (sortBy === "unpaid") return (unpaidCountByCustomer.get(b.id) ?? 0) - (unpaidCountByCustomer.get(a.id) ?? 0);
+      return a.name.localeCompare(b.name);
+    });
+  }, [visible, q, sortBy, unpaidCountByCustomer]);
 
   const outstanding = visible.reduce((s, c) => s + (c.partyType === "supplier" ? (c.payableBalance ?? 0) : c.balance), 0);
 
@@ -309,7 +329,7 @@ function CustomersPage() {
           <Input className="pl-9" placeholder="Search by name, phone or email" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
         <div className="inline-flex rounded-lg border bg-card p-1">
-          {([["name", "By Company Name"], ["balance", "By Balance"]] as const).map(([v, label]) => (
+          {([["name", "By Company Name"], ["balance", "By Balance"], ["unpaid", "By Unpaid Bills"]] as const).map(([v, label]) => (
             <button key={v} type="button" onClick={() => setSortBy(v)}
               className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${sortBy === v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}>
               {label}
@@ -337,6 +357,7 @@ function CustomersPage() {
                       <div className="flex items-center gap-1.5">
                         <div className="truncate font-semibold">{c.name}</div>
                         <Badge variant="outline" className="px-1.5 py-0 text-[9px] capitalize">{c.partyType}</Badge>
+                        <Badge variant="secondary" className="px-1.5 py-0 text-[9px]">{unpaidCountByCustomer.get(c.id) ?? 0} Unpaid</Badge>
                       </div>
                       {c.gstin && <div className="truncate text-[10px] uppercase tracking-wider text-muted-foreground">GSTIN {c.gstin}</div>}
                     </div>
