@@ -274,13 +274,19 @@ function deliveryNoteFromRow(row: any): DeliveryNote {
 function saleReturnFromRow(row: any): SaleReturn {
   return {
     id: row.id, number: row.number, customerId: row.customer_id ?? "", date: row.date,
-    items: (row.items ?? []) as InvoiceItem[], total: Number(row.total ?? 0), notes: row.notes ?? undefined, status: row.status,
+    items: (row.items ?? []) as InvoiceItem[], taxRate: Number(row.tax_rate ?? 0),
+    discountMode: row.discount_mode ?? "rate", discountValue: Number(row.discount_value ?? 0),
+    shippingAmount: Number(row.shipping_amount ?? 0),
+    total: Number(row.total ?? 0), notes: row.notes ?? undefined, status: row.status,
   };
 }
 function purchaseReturnFromRow(row: any): PurchaseReturn {
   return {
     id: row.id, number: row.number, supplierId: row.supplier_id ?? "", date: row.date,
-    items: (row.items ?? []) as InvoiceItem[], total: Number(row.total ?? 0), notes: row.notes ?? undefined, status: row.status,
+    items: (row.items ?? []) as InvoiceItem[], taxRate: Number(row.tax_rate ?? 0),
+    discountMode: row.discount_mode ?? "rate", discountValue: Number(row.discount_value ?? 0),
+    shippingAmount: Number(row.shipping_amount ?? 0),
+    total: Number(row.total ?? 0), notes: row.notes ?? undefined, status: row.status,
   };
 }
 function productionEntryFromRow(row: any): ProductionEntry {
@@ -1044,6 +1050,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const { data, error } = await supabase.from("sale_returns").insert({
         ...(number ? { number } : {}),
         customer_id: s.customerId || null, date: s.date, items: s.items as unknown as import("@/integrations/supabase/types").Json,
+        tax_rate: s.taxRate ?? 0, discount_mode: s.discountMode ?? "rate", discount_value: s.discountValue ?? 0,
+        shipping_amount: s.shippingAmount ?? 0,
         total: s.total, notes: s.notes || null, status: s.status, created_by: userData.user?.id, tenant_id: tenantId,
       }).select().single();
       if (error || !data) throw new Error(error?.message || "Could not save sale return");
@@ -1056,6 +1064,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (patch.customerId !== undefined) dbPatch.customer_id = patch.customerId || null;
       if (patch.date !== undefined) dbPatch.date = patch.date;
       if (patch.items !== undefined) dbPatch.items = patch.items;
+      if (patch.taxRate !== undefined) dbPatch.tax_rate = patch.taxRate;
+      if (patch.discountMode !== undefined) dbPatch.discount_mode = patch.discountMode;
+      if (patch.discountValue !== undefined) dbPatch.discount_value = patch.discountValue;
+      if (patch.shippingAmount !== undefined) dbPatch.shipping_amount = patch.shippingAmount;
       if (patch.total !== undefined) dbPatch.total = patch.total;
       if (patch.notes !== undefined) dbPatch.notes = patch.notes;
       if (patch.status !== undefined) dbPatch.status = patch.status;
@@ -1075,6 +1087,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const { data, error } = await supabase.from("purchase_returns").insert({
         ...(number ? { number } : {}),
         supplier_id: p.supplierId || null, date: p.date, items: p.items as unknown as import("@/integrations/supabase/types").Json,
+        tax_rate: p.taxRate ?? 0, discount_mode: p.discountMode ?? "rate", discount_value: p.discountValue ?? 0,
+        shipping_amount: p.shippingAmount ?? 0,
         total: p.total, notes: p.notes || null, status: p.status, created_by: userData.user?.id, tenant_id: tenantId,
       }).select().single();
       if (error || !data) throw new Error(error?.message || "Could not save purchase return");
@@ -1087,6 +1101,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (patch.supplierId !== undefined) dbPatch.supplier_id = patch.supplierId || null;
       if (patch.date !== undefined) dbPatch.date = patch.date;
       if (patch.items !== undefined) dbPatch.items = patch.items;
+      if (patch.taxRate !== undefined) dbPatch.tax_rate = patch.taxRate;
+      if (patch.discountMode !== undefined) dbPatch.discount_mode = patch.discountMode;
+      if (patch.discountValue !== undefined) dbPatch.discount_value = patch.discountValue;
+      if (patch.shippingAmount !== undefined) dbPatch.shipping_amount = patch.shippingAmount;
       if (patch.total !== undefined) dbPatch.total = patch.total;
       if (patch.notes !== undefined) dbPatch.notes = patch.notes;
       if (patch.status !== undefined) dbPatch.status = patch.status;

@@ -240,6 +240,10 @@ export type SaleReturn = {
   customerId: string;
   date: string;
   items: InvoiceItem[];
+  taxRate: number;
+  discountMode?: "rate" | "flat";
+  discountValue?: number;
+  shippingAmount?: number;
   total: number;
   notes?: string;
   status: SaleReturnStatus;
@@ -252,6 +256,10 @@ export type PurchaseReturn = {
   supplierId: string;
   date: string;
   items: InvoiceItem[];
+  taxRate: number;
+  discountMode?: "rate" | "flat";
+  discountValue?: number;
+  shippingAmount?: number;
   total: number;
   notes?: string;
   status: PurchaseReturnStatus;
