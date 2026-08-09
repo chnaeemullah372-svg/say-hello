@@ -70,6 +70,12 @@ function Dashboard() {
   const outstandingPayment = purchases.reduce((s, p) => s + (p.total - p.paid), 0);
   const expenseMonth = expenses.filter((e) => isThisMonth(e.date)).reduce((s, e) => s + e.amount, 0);
   const openOrders = saleOrders.filter((o) => o.status === "booked" || o.status === "processing").length;
+  const orderStats = {
+    booked: saleOrders.filter((o) => o.status === "booked").length,
+    processing: saleOrders.filter((o) => o.status === "processing").length,
+    completed: saleOrders.filter((o) => o.status === "completed").length,
+    cancelled: saleOrders.filter((o) => o.status === "cancelled").length,
+  };
 
   const firstName = (user?.name || "there").split(" ")[0];
 
@@ -131,7 +137,7 @@ function Dashboard() {
         />
         <SummaryPair
           left={{ label: "Payment Received", subLabel: "All Time", value: fmt(received), tone: "accent", to: "/payments" }}
-          right={{ label: "Payment Paid", subLabel: "Paid this month", value: fmt(paymentPaidThisMonth), tone: "destructive", to: "/expenses" }}
+          right={{ label: "Payment Paid", subLabel: "Paid this month", value: fmt(paymentPaidThisMonth), tone: "destructive", to: "/purchases" }}
         />
         <SummaryPair
           left={{ label: "Outstanding Balance", subLabel: "All Time", value: fmt(outstanding), tone: "accent", to: "/invoices" }}
@@ -141,6 +147,32 @@ function Dashboard() {
           left={{ label: "Expense", subLabel: "Expense this month", value: fmt(expenseMonth), tone: "muted", to: "/expenses" }}
           right={{ label: "Order Statistics", subLabel: "Current month", value: `${openOrders} open`, tone: "muted", to: "/sale-order" }}
         />
+
+        <Link to="/sale-order" className="block">
+          <Card className="transition hover:border-accent/40 hover:shadow-sm">
+            <CardContent className="p-3.5">
+              <div className="mb-2 text-sm font-semibold">Order Statistics breakdown</div>
+              <div className="grid grid-cols-4 gap-2 text-center">
+                <div>
+                  <div className="font-display text-lg font-bold text-sapphire">{orderStats.booked}</div>
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Booked</div>
+                </div>
+                <div>
+                  <div className="font-display text-lg font-bold text-amber">{orderStats.processing}</div>
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Processing</div>
+                </div>
+                <div>
+                  <div className="font-display text-lg font-bold text-accent">{orderStats.completed}</div>
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Completed</div>
+                </div>
+                <div>
+                  <div className="font-display text-lg font-bold text-destructive">{orderStats.cancelled}</div>
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Cancelled</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
 
         <Card>
           <CardContent className="p-4">
