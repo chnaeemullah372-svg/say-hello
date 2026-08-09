@@ -47,14 +47,29 @@ const modules = [
 ];
 
 function Dashboard() {
-  const { invoices, payments } = useStore();
+  const { invoices, payments, purchases, expenses, saleOrders } = useStore();
   const { user } = useAuth();
 
+  // These summary tiles used to show a mix of real totals and hardcoded
+  // placeholder numbers (Purchases this month, Payment Paid, Outstanding
+  // Payment, Expense this month, Order Statistics all had fixed fake
+  // values baked in) — the very first screen every user sees was silently
+  // wrong for anyone except the exact demo data this was built against.
+  const now = new Date();
+  const isThisMonth = (d: string) => {
+    const dt = new Date(d);
+    return dt.getFullYear() === now.getFullYear() && dt.getMonth() === now.getMonth();
+  };
+
   const totals = invoices.map((i) => ({ ...i, ...calcInvoiceTotals(i.items, i.taxRate, i.discountMode, i.discountValue, i.shippingAmount, i.taxInclusive) }));
-  const sales = totals.reduce((s, i) => s + i.total, 0);
+  const sales = totals.filter((i) => isThisMonth(i.date)).reduce((s, i) => s + i.total, 0);
   const received = payments.reduce((s, p) => s + p.amount, 0);
   const outstanding = totals.reduce((s, i) => s + (i.total - i.paid), 0);
-  const expenseMonth = 68500;
+  const purchasesThisMonth = purchases.filter((p) => isThisMonth(p.date)).reduce((s, p) => s + p.total, 0);
+  const paymentPaidThisMonth = purchases.filter((p) => isThisMonth(p.date)).reduce((s, p) => s + p.paid, 0);
+  const outstandingPayment = purchases.reduce((s, p) => s + (p.total - p.paid), 0);
+  const expenseMonth = expenses.filter((e) => isThisMonth(e.date)).reduce((s, e) => s + e.amount, 0);
+  const openOrders = saleOrders.filter((o) => o.status === "booked" || o.status === "processing").length;
 
   const firstName = (user?.name || "there").split(" ")[0];
 
@@ -73,7 +88,7 @@ function Dashboard() {
             </div>
           </div>
           <div className="rounded-full border border-sidebar-border/60 bg-sidebar-accent/80 px-3 py-1.5 text-[11px] font-medium text-sidebar-accent-foreground shadow-sm">
-            Prestige Store
+            {user?.businessName || "Your Business"}
           </div>
         </div>
         <div className="grid grid-cols-3 gap-2 sm:gap-3">
@@ -112,19 +127,19 @@ function Dashboard() {
       <section className="space-y-3 px-4 py-4 sm:px-6">
         <SummaryPair
           left={{ label: "Sales", subLabel: "Sales this month", value: fmt(sales), tone: "gold", to: "/invoices" }}
-          right={{ label: "Purchases", subLabel: "Purchase this month", value: fmt(178200), tone: "gold", to: "/purchases" }}
+          right={{ label: "Purchases", subLabel: "Purchase this month", value: fmt(purchasesThisMonth), tone: "gold", to: "/purchases" }}
         />
         <SummaryPair
           left={{ label: "Payment Received", subLabel: "All Time", value: fmt(received), tone: "accent", to: "/payments" }}
-          right={{ label: "Payment Paid", subLabel: "Paid this month", value: fmt(0), tone: "destructive", to: "/expenses" }}
+          right={{ label: "Payment Paid", subLabel: "Paid this month", value: fmt(paymentPaidThisMonth), tone: "destructive", to: "/expenses" }}
         />
         <SummaryPair
-          left={{ label: "Outstanding Balance", subLabel: "This Month", value: fmt(outstanding), tone: "accent", to: "/invoices" }}
-          right={{ label: "Outstanding Payment", subLabel: "This Month", value: fmt(0), tone: "destructive", to: "/purchases" }}
+          left={{ label: "Outstanding Balance", subLabel: "All Time", value: fmt(outstanding), tone: "accent", to: "/invoices" }}
+          right={{ label: "Outstanding Payment", subLabel: "All Time", value: fmt(outstandingPayment), tone: "destructive", to: "/purchases" }}
         />
         <SummaryPair
           left={{ label: "Expense", subLabel: "Expense this month", value: fmt(expenseMonth), tone: "muted", to: "/expenses" }}
-          right={{ label: "Order Statistics", subLabel: "Current month", value: "4 open", tone: "muted", to: "/sale-order" }}
+          right={{ label: "Order Statistics", subLabel: "Current month", value: `${openOrders} open`, tone: "muted", to: "/sale-order" }}
         />
 
         <Card>
