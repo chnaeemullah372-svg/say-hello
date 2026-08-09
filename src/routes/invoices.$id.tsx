@@ -13,6 +13,7 @@ import { StatusPill } from "@/components/StatusPill";
 import { supabase } from "@/integrations/supabase/client";
 import { sendAndLogWhatsApp } from "@/lib/whatsapp";
 import { templateSettingsDefaults } from "@/routes/settings";
+import { friendlyErrorMessage } from "@/lib/friendly-error";
 import { toast } from "sonner";
 
 const waStatusMeta = {
@@ -527,7 +528,7 @@ function InvoiceView() {
                     </div>
                   </div>
                   {log.status === "failed" && log.errorMessage && (
-                    <div className="mt-1.5 text-xs text-destructive">Reason: {log.errorMessage}</div>
+                    <div className="mt-1.5 text-xs text-destructive">Reason: {friendlyErrorMessage(new Error(log.errorMessage), log.errorMessage)}</div>
                   )}
                 </li>
               );

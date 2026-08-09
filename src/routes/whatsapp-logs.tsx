@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useStore } from "@/lib/store";
 import { sendAndLogWhatsApp } from "@/lib/whatsapp";
+import { friendlyErrorMessage } from "@/lib/friendly-error";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/whatsapp-logs")({
@@ -88,7 +89,7 @@ function WhatsAppLogsPage() {
                   <div className="truncate text-xs text-muted-foreground">
                     {l.whatsappNumber}{l.referenceNumber ? ` · ${l.referenceNumber}` : ""} · {new Date(l.createdAt).toLocaleString()}
                   </div>
-                  {l.status === "failed" && l.errorMessage && <div className="mt-0.5 truncate text-xs text-destructive">{l.errorMessage}</div>}
+                  {l.status === "failed" && l.errorMessage && <div className="mt-0.5 truncate text-xs text-destructive">{friendlyErrorMessage(new Error(l.errorMessage), l.errorMessage)}</div>}
                 </div>
                 <Badge variant="outline" className={meta.tone}><Icon className="mr-1 h-3 w-3" />{meta.label}</Badge>
                 {l.status === "failed" && (

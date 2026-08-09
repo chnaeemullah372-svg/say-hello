@@ -75,6 +75,7 @@ import {
   type WAStatus,
 } from "@/lib/whatsapp-actions";
 import { runDueReminderCheckNow } from "@/lib/due-reminders-actions";
+import { friendlyErrorMessage } from "@/lib/friendly-error";
 import { sendAndLogWhatsApp } from "@/lib/whatsapp";
 import { setCurrencySymbol, fmt, type AccountType } from "@/lib/dummy-data";
 import { CURRENCIES } from "@/lib/currencies";
@@ -243,7 +244,7 @@ const defaults: SettingsState = {
     expenseNext: "220",
     subscriptionPrefix: "SUB-",
     subscriptionNext: "1",
-    productionPrefix: "PR-",
+    productionPrefix: "PRD-",
     productionNext: "1",
     businessLicenceName: "GSTIN",
     country: "Pakistan",
@@ -1366,7 +1367,7 @@ function NotificationsPanel({ data, set }: PanelProps) {
       setLastResult(stats);
       toast.success(`Checked ${stats.checked} invoice(s) — ${stats.sent} sent, ${stats.skipped} skipped, ${stats.failed} failed`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not run the reminder check");
+      toast.error(friendlyErrorMessage(err, "Could not run the reminder check"));
     } finally {
       setChecking(false);
     }
@@ -1499,7 +1500,13 @@ function WhatsAppPanel({ data, set, isAdmin }: PanelProps & { isAdmin: boolean }
       setWa(state);
       return state;
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not read WhatsApp status");
+      // This runs on a 2.5s background poll (see below) -- toasting on every
+      // failed tick used to stack unlimited error toasts on top of the panel
+      // (and each one visually blocks the header Save button/icons while
+      // present) for as long as the status endpoint kept failing. The status
+      // badge already communicates "not connected" -- a background health
+      // check failing repeatedly doesn't need a toast per tick, only a log.
+      console.warn("WhatsApp status check failed:", err instanceof Error ? err.message : err);
       return null;
     }
   };
