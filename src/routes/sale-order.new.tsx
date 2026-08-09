@@ -21,33 +21,32 @@ import { sendAndLogWhatsApp } from "@/lib/whatsapp";
 import { ItemDialog, type ItemMode, type DraftLine } from "@/routes/invoices.new";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/estimates/new")({
+export const Route = createFileRoute("/sale-order/new")({
   head: () => ({ meta: [
-    { title: "Create Estimate — CN Invoice" },
-    { name: "description", content: "Create a quote with line items, tax, discount and shipping." },
+    { title: "Create Sale Order — CN Invoice" },
+    { name: "description", content: "Create a confirmed customer order with line items, tax, discount and shipping." },
   ]}),
-  component: CreateEstimate,
+  component: CreateSaleOrder,
 });
 
 type DiscountMode = "rate" | "flat";
 
 const statusOptions = [
-  { value: "open", label: "Open" },
-  { value: "followup", label: "Follow-up" },
-  { value: "negotiation", label: "Negotiation" },
-  { value: "not_interested", label: "Not interested" },
-  { value: "accepted", label: "Finalised" },
+  { value: "booked", label: "Booked" },
+  { value: "processing", label: "Processing" },
+  { value: "completed", label: "Completed" },
+  { value: "cancelled", label: "Cancelled" },
 ];
 
-function CreateEstimate() {
+function CreateSaleOrder() {
   const nav = useNavigate();
-  const { customers, products, addCustomer, updateCustomer, addProduct, addEstimate, updateEstimate, estimates } = useStore();
+  const { customers, products, addCustomer, updateCustomer, addProduct, addSaleOrder, updateSaleOrder, saleOrders } = useStore();
 
   const editId = useMemo(() => {
     if (typeof window === "undefined") return null;
     return new URLSearchParams(window.location.search).get("edit");
   }, []);
-  const editingEstimate = useMemo(() => (editId ? estimates.find((e) => e.id === editId) : undefined), [editId, estimates]);
+  const editingOrder = useMemo(() => (editId ? saleOrders.find((s) => s.id === editId) : undefined), [editId, saleOrders]);
   const [loadedEditId, setLoadedEditId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -61,9 +60,9 @@ function CreateEstimate() {
   const [shippingAmount, setShippingAmount] = useState(0);
 
   const [period, setPeriod] = useState("none");
-  const [validUntil, setValidUntil] = useState<string>("");
-  const [estimateDate] = useState(new Date());
-  const [status, setStatus] = useState("open");
+  const [deliveryDate, setDeliveryDate] = useState<string>("");
+  const [orderDate] = useState(new Date());
+  const [status, setStatus] = useState("booked");
   const [notes, setNotes] = useState("");
   const [notesOpen, setNotesOpen] = useState(false);
   const [terms, setTerms] = useState("");
@@ -90,27 +89,27 @@ function CreateEstimate() {
   const [isEditingClient, setIsEditingClient] = useState(false);
 
   useEffect(() => {
-    if (editingEstimate && loadedEditId !== editingEstimate.id) {
-      setCustomerId(editingEstimate.customerId);
-      setItems(editingEstimate.items.map((it) => ({ ...it })));
-      setDiscountMode(editingEstimate.discountMode ?? "rate");
-      setDiscountValue(editingEstimate.discountValue ?? 0);
-      setTaxPct(editingEstimate.taxRate);
-      setShippingAmount(editingEstimate.shippingAmount ?? 0);
-      setValidUntil(editingEstimate.validUntil || "");
-      setStatus(editingEstimate.status);
-      setNotes(editingEstimate.notes || "");
-      setLoadedEditId(editingEstimate.id);
+    if (editingOrder && loadedEditId !== editingOrder.id) {
+      setCustomerId(editingOrder.customerId);
+      setItems(editingOrder.items.map((it) => ({ ...it })));
+      setDiscountMode(editingOrder.discountMode ?? "rate");
+      setDiscountValue(editingOrder.discountValue ?? 0);
+      setTaxPct(editingOrder.taxRate);
+      setShippingAmount(editingOrder.shippingAmount ?? 0);
+      setDeliveryDate(editingOrder.deliveryDate || "");
+      setStatus(editingOrder.status);
+      setNotes(editingOrder.notes || "");
+      setLoadedEditId(editingOrder.id);
     }
-  }, [editingEstimate, loadedEditId]);
+  }, [editingOrder, loadedEditId]);
 
-  // Default Terms from Settings -> Terms & Condition -> Estimate Terms.
+  // Default Terms from Settings -> Terms & Condition -> Sale Order Terms.
   useEffect(() => {
-    if (editingEstimate) return;
+    if (editingOrder) return;
     supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.terms").maybeSingle()
       .then(({ data }) => {
         const t = (data?.setting_value as Record<string, string>) ?? {};
-        if (t.estimateTerms) setTerms(t.estimateTerms);
+        if (t.saleOrderTerms) setTerms(t.saleOrderTerms);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -146,9 +145,9 @@ function CreateEstimate() {
     doc.setFontSize(16);
     doc.text(businessName, 14, 16);
     doc.setFontSize(10);
-    doc.text(editingEstimate ? editingEstimate.number : "Draft Estimate", 14, 23);
-    doc.text(`Date: ${estimateDate.toISOString().slice(0, 10)}`, 140, 16);
-    doc.text(`Valid until: ${validUntil || "-"}`, 140, 21);
+    doc.text(editingOrder ? editingOrder.number : "Draft Sale Order", 14, 23);
+    doc.text(`Date: ${orderDate.toISOString().slice(0, 10)}`, 140, 16);
+    doc.text(`Delivery: ${deliveryDate || "-"}`, 140, 21);
     doc.text(`Bill To: ${customer?.name || ""}`, 14, 30);
     autoTable(doc, {
       startY: 36,
@@ -192,22 +191,22 @@ function CreateEstimate() {
 
     const payload = {
       customerId,
-      date: estimateDate.toISOString().slice(0, 10),
-      validUntil,
+      date: orderDate.toISOString().slice(0, 10),
+      deliveryDate,
       items: items.map(({ productId, name, qty, rate, discount }) => ({ productId, name, qty, rate, discount })),
       taxRate: taxPct, discountMode, discountValue, shippingAmount, notes,
       status: status as (typeof statusOptions)[number]["value"] as any,
     };
     try {
-      let estimateNumber: string;
-      if (editingEstimate) {
-        await updateEstimate(editingEstimate.id, payload);
-        estimateNumber = editingEstimate.number;
-        toast.success(`Estimate ${editingEstimate.number} updated`);
+      let orderNumber: string;
+      if (editingOrder) {
+        await updateSaleOrder(editingOrder.id, payload);
+        orderNumber = editingOrder.number;
+        toast.success(`Sale order ${editingOrder.number} updated`);
       } else {
-        const est = await addEstimate(payload as any);
-        estimateNumber = est.number;
-        toast.success(`Estimate ${est.number} saved`);
+        const order = await addSaleOrder(payload as any);
+        orderNumber = order.number;
+        toast.success(`Sale order ${order.number} saved`);
       }
 
       if (opts.send && customer) {
@@ -217,10 +216,10 @@ function CreateEstimate() {
             customerId: customer.id,
             customerName: customer.name,
             toNumbers: to,
-            message: `Hello ${customer.name}, your estimate ${estimateNumber} of ${fmt(total)} is ready.`,
-            messageType: "other",
-            referenceId: editingEstimate?.id ?? estimateNumber,
-            referenceNumber: estimateNumber,
+            message: `Hello ${customer.name}, your sale order ${orderNumber} of ${fmt(total)} is confirmed.`,
+            messageType: "order_status",
+            referenceId: editingOrder?.id ?? orderNumber,
+            referenceNumber: orderNumber,
           }).then((r) => { if (!r.ok) toast.error(`WhatsApp send failed: ${r.error}`); }).catch(() => {});
         } else {
           toast.error("This client has no WhatsApp number on file");
@@ -232,9 +231,9 @@ function CreateEstimate() {
         window.open(doc.output("bloburl"), "_blank");
       }
 
-      setTimeout(() => nav({ to: "/estimates" }), 150);
+      setTimeout(() => nav({ to: "/sale-order" }), 150);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not save estimate");
+      toast.error(err instanceof Error ? err.message : "Could not save sale order");
       setSaving(false);
     }
   };
@@ -242,11 +241,11 @@ function CreateEstimate() {
   return (
     <div className="-m-4 sm:-m-6 lg:-m-8 pb-28">
       <div className="sticky top-14 z-20 flex items-center gap-2 bg-primary px-3 py-2.5 text-primary-foreground shadow-sm">
-        <button onClick={() => nav({ to: "/estimates" })} className="grid h-9 w-9 place-items-center rounded-full hover:bg-white/10" aria-label="Back">
+        <button onClick={() => nav({ to: "/sale-order" })} className="grid h-9 w-9 place-items-center rounded-full hover:bg-white/10" aria-label="Back">
           <ArrowLeft className="h-5 w-5" />
         </button>
         <div className="flex-1 text-center font-display text-base font-bold tracking-widest">
-          {editingEstimate ? "EDIT ESTIMATE" : "ESTIMATE"}
+          {editingOrder ? "EDIT SALE ORDER" : "SALE ORDER"}
         </div>
         <button
           onClick={() => document.getElementById("tax-discount-section")?.scrollIntoView({ behavior: "smooth", block: "start" })}
@@ -261,7 +260,7 @@ function CreateEstimate() {
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={async () => { if (!items.length) return toast.error("Add at least one item first"); const doc = await buildDraftPdfDoc(); doc.save(`${editingEstimate ? editingEstimate.number : "estimate-draft"}.pdf`); toast.success("PDF downloaded"); }}>
+            <DropdownMenuItem onClick={async () => { if (!items.length) return toast.error("Add at least one item first"); const doc = await buildDraftPdfDoc(); doc.save(`${editingOrder ? editingOrder.number : "sale-order-draft"}.pdf`); toast.success("PDF downloaded"); }}>
               <FileOutput className="mr-2 h-4 w-4" />Duplicate PDF
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -275,25 +274,25 @@ function CreateEstimate() {
 
         <div className="flex items-start justify-between gap-3 border-b bg-card px-4 py-4">
           <div className="font-display text-2xl font-black tracking-tight">
-            {editingEstimate ? editingEstimate.number : "Auto-generated"}
+            {editingOrder ? editingOrder.number : "Auto-generated"}
           </div>
           <div className="text-right">
-            <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Estimate Date</div>
+            <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Order Date</div>
             <div className="mt-0.5 flex items-center justify-end gap-1.5 text-sm font-medium">
               <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-              {estimateDate.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+              {orderDate.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
             </div>
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-0 border-b bg-card">
           <div className="border-r px-4 py-3">
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Follow Up period</div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Delivery Period</div>
             <Select value={period} onValueChange={(v) => {
               setPeriod(v);
-              if (v === "none") setValidUntil("");
-              else if (v === "custom") { /* leave validUntil as-is */ }
-              else setValidUntil(new Date(Date.now() + Number(v) * 86400000).toISOString().slice(0, 10));
+              if (v === "none") setDeliveryDate("");
+              else if (v === "custom") { /* leave deliveryDate as-is */ }
+              else setDeliveryDate(new Date(Date.now() + Number(v) * 86400000).toISOString().slice(0, 10));
             }}>
               <SelectTrigger className="mt-1 h-8 border-0 bg-transparent px-0 shadow-none focus:ring-0">
                 <SelectValue />
@@ -311,9 +310,9 @@ function CreateEstimate() {
             </Select>
           </div>
           <div className="px-4 py-3 text-right">
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Follow up date</div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Delivery Date</div>
             <div className="mt-1 flex items-center justify-end gap-1.5 text-sm">
-              <Input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} className="h-8 border-0 bg-transparent p-0 text-right shadow-none focus-visible:ring-0" />
+              <Input type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} className="h-8 border-0 bg-transparent p-0 text-right shadow-none focus-visible:ring-0" />
               <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
             </div>
           </div>
@@ -487,7 +486,7 @@ function CreateEstimate() {
           </div>
           {termsOpen && (
             <div className="border-t px-4 py-3">
-              <Textarea rows={3} value={terms} onChange={(e) => setTerms(e.target.value)} placeholder="This estimate is valid for 15 days from the date of issue…" autoFocus />
+              <Textarea rows={3} value={terms} onChange={(e) => setTerms(e.target.value)} placeholder="Payment 30 days after invoice date, order will be charged…" autoFocus />
             </div>
           )}
         </div>
@@ -620,8 +619,8 @@ function CreateEstimate() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 pt-1">
-                  <Checkbox id="est-ship-same" checked={newCust.shippingSameAsBilling} onCheckedChange={(v) => setNewCust({ ...newCust, shippingSameAsBilling: !!v })} />
-                  <Label htmlFor="est-ship-same" className="text-sm font-normal">Shipping address same as billing</Label>
+                  <Checkbox id="so-ship-same" checked={newCust.shippingSameAsBilling} onCheckedChange={(v) => setNewCust({ ...newCust, shippingSameAsBilling: !!v })} />
+                  <Label htmlFor="so-ship-same" className="text-sm font-normal">Shipping address same as billing</Label>
                 </div>
                 <div className="border-t pt-3 grid gap-3">
                   <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Credit &amp; opening balance</div>
