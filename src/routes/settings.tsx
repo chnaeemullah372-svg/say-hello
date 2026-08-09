@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ArrowLeft,
@@ -83,6 +83,15 @@ import { useTheme } from "@/lib/theme";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/settings")({
+  // Which section is open lives in the URL (not just component state) so
+  // the browser's own back button/gesture works the way it does on every
+  // other page: opening a section pushes a real history entry, and
+  // stepping back out of it (even after navigating away to e.g. /funds and
+  // back) lands you exactly where you left off instead of losing your
+  // place or falling through further than one step.
+  validateSearch: (search: Record<string, unknown>): { section?: string } => ({
+    section: typeof search.section === "string" ? search.section : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Settings — CN Invoice" },
@@ -452,7 +461,12 @@ function SettingsPage() {
   // preselected section — a category push-navigates into its own screen,
   // matching the reference app's drill-down list instead of a permanent
   // desktop-style split view.
-  const [active, setActive] = useState<ActiveKey | null>(null);
+  const search = Route.useSearch();
+  const navigate = useNavigate();
+  const active = (search.section as ActiveKey | undefined) ?? null;
+  const setActive = (key: ActiveKey | null) => {
+    navigate({ to: "/settings", search: (key ? { section: key } : {}) as never });
+  };
   const [query, setQuery] = useState("");
   const [settings, setSettings] = useState<SettingsState>(defaults);
   const [loading, setLoading] = useState(true);
