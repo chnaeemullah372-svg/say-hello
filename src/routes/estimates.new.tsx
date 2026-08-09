@@ -57,12 +57,15 @@ function CreateEstimate() {
 
   const [discountMode, setDiscountMode] = useState<DiscountMode>("rate");
   const [discountValue, setDiscountValue] = useState(0);
+  const [taxEnabled, setTaxEnabled] = useState(true);
+  const [taxInclusive, setTaxInclusive] = useState(false);
   const [taxPct, setTaxPct] = useState(0);
   const [shippingAmount, setShippingAmount] = useState(0);
 
   const [period, setPeriod] = useState("none");
   const [validUntil, setValidUntil] = useState<string>("");
   const [estimateDate] = useState(new Date());
+  const [reference, setReference] = useState("");
   const [status, setStatus] = useState("open");
   const [notes, setNotes] = useState("");
   const [notesOpen, setNotesOpen] = useState(false);
@@ -132,8 +135,8 @@ function CreateEstimate() {
   );
   const discountAmount = discountMode === "rate" ? (baseAmount * discountValue) / 100 : discountValue;
   const taxable = Math.max(0, baseAmount - discountAmount);
-  const taxAmount = (taxable * taxPct) / 100;
-  const total = taxable + taxAmount + shippingAmount;
+  const taxAmount = !taxEnabled ? 0 : taxInclusive ? taxable - taxable / (1 + taxPct / 100) : (taxable * taxPct) / 100;
+  const total = !taxEnabled || taxInclusive ? taxable + shippingAmount : taxable + taxAmount + shippingAmount;
 
   const buildDraftPdfDoc = async () => {
     const { default: jsPDF } = await import("jspdf");
@@ -195,7 +198,7 @@ function CreateEstimate() {
       date: estimateDate.toISOString().slice(0, 10),
       validUntil,
       items: items.map(({ productId, name, qty, rate, discount }) => ({ productId, name, qty, rate, discount })),
-      taxRate: taxPct, discountMode, discountValue, shippingAmount, notes,
+      taxRate: taxEnabled ? taxPct : 0, discountMode, discountValue, shippingAmount, notes,
       status: status as (typeof statusOptions)[number]["value"] as any,
     };
     try {
@@ -269,6 +272,10 @@ function CreateEstimate() {
       </div>
 
       <div className="mx-auto max-w-2xl bg-background">
+        <div className="border-b bg-muted px-4 py-2 text-center text-sm font-bold">
+          {statusOptions.find((s) => s.value === status)?.label ?? status}
+        </div>
+
         <div className="border-b bg-card py-2 text-center">
           <div className="font-display text-sm font-semibold tracking-[0.25em] text-muted-foreground">CN INVOICE</div>
         </div>
@@ -317,6 +324,17 @@ function CreateEstimate() {
               <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
             </div>
           </div>
+        </div>
+
+        {/* Reference */}
+        <div className="flex items-center justify-between gap-2 border-b bg-card px-4 py-3">
+          <Label className="text-sm font-medium">Reference</Label>
+          <Input
+            value={reference}
+            onChange={(e) => setReference(e.target.value)}
+            placeholder="Reference Bill / Name"
+            className="h-8 max-w-[65%] border-0 bg-transparent text-right shadow-none focus-visible:ring-0"
+          />
         </div>
 
         {/* Bill To */}
@@ -433,8 +451,17 @@ function CreateEstimate() {
           </div>
 
           <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2 px-4 py-3">
-            <span className="text-xs font-semibold">Tax %</span>
-            <Input type="number" min={0} value={taxPct} onChange={(e) => setTaxPct(Math.max(0, +e.target.value || 0))} className="h-9 text-right" />
+            <label className="flex items-center gap-2 text-xs">
+              <input type="checkbox" checked={taxEnabled} onChange={(e) => setTaxEnabled(e.target.checked)} className="h-4 w-4 accent-primary" />
+              <span className="font-semibold">Tax</span>
+              <button type="button" onClick={() => setTaxInclusive((v) => !v)} className="text-[10px] uppercase tracking-wider text-muted-foreground underline-offset-2 hover:underline">
+                {taxInclusive ? "Inclusive" : "Exclusive"}
+              </button>
+            </label>
+            <div className="relative">
+              <Input type="number" min={0} disabled={!taxEnabled} value={taxPct} onChange={(e) => setTaxPct(Math.max(0, +e.target.value || 0))} className="h-9 pr-8 text-right" />
+              <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">%</span>
+            </div>
             <span className="min-w-[80px] text-right text-sm font-semibold tabular-nums">{fmt(taxAmount)}</span>
           </div>
 
@@ -451,6 +478,11 @@ function CreateEstimate() {
         <div className="flex items-center justify-between border-y bg-primary px-4 py-3 text-primary-foreground">
           <span className="text-sm font-bold uppercase tracking-widest">Total</span>
           <span className="font-display text-lg font-bold tabular-nums">{fmt(total)}</span>
+        </div>
+
+        <div className="flex items-center justify-between border-b bg-muted/70 px-4 py-3">
+          <span className="text-sm font-bold uppercase tracking-widest">Balance</span>
+          <span className="font-display text-lg font-bold tabular-nums text-primary">{fmt(total)}</span>
         </div>
 
         <div className="border-b bg-card px-4 py-3">
