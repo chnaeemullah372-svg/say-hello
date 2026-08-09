@@ -1250,6 +1250,7 @@ function ItemDialog({
   const [productId, setProductId] = useState(initial?.productId ?? "");
   const [qty, setQty] = useState<number>(initial?.qty ?? 1);
   const [rate, setRate] = useState<number>(initial?.rate ?? 0);
+  const [lineDiscount, setLineDiscount] = useState<number>(initial?.discount ?? 0);
   const [code, setCode] = useState(initial?.code ?? "");
   const [unit, setUnit] = useState(initial?.unit ?? "");
   const [warehouse, setWarehouse] = useState(initial?.warehouse ?? "");
@@ -1279,6 +1280,7 @@ function ItemDialog({
       setProductId(initial?.productId ?? "");
       setQty(initial?.qty ?? 1);
       setRate(initial?.rate ?? 0);
+      setLineDiscount(initial?.discount ?? 0);
       setCode(initial?.code ?? "");
       setUnit(initial?.unit ?? "");
       setWarehouse(initial?.warehouse ?? "");
@@ -1338,7 +1340,7 @@ function ItemDialog({
       }
     }
 
-    onSave({ productId: pid, name: trimmed, qty, rate, discount: 0, code, unit, warehouse, description, wholesale });
+    onSave({ productId: pid, name: trimmed, qty, rate, discount: lineDiscount, code, unit, warehouse, description, wholesale });
     setSubmitting(false);
 
     if (editing) return; // parent closes for edit mode
@@ -1349,6 +1351,7 @@ function ItemDialog({
     setProductId("");
     setQty(1);
     setRate(0);
+    setLineDiscount(0);
     setCode("");
     setUnit("");
     setDescription("");
@@ -1471,6 +1474,26 @@ function ItemDialog({
               Entered quantity exceeds available stock
             </div>
           )}
+
+          {/* Line discount + Amount preview */}
+          <div className="grid grid-cols-2 border-b">
+            <label className="border-r px-4 py-2">
+              <span className="text-[11px] uppercase tracking-wider text-muted-foreground">Discount %</span>
+              <Input
+                type="number"
+                min={0}
+                max={100}
+                value={lineDiscount}
+                onChange={(e) => setLineDiscount(Math.min(100, Math.max(0, +e.target.value || 0)))}
+                className="h-8 border-0 p-0 text-base shadow-none focus-visible:ring-0"
+                placeholder="0"
+              />
+            </label>
+            <div className="px-4 py-2">
+              <span className="text-[11px] uppercase tracking-wider text-muted-foreground">Amount</span>
+              <div className="flex h-8 items-center text-base font-semibold tabular-nums">{fmt(qty * rate * (1 - lineDiscount / 100))}</div>
+            </div>
+          </div>
 
           {/* Code + Unit */}
           <div className="grid grid-cols-2 border-b">
