@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { inviteTeamMember, getTeamLastActive, createTeamMember } from "@/lib/team-actions";
 import { friendlyErrorMessage } from "@/lib/friendly-error";
 import type { ModulePermission } from "@/lib/permissions";
+import { AuditTrail } from "@/routes/settings";
 
 export const Route = createFileRoute("/team")({
   head: () => ({ meta: [
@@ -82,6 +83,7 @@ function TeamPage() {
   const [permData, setPermData] = useState<Record<string, ModulePermission>>({});
   const [permLoading, setPermLoading] = useState(false);
   const [permSaving, setPermSaving] = useState(false);
+  const [permAuditRefresh, setPermAuditRefresh] = useState(0);
 
   const roleByUser = useMemo(() => new Map(roles.map((r) => [r.user_id, r.role])), [roles]);
   const currentRole = user?.role;
@@ -178,11 +180,13 @@ function TeamPage() {
       }));
       const { error } = await supabase.from("staff_permissions").upsert(rows, { onConflict: "tenant_id,user_id,module" });
       if (error) throw error;
-      await supabase.from("settings_audit_log").insert({
+      const { error: auditError } = await supabase.from("settings_audit_log").insert({
         tenant_id: user.tenantId, actor_user_id: user.id, module: "team_permissions", action: "update",
         before_value: before, after_value: permData,
         reason: `Updated module permissions for ${permMember.full_name || permMember.email}`,
       });
+      if (auditError) console.warn("Settings audit log insert failed:", auditError.message);
+      setPermAuditRefresh((n) => n + 1);
       toast.success("Permissions updated");
       setPermMember(null);
     } catch (err) {
@@ -375,6 +379,9 @@ function TeamPage() {
                 </tbody>
               </table>
               <p className="mt-3 text-[11px] text-muted-foreground">Every change here is recorded in the audit log with who changed what and when.</p>
+              <div className="mt-3">
+                <AuditTrail module="team_permissions" refreshKey={permAuditRefresh} />
+              </div>
             </div>
           )}
           <DialogFooter>

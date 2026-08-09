@@ -558,7 +558,10 @@ function SettingsPage() {
       supabase.from("settings_audit_log").insert({
         tenant_id: user.tenantId, actor_user_id: user.id, module: section, action: "update",
         before_value: existing?.setting_value ?? null, after_value: settings[section],
-      }).then(() => setAuditRefresh((n) => n + 1));
+      }).then(({ error: auditError }) => {
+        if (auditError) console.warn("Settings audit log insert failed:", auditError.message);
+        setAuditRefresh((n) => n + 1);
+      });
     }
   };
 
@@ -716,7 +719,7 @@ function SettingsPage() {
   );
 }
 
-function AuditTrail({ module, refreshKey }: { module: string; refreshKey: number }) {
+export function AuditTrail({ module, refreshKey }: { module: string; refreshKey: number }) {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [rows, setRows] = useState<{ id: string; actor: string; action: string; created_at: string }[]>([]);
