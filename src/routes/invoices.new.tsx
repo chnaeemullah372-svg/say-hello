@@ -31,10 +31,10 @@ export const Route = createFileRoute("/invoices/new")({
   component: CreateInvoice,
 });
 
-type ItemMode = "product" | "service" | "fixed";
+export type ItemMode = "product" | "service" | "fixed";
 type DiscountMode = "rate" | "flat";
 
-type DraftLine = InvoiceItem & { unit?: string; code?: string; warehouse?: string; description?: string; wholesale?: boolean };
+export type DraftLine = InvoiceItem & { unit?: string; code?: string; warehouse?: string; description?: string; wholesale?: boolean };
 
 function CreateInvoice() {
   const nav = useNavigate();
@@ -1219,7 +1219,7 @@ function CreateInvoice() {
 
 /* ---------------- Item dialog ---------------- */
 
-function ItemDialog({
+export function ItemDialog({
   open, onOpenChange, mode, products, editing, initial, onSave, onRegisterProduct, customerId,
 }: {
   open: boolean;
