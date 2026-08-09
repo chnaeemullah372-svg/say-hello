@@ -31,9 +31,18 @@ async function ensureProfileAndRole(): Promise<AuthUser | null> {
     (user.user_metadata?.name as string | undefined) ||
     user.email.split("@")[0];
 
+  // Keeps name/email in sync for a profile row that already exists (created
+  // atomically by signup_create_business() at signup time, alongside its
+  // tenant_id). A plain update rather than an upsert: profiles.tenant_id is
+  // NOT NULL with no default, so an upsert's implicit insert leg -- which
+  // Postgres validates against NOT NULL before conflict resolution even
+  // runs -- failed on every single call, for every user, on every page
+  // load. A user with no profile row yet (mid-signup) just updates zero
+  // rows here, which is fine; the tenant-less case is handled below.
   await supabase
     .from("profiles")
-    .upsert({ user_id: user.id, full_name: displayName, email: user.email }, { onConflict: "user_id" });
+    .update({ full_name: displayName, email: user.email })
+    .eq("user_id", user.id);
 
   const { data: profile } = await supabase
     .from("profiles")
