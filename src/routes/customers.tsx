@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { UserPlus, Search, Phone, Mail, MapPin, Pencil, ChevronDown, ChevronUp, MessageCircle, Building2, Receipt } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -133,6 +133,21 @@ function CustomersPage() {
     setShowMore(true);
     setOpen(true);
   };
+
+  // Lets other pages (the Statement page's "Edit client" shortcut) deep-link
+  // straight into this dialog instead of making someone find the same
+  // contact again in this list themselves.
+  const openedEditFromLink = useRef(false);
+  useEffect(() => {
+    if (openedEditFromLink.current || typeof window === "undefined") return;
+    const editId = new URLSearchParams(window.location.search).get("edit");
+    if (!editId) return;
+    const target = customers.find((c) => c.id === editId);
+    if (!target) return;
+    openedEditFromLink.current = true;
+    startEdit(target);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customers]);
 
   const save = async () => {
     if (!form.name) return toast.error("Name is required");

@@ -134,11 +134,12 @@ function buildReport(
     case "Client Ledger / Transactions::Client Ledger / Transactions": {
       const rows = store.customers.filter((c) => c.partyType !== "supplier");
       return {
-        columns: ["Client", "Phone", "Invoices", "Total Billed", "Balance"],
+        columns: ["Client", "Phone", "Invoices", "Opening Balance", "Total Billed", "Payment Received", "Balance"],
         rows: rows.map((c) => {
           const own = invoices.filter((i) => i.customerId === c.id);
           const billed = own.reduce((s, i) => s + i.total, 0);
-          return [c.name, c.phone || "-", String(own.length), fmt(billed), fmt(c.balance)];
+          const received = store.payments.filter((p) => own.some((i) => i.number === p.invoiceNumber)).reduce((s, p) => s + p.amount, 0);
+          return [c.name, c.phone || "-", String(own.length), fmt(c.openingBalance ?? 0), fmt(billed), fmt(received), fmt(c.balance)];
         }),
         total: rows.reduce((s, c) => s + c.balance, 0),
         dateFrom: "-", dateTo: "-",
@@ -148,8 +149,12 @@ function buildReport(
     case "Client Ledger / Transactions::Client/Supplier Overall Report": {
       const rows = store.customers;
       return {
-        columns: ["Name", "Type", "Region", "Balance", "Payable"],
-        rows: rows.map((c) => [c.name, c.partyType, c.region || "-", fmt(c.balance), fmt(c.payableBalance ?? 0)]),
+        columns: ["Name", "Type", "Region", "Opening Balance", "Payment Received", "Balance", "Payable"],
+        rows: rows.map((c) => {
+          const own = invoices.filter((i) => i.customerId === c.id);
+          const received = store.payments.filter((p) => own.some((i) => i.number === p.invoiceNumber)).reduce((s, p) => s + p.amount, 0);
+          return [c.name, c.partyType, c.region || "-", fmt(c.openingBalance ?? 0), fmt(received), fmt(c.balance), fmt(c.payableBalance ?? 0)];
+        }),
         total: rows.reduce((s, c) => s + c.balance, 0),
         dateFrom: "-", dateTo: "-",
       };
