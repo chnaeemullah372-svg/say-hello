@@ -147,6 +147,116 @@
   --sidebar-ring: oklch(0.8 0.14 85);
 }
 
+/* Settings -> Appearance -> Color theme used to only recolor the printed
+   PDF (invoices.$id.tsx's own inline override) while the live app — sidebar,
+   buttons, charts, dashboard highlights — stayed hardcoded to the emerald
+   "Prestige" hue no matter what a tenant picked. These blocks re-hue every
+   brand-color token (same lightness/chroma as Prestige, just a different
+   hue) so picking Emerald/Blue/Gold actually re-themes the whole app, not
+   just documents. "Prestige" itself needs no block — it already matches
+   the base :root/.dark values above. */
+[data-theme="emerald"] {
+  --foreground: oklch(0.22 0.04 150);
+  --card-foreground: oklch(0.22 0.04 150);
+  --popover-foreground: oklch(0.22 0.04 150);
+  --primary: oklch(0.38 0.09 150);
+  --secondary-foreground: oklch(0.38 0.09 150);
+  --muted-foreground: oklch(0.48 0.03 150);
+  --accent: oklch(0.55 0.11 150);
+  --ring: oklch(0.55 0.11 150);
+  --emerald-deep: oklch(0.38 0.09 150);
+  --chart-1: oklch(0.38 0.09 150);
+  --chart-2: oklch(0.55 0.11 150);
+  --sidebar: oklch(0.32 0.07 150);
+  --sidebar-accent: oklch(0.42 0.09 150);
+  --sidebar-border: oklch(0.42 0.09 150);
+}
+.dark[data-theme="emerald"] {
+  --background: oklch(0.16 0.02 150);
+  --card: oklch(0.22 0.03 150);
+  --popover: oklch(0.22 0.03 150);
+  --primary: oklch(0.6 0.13 150);
+  --secondary: oklch(0.28 0.04 150);
+  --accent: oklch(0.6 0.13 150);
+  --border: oklch(0.3 0.03 150);
+  --input: oklch(0.3 0.03 150);
+  --ring: oklch(0.6 0.13 150);
+  --emerald-deep: oklch(0.5 0.11 150);
+  --chart-1: oklch(0.6 0.13 150);
+  --chart-2: oklch(0.72 0.09 150);
+  --sidebar: oklch(0.13 0.02 150);
+  --sidebar-accent: oklch(0.22 0.04 150);
+  --sidebar-border: oklch(0.24 0.03 150);
+}
+
+[data-theme="blue"] {
+  --foreground: oklch(0.22 0.04 250);
+  --card-foreground: oklch(0.22 0.04 250);
+  --popover-foreground: oklch(0.22 0.04 250);
+  --primary: oklch(0.38 0.09 250);
+  --secondary-foreground: oklch(0.38 0.09 250);
+  --muted-foreground: oklch(0.48 0.03 250);
+  --accent: oklch(0.55 0.11 250);
+  --ring: oklch(0.55 0.11 250);
+  --emerald-deep: oklch(0.38 0.09 250);
+  --chart-1: oklch(0.38 0.09 250);
+  --chart-2: oklch(0.55 0.11 250);
+  --sidebar: oklch(0.32 0.07 250);
+  --sidebar-accent: oklch(0.42 0.09 250);
+  --sidebar-border: oklch(0.42 0.09 250);
+}
+.dark[data-theme="blue"] {
+  --background: oklch(0.16 0.02 250);
+  --card: oklch(0.22 0.03 250);
+  --popover: oklch(0.22 0.03 250);
+  --primary: oklch(0.6 0.13 250);
+  --secondary: oklch(0.28 0.04 250);
+  --accent: oklch(0.6 0.13 250);
+  --border: oklch(0.3 0.03 250);
+  --input: oklch(0.3 0.03 250);
+  --ring: oklch(0.6 0.13 250);
+  --emerald-deep: oklch(0.5 0.11 250);
+  --chart-1: oklch(0.6 0.13 250);
+  --chart-2: oklch(0.72 0.09 250);
+  --sidebar: oklch(0.13 0.02 250);
+  --sidebar-accent: oklch(0.22 0.04 250);
+  --sidebar-border: oklch(0.24 0.03 250);
+}
+
+[data-theme="gold"] {
+  --foreground: oklch(0.22 0.04 80);
+  --card-foreground: oklch(0.22 0.04 80);
+  --popover-foreground: oklch(0.22 0.04 80);
+  --primary: oklch(0.38 0.09 80);
+  --secondary-foreground: oklch(0.38 0.09 80);
+  --muted-foreground: oklch(0.48 0.03 80);
+  --accent: oklch(0.55 0.11 80);
+  --ring: oklch(0.55 0.11 80);
+  --emerald-deep: oklch(0.38 0.09 80);
+  --chart-1: oklch(0.38 0.09 80);
+  --chart-2: oklch(0.55 0.11 80);
+  --sidebar: oklch(0.32 0.07 80);
+  --sidebar-accent: oklch(0.42 0.09 80);
+  --sidebar-border: oklch(0.42 0.09 80);
+}
+.dark[data-theme="gold"] {
+  --background: oklch(0.16 0.02 80);
+  --card: oklch(0.22 0.03 80);
+  --popover: oklch(0.22 0.03 80);
+  --primary: oklch(0.6 0.13 80);
+  --secondary: oklch(0.28 0.04 80);
+  --accent: oklch(0.6 0.13 80);
+  --border: oklch(0.3 0.03 80);
+  --input: oklch(0.3 0.03 80);
+  --ring: oklch(0.6 0.13 80);
+  --emerald-deep: oklch(0.5 0.11 80);
+  --chart-1: oklch(0.6 0.13 80);
+  --chart-2: oklch(0.72 0.09 80);
+  --sidebar: oklch(0.13 0.02 80);
+  --sidebar-accent: oklch(0.22 0.04 80);
+  --sidebar-border: oklch(0.24 0.03 80);
+}
+
 @layer base {
   * {
     border-color: var(--color-border);

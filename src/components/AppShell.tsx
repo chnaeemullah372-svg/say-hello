@@ -30,6 +30,20 @@ export function AppShell({ children }: { children: ReactNode }) {
       });
   }, [isAuthenticated]);
 
+  // Settings -> Appearance -> Color theme used to only recolor the printed
+  // PDF/invoice page, leaving the sidebar/dashboard/buttons stuck on the
+  // emerald default no matter what a tenant picked. Applying it here as a
+  // data-theme attribute on <html> re-hues those same tokens app-wide (see
+  // the [data-theme] blocks in styles.css).
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.appearance").maybeSingle()
+      .then(({ data }) => {
+        const colorTheme = (data?.setting_value as Record<string, string> | null)?.colorTheme;
+        document.documentElement.setAttribute("data-theme", colorTheme || "prestige");
+      });
+  }, [isAuthenticated]);
+
   // Fix: numeric fields (Rate, Qty, Discount, Tax, Shipping, Payment amount…)
   // used to show a literal "0" that staff had to backspace before typing the
   // real number, on every single line item. Auto-selecting the value on
