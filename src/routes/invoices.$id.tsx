@@ -13,6 +13,7 @@ import { StatusPill } from "@/components/StatusPill";
 import { supabase } from "@/integrations/supabase/client";
 import { sendAndLogWhatsApp } from "@/lib/whatsapp";
 import { templateSettingsDefaults } from "@/routes/settings";
+import type { PdfDocData } from "@/lib/pdf-builder";
 import { friendlyErrorMessage } from "@/lib/friendly-error";
 import { toast } from "sonner";
 
@@ -159,7 +160,7 @@ function InvoiceView() {
     if (!inv) return null;
     const totals = calcInvoiceTotals(inv.items, inv.taxRate, inv.discountMode, inv.discountValue, inv.shippingAmount, inv.taxInclusive);
     const balance = Math.max(0, totals.total - inv.paid);
-    const { buildDocumentPdf, buildReceiptPdf } = await import("@/lib/pdf-builder");
+    const { buildDocumentPdf, buildReceiptPdf, TEXT_SCALE } = await import("@/lib/pdf-builder");
     const docData = {
       documentTitle: "Invoice",
       documentNumber: inv.number,
@@ -193,6 +194,12 @@ function InvoiceView() {
       customColors: tpl.useCustomColors ? { primary: String(tpl.primaryColor || ""), accent: String(tpl.accentColor || "") } : null,
       headerTagline: tpl.headerTagline ? String(tpl.headerTagline) : undefined,
       footerText: tpl.footerText ? String(tpl.footerText) : undefined,
+      hideHeader: !!tpl.hideHeaderBand,
+      headerHeightMm: Number(tpl.headerBandHeight) || 12,
+      watermarkUrl: tpl.watermarkUrl ? String(tpl.watermarkUrl) : undefined,
+      watermarkPosition: (tpl.watermarkPosition as PdfDocData["watermarkPosition"]) || "bottom-right",
+      watermarkOpacity: Number(tpl.watermarkOpacity ?? 15),
+      textScale: TEXT_SCALE[String(tpl.textSize || "M")] ?? 1,
     };
     if (printSettings.printerChoice === "thermal") {
       return buildReceiptPdf(docData, {
