@@ -46,6 +46,7 @@ import {
   Trash2,
   Upload,
   UserCog,
+  Wand2,
   Users,
   WalletCards,
   Wrench,
@@ -1363,67 +1364,79 @@ function TemplateSettingsPanel({ data, set }: { data: Record<string, boolean | s
     <Panel>
       <PanelHeader icon={FileText} title="Template Settings" subtitle="Control what appears on invoices/documents. Show or hide fields and totals." />
 
-      <SettingBlock title="Template Color" icon={Palette}>
-        <div className="mb-3 flex items-center justify-between">
-          <span className="text-sm">Use custom colors instead of the theme preset</span>
-          <Switch checked={useCustomColors} onCheckedChange={(v) => set("useCustomColors", v)} />
+      <div className="rounded-xl border-2 border-primary/30 bg-primary/5 p-4">
+        <div className="mb-3 flex items-center gap-2 font-display text-base font-bold text-primary">
+          <Wand2 className="h-5 w-5" /> Template Design
         </div>
-        {useCustomColors && (
-          <ColorSwatchPicker
-            value={String(data.primaryColor || "#0d5c47")}
-            onChange={(hex) => { set("primaryColor", hex); set("accentColor", lightenHex(hex, 0.35)); }}
-          />
-        )}
-      </SettingBlock>
+        <p className="mb-4 text-xs text-muted-foreground">
+          Everything that controls how documents look — color, watermark, text size and header/footer text.
+          Same idea as UNI Invoice's own Template Design screen.
+        </p>
+        <div className="grid gap-4">
+          <SettingBlock title="Template Color" icon={Palette}>
+            <div className="mb-3 flex items-center justify-between">
+              <span className="text-sm">Use custom colors instead of the theme preset</span>
+              <Switch checked={useCustomColors} onCheckedChange={(v) => set("useCustomColors", v)} />
+            </div>
+            {useCustomColors && (
+              <ColorSwatchPicker
+                value={String(data.primaryColor || "#0d5c47")}
+                onChange={(hex) => { set("primaryColor", hex); set("accentColor", lightenHex(hex, 0.35)); }}
+              />
+            )}
+          </SettingBlock>
 
-      <SettingBlock title="Template Text" icon={PenLine}>
-        <div className="grid gap-3">
-          <div className="grid gap-1.5">
-            <Label className="text-xs text-muted-foreground">Header tagline (shown under your business name)</Label>
-            <Input value={String(data.headerTagline || "")} onChange={(e) => set("headerTagline", e.target.value)} placeholder="e.g. Quality you can trust" />
-          </div>
-          <div className="grid gap-1.5">
-            <Label className="text-xs text-muted-foreground">Footer text (shown at the bottom, replaces "Thank you for your business.")</Label>
-            <Input value={String(data.footerText || "")} onChange={(e) => set("footerText", e.target.value)} placeholder="Thank you for your business." />
-          </div>
+          <SettingBlock title="Template Text" icon={PenLine}>
+            <div className="grid gap-3">
+              <div className="grid gap-1.5">
+                <Label className="text-xs text-muted-foreground">Header tagline (shown under your business name)</Label>
+                <Input value={String(data.headerTagline || "")} onChange={(e) => set("headerTagline", e.target.value)} placeholder="e.g. Quality you can trust" />
+              </div>
+              <div className="grid gap-1.5">
+                <Label className="text-xs text-muted-foreground">Footer text (shown at the bottom, replaces "Thank you for your business.")</Label>
+                <Input value={String(data.footerText || "")} onChange={(e) => set("footerText", e.target.value)} placeholder="Thank you for your business." />
+              </div>
+            </div>
+          </SettingBlock>
+
+          <SettingBlock title="Text Size" icon={FileText}>
+            <div className="grid grid-cols-5 gap-2">
+              {(["XS", "S", "M", "L", "XL"] as const).map((v) => (
+                <button key={v} type="button" onClick={() => set("textSize", v)}
+                  className={`rounded-lg border px-3 py-2 text-sm font-medium transition ${(String(data.textSize || "M")) === v ? "border-primary bg-primary/10 text-primary" : "text-muted-foreground"}`}>
+                  {v}
+                </button>
+              ))}
+            </div>
+          </SettingBlock>
+
+          <SettingBlock title="Watermark" icon={Image}>
+            <p className="mb-3 text-xs text-muted-foreground">A faint background image on every document — same idea as UNI Invoice's Template watermark.</p>
+            <UploadBox icon={Image} title="Watermark image" subtitle="PNG/JPG shown faintly behind the document" value={String(data.watermarkUrl || "")} assetKey="watermark" onUploaded={(url) => set("watermarkUrl", url)} />
+            {data.watermarkUrl ? (
+              <div className="mt-3">
+                <Grid>
+                  <SelectField label="Position" value={String(data.watermarkPosition || "bottom-right")} onChange={(v) => set("watermarkPosition", v)}
+                    options={["center", "top-left", "top-right", "bottom-left", "bottom-right"]} />
+                  <TextField label="Opacity (%)" value={String(data.watermarkOpacity ?? "15")} onChange={(v) => set("watermarkOpacity", v)} type="number" />
+                </Grid>
+              </div>
+            ) : null}
+          </SettingBlock>
+
+          <SettingBlock title="Page Layout" icon={Printer}>
+            <div className="mb-3 flex items-center justify-between">
+              <span className="text-sm">Hide the branded header band (for letterhead paper)</span>
+              <Switch checked={!!data.hideHeaderBand} onCheckedChange={(v) => set("hideHeaderBand", v)} />
+            </div>
+            {data.hideHeaderBand ? (
+              <TextField label="Blank space left at the top (mm)" value={String(data.headerBandHeight ?? "12")} onChange={(v) => set("headerBandHeight", v)} type="number" />
+            ) : null}
+          </SettingBlock>
         </div>
-      </SettingBlock>
+      </div>
 
-      <SettingBlock title="Text Size" icon={FileText}>
-        <div className="grid grid-cols-5 gap-2">
-          {(["XS", "S", "M", "L", "XL"] as const).map((v) => (
-            <button key={v} type="button" onClick={() => set("textSize", v)}
-              className={`rounded-lg border px-3 py-2 text-sm font-medium transition ${(String(data.textSize || "M")) === v ? "border-primary bg-primary/10 text-primary" : "text-muted-foreground"}`}>
-              {v}
-            </button>
-          ))}
-        </div>
-      </SettingBlock>
-
-      <SettingBlock title="Watermark" icon={Image}>
-        <p className="mb-3 text-xs text-muted-foreground">A faint background image on every document — same idea as UNI Invoice's Template watermark.</p>
-        <UploadBox icon={Image} title="Watermark image" subtitle="PNG/JPG shown faintly behind the document" value={String(data.watermarkUrl || "")} assetKey="watermark" onUploaded={(url) => set("watermarkUrl", url)} />
-        {data.watermarkUrl ? (
-          <div className="mt-3">
-            <Grid>
-              <SelectField label="Position" value={String(data.watermarkPosition || "bottom-right")} onChange={(v) => set("watermarkPosition", v)}
-                options={["center", "top-left", "top-right", "bottom-left", "bottom-right"]} />
-              <TextField label="Opacity (%)" value={String(data.watermarkOpacity ?? "15")} onChange={(v) => set("watermarkOpacity", v)} type="number" />
-            </Grid>
-          </div>
-        ) : null}
-      </SettingBlock>
-
-      <SettingBlock title="Page Layout" icon={Printer}>
-        <div className="mb-3 flex items-center justify-between">
-          <span className="text-sm">Hide the branded header band (for letterhead paper)</span>
-          <Switch checked={!!data.hideHeaderBand} onCheckedChange={(v) => set("hideHeaderBand", v)} />
-        </div>
-        {data.hideHeaderBand ? (
-          <TextField label="Blank space left at the top (mm)" value={String(data.headerBandHeight ?? "12")} onChange={(v) => set("headerBandHeight", v)} type="number" />
-        ) : null}
-      </SettingBlock>
-
+      <div className="mb-2 mt-5 text-sm font-semibold text-muted-foreground">Template Content</div>
       <div className="divide-y rounded-lg border">
         {rows.map(([key, label]) => (
           <div key={key} className="flex items-center justify-between px-3 py-2.5">
