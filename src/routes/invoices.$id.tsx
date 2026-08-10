@@ -50,7 +50,7 @@ function InvoiceView() {
   const [business, setBusiness] = useState<Record<string, any>>({});
   const [bank, setBank] = useState<Record<string, any>>({});
   const [labels, setLabels] = useState<Record<string, string>>({});
-  const [tpl, setTpl] = useState<Record<string, boolean>>(templateSettingsDefaults);
+  const [tpl, setTpl] = useState<Record<string, boolean | string>>(templateSettingsDefaults);
   const [customFields, setCustomFields] = useState<{ id: string; fieldName: string; placement: string }[]>([]);
   const [printSettings, setPrintSettings] = useState<Record<string, any>>({});
   const [numbering, setNumbering] = useState<Record<string, any>>({});
@@ -76,7 +76,7 @@ function InvoiceView() {
       if (b.data?.setting_value) setBusiness(b.data.setting_value as Record<string, any>);
       if (bk.data?.setting_value) setBank(bk.data.setting_value as Record<string, any>);
       if (rf.data?.setting_value) setLabels(rf.data.setting_value as Record<string, string>);
-      if (ts.data?.setting_value) setTpl({ ...templateSettingsDefaults, ...(ts.data.setting_value as Record<string, boolean>) });
+      if (ts.data?.setting_value) setTpl({ ...templateSettingsDefaults, ...(ts.data.setting_value as Record<string, boolean | string>) });
       const fields = (cf.data?.setting_value as { fields?: any[] } | null)?.fields;
       if (fields) setCustomFields(fields);
       if (pr.data?.setting_value) setPrintSettings(pr.data.setting_value as Record<string, any>);
@@ -110,7 +110,15 @@ function InvoiceView() {
     a4: "A4", a5: "A5", a3: "A3", letter: "letter", legal: "legal",
     "thermal-80mm": "80mm 297mm", "thermal-58mm": "58mm 297mm",
   };
-  const pageCss = `@page { size: ${PAGE_SIZE[printSettings.paper] ?? "A4"} ${printSettings.orientation === "landscape" ? "landscape" : "portrait"}; margin: ${printSettings.marginTop ?? 12}mm ${printSettings.marginRight ?? 10}mm ${printSettings.marginBottom ?? 12}mm ${printSettings.marginLeft ?? 10}mm; }`;
+  // Thermal/receipt mode uses a fixed width but `auto` height — the browser
+  // then sizes the printed page to however tall the content actually is,
+  // which is what makes it grow downward as items are added instead of
+  // padding out to a fixed A4-shaped rectangle.
+  const isReceiptMode = printSettings.printerChoice === "thermal";
+  const receiptWidthMm = Math.max(30, Number(printSettings.printerSize) || 80);
+  const pageCss = isReceiptMode
+    ? `@page { size: ${receiptWidthMm}mm auto; margin: 2mm; }`
+    : `@page { size: ${PAGE_SIZE[printSettings.paper] ?? "A4"} ${printSettings.orientation === "landscape" ? "landscape" : "portrait"}; margin: ${printSettings.marginTop ?? 12}mm ${printSettings.marginRight ?? 10}mm ${printSettings.marginBottom ?? 12}mm ${printSettings.marginLeft ?? 10}mm; }`;
 
   // Falls back to the plain English label if nothing's been renamed in
   // Settings -> Rename Field Name.
@@ -151,8 +159,8 @@ function InvoiceView() {
     if (!inv) return null;
     const totals = calcInvoiceTotals(inv.items, inv.taxRate, inv.discountMode, inv.discountValue, inv.shippingAmount, inv.taxInclusive);
     const balance = Math.max(0, totals.total - inv.paid);
-    const { buildDocumentPdf } = await import("@/lib/pdf-builder");
-    return buildDocumentPdf({
+    const { buildDocumentPdf, buildReceiptPdf } = await import("@/lib/pdf-builder");
+    const docData = {
       documentTitle: "Invoice",
       documentNumber: inv.number,
       dateLabel: "Invoice Date",
@@ -165,7 +173,7 @@ function InvoiceView() {
       businessEmail: business.email,
       businessTaxId: business.gstin,
       logoDataUrl: business.logoUrl,
-      partyLabel: "Bill To",
+      partyLabel: "Bill To" as const,
       partyName: customer?.name || "",
       partyAddress: customer?.address,
       partyPhone: customer?.phone,
@@ -182,7 +190,18 @@ function InvoiceView() {
       terms: inv.terms,
       currencySymbol: getCurrencySymbol(),
       theme: colorTheme,
-    });
+      customColors: tpl.useCustomColors ? { primary: String(tpl.primaryColor || ""), accent: String(tpl.accentColor || "") } : null,
+      headerTagline: tpl.headerTagline ? String(tpl.headerTagline) : undefined,
+      footerText: tpl.footerText ? String(tpl.footerText) : undefined,
+    };
+    if (printSettings.printerChoice === "thermal") {
+      return buildReceiptPdf(docData, {
+        widthMm: Number(printSettings.printerSize) || 80,
+        dynamicHeight: printSettings.dynamicReceiptHeight !== false,
+        fixedHeightMm: Number(printSettings.fixedReceiptHeight) || 200,
+      });
+    }
+    return buildDocumentPdf(docData);
   };
 
   // Sends the invoice PDF (plus the templated text) to the customer's

@@ -140,7 +140,7 @@ type SettingsState = {
   appearance: Record<string, string | boolean>;
   security: Record<string, string | boolean>;
   renameFields: Record<string, string>;
-  templateSettings: Record<string, boolean>;
+  templateSettings: Record<string, boolean | string>;
   customFields: { fields: CustomFieldDef[] };
 };
 
@@ -157,7 +157,7 @@ type CustomFieldDef = {
 // Exported so pages that only need one section (e.g. the invoice view's
 // Template Settings toggles) can merge server data over the same defaults
 // shown here, instead of treating "no row saved yet" as everything-off.
-export const templateSettingsDefaults: Record<string, boolean> = {
+export const templateSettingsDefaults: Record<string, boolean | string> = {
   showBankInEstimate: true, showAmountInWords: true, showBalanceInWords: true,
   showNotesInLedger: true, enableAdjustmentInLedger: true, showCompanyNameBelowSignature: true,
   showOldBalance: true, showAllPaymentDetails: true, showNotesInPdf: true,
@@ -167,6 +167,11 @@ export const templateSettingsDefaults: Record<string, boolean> = {
   showImageColumn: false, hideQuantityColumn: false, hideSrNoColumn: true,
   hideHsnColumn: false, hideRateColumn: false, hideDiscountColumn: false,
   hideTaxColumn: false, showSubtotal: false,
+  // Custom branding for the printed/PDF template — colors + the free-text
+  // lines UNI Invoice's own Template setting exposes ("what to write at
+  // the top", "what to write at the bottom").
+  useCustomColors: false, primaryColor: "#0d5c47", accentColor: "#1f8a6b",
+  headerTagline: "", footerText: "",
 };
 
 // NOTE: every text field below that describes a SPECIFIC business (name,
@@ -296,6 +301,8 @@ const defaults: SettingsState = {
     printFormat: "text",
     printerSize: "58",
     maxCharsPerLine: "40",
+    dynamicReceiptHeight: true,
+    fixedReceiptHeight: "200",
   },
   items: {
     stockTracking: true,
@@ -1149,12 +1156,44 @@ function PrintPanel({ data, set }: PanelProps) {
           </div>
         </div>
         {data.printerChoice === "thermal" ? (
-          <Grid>
-            <SelectField label="Printer connection" value={data.printerConnection} onChange={(v) => set("printerConnection", v)} options={["bluetooth", "usb"]} />
-            <SelectField label="Print format" value={data.printFormat} onChange={(v) => set("printFormat", v)} options={["image", "text"]} />
-            <SelectField label="Printer size (mm)" value={data.printerSize} onChange={(v) => set("printerSize", v)} options={["58", "80"]} />
-            <TextField label="Maximum character in single line" value={data.maxCharsPerLine} onChange={(v) => set("maxCharsPerLine", v)} type="number" />
-          </Grid>
+          <>
+            <Grid>
+              <SelectField label="Printer connection" value={data.printerConnection} onChange={(v) => set("printerConnection", v)} options={["bluetooth", "usb"]} />
+              <SelectField label="Print format" value={data.printFormat} onChange={(v) => set("printFormat", v)} options={["image", "text"]} />
+              <TextField label="Maximum character in single line" value={data.maxCharsPerLine} onChange={(v) => set("maxCharsPerLine", v)} type="number" />
+            </Grid>
+            <div className="mb-3">
+              <Label className="mb-1.5 block text-xs uppercase tracking-wider text-muted-foreground">Printer / paper size (mm)</Label>
+              <div className="flex flex-wrap items-center gap-2">
+                <Input className="w-28" type="number" value={String(data.printerSize)} onChange={(e) => set("printerSize", e.target.value)} placeholder="e.g. 58, 80, 72…" />
+                {["58", "80"].map((v) => (
+                  <button key={v} type="button" onClick={() => set("printerSize", v)}
+                    className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition ${String(data.printerSize) === v ? "border-primary bg-primary/10 text-primary" : "text-muted-foreground"}`}>
+                    {v}mm
+                  </button>
+                ))}
+                <span className="text-xs text-muted-foreground">Not a standard size? Type whatever width your printer actually uses.</span>
+              </div>
+            </div>
+            <div className="mb-1">
+              <Label className="mb-1.5 block text-xs uppercase tracking-wider text-muted-foreground">Receipt length</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {([
+                  { v: true, label: "Grows with items", hint: "2 items → short receipt, 50 items → long one" },
+                  { v: false, label: "Fixed length", hint: "Always the same page height" },
+                ] as const).map((opt) => (
+                  <button key={String(opt.v)} type="button" onClick={() => set("dynamicReceiptHeight", opt.v)}
+                    className={`rounded-lg border px-3 py-2 text-left text-sm font-medium transition ${!!data.dynamicReceiptHeight === opt.v ? "border-primary bg-primary/10 text-primary" : "text-muted-foreground"}`}>
+                    {opt.label}
+                    <div className="text-[11px] font-normal text-muted-foreground">{opt.hint}</div>
+                  </button>
+                ))}
+              </div>
+              {!data.dynamicReceiptHeight && (
+                <div className="mt-2"><TextField label="Fixed receipt length (mm)" value={data.fixedReceiptHeight} onChange={(v) => set("fixedReceiptHeight", v)} type="number" /></div>
+              )}
+            </div>
+          </>
         ) : (
           <SelectField label="Print Size" value={data.paper.toUpperCase()} onChange={(v) => set("paper", v.toLowerCase())} options={["A4", "A5", "A3", "LETTER", "LEGAL"]} />
         )}
@@ -1274,7 +1313,8 @@ function CustomFieldsPanel({ data, set }: { data: { fields: CustomFieldDef[] }; 
   );
 }
 
-function TemplateSettingsPanel({ data, set }: { data: Record<string, boolean>; set: (k: string, v: boolean) => void }) {
+function TemplateSettingsPanel({ data, set }: { data: Record<string, boolean | string>; set: (k: string, v: boolean | string) => void }) {
+  const useCustomColors = !!data.useCustomColors;
   const rows: [string, string][] = [
     ["showBankInEstimate", "Show bank / payment information in estimate"],
     ["showAmountInWords", "Show amount in words"],
@@ -1306,6 +1346,45 @@ function TemplateSettingsPanel({ data, set }: { data: Record<string, boolean>; s
   return (
     <Panel>
       <PanelHeader icon={FileText} title="Template Settings" subtitle="Control what appears on invoices/documents. Show or hide fields and totals." />
+
+      <SettingBlock title="Template Color" icon={Palette}>
+        <div className="mb-3 flex items-center justify-between">
+          <span className="text-sm">Use custom colors instead of the theme preset</span>
+          <Switch checked={useCustomColors} onCheckedChange={(v) => set("useCustomColors", v)} />
+        </div>
+        {useCustomColors && (
+          <Grid>
+            <div className="grid gap-1.5">
+              <Label className="text-xs text-muted-foreground">Primary color</Label>
+              <div className="flex items-center gap-2">
+                <input type="color" value={String(data.primaryColor || "#0d5c47")} onChange={(e) => set("primaryColor", e.target.value)} className="h-9 w-12 rounded border" />
+                <Input value={String(data.primaryColor || "#0d5c47")} onChange={(e) => set("primaryColor", e.target.value)} />
+              </div>
+            </div>
+            <div className="grid gap-1.5">
+              <Label className="text-xs text-muted-foreground">Accent color</Label>
+              <div className="flex items-center gap-2">
+                <input type="color" value={String(data.accentColor || "#1f8a6b")} onChange={(e) => set("accentColor", e.target.value)} className="h-9 w-12 rounded border" />
+                <Input value={String(data.accentColor || "#1f8a6b")} onChange={(e) => set("accentColor", e.target.value)} />
+              </div>
+            </div>
+          </Grid>
+        )}
+      </SettingBlock>
+
+      <SettingBlock title="Template Text" icon={PenLine}>
+        <div className="grid gap-3">
+          <div className="grid gap-1.5">
+            <Label className="text-xs text-muted-foreground">Header tagline (shown under your business name)</Label>
+            <Input value={String(data.headerTagline || "")} onChange={(e) => set("headerTagline", e.target.value)} placeholder="e.g. Quality you can trust" />
+          </div>
+          <div className="grid gap-1.5">
+            <Label className="text-xs text-muted-foreground">Footer text (shown at the bottom, replaces "Thank you for your business.")</Label>
+            <Input value={String(data.footerText || "")} onChange={(e) => set("footerText", e.target.value)} placeholder="Thank you for your business." />
+          </div>
+        </div>
+      </SettingBlock>
+
       <div className="divide-y rounded-lg border">
         {rows.map(([key, label]) => (
           <div key={key} className="flex items-center justify-between px-3 py-2.5">

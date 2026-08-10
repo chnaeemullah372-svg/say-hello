@@ -15,6 +15,21 @@ const THEME_HEX: Record<string, { primary: [number, number, number]; accent: [nu
   gold: { primary: [146, 64, 14], accent: [212, 160, 23] },
 };
 
+function hexToRgb(hex: string): [number, number, number] | null {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+function resolveColors(data: PdfDocData) {
+  const preset = THEME_HEX[data.theme ?? "prestige"] ?? THEME_HEX.prestige;
+  if (!data.customColors) return preset;
+  const primary = hexToRgb(data.customColors.primary) ?? preset.primary;
+  const accent = hexToRgb(data.customColors.accent) ?? preset.accent;
+  return { primary, accent };
+}
+
 export type PdfLineItem = { name: string; qty: number; rate: number; discount: number };
 
 export type PdfDocData = {
@@ -50,6 +65,16 @@ export type PdfDocData = {
   terms?: string;
   currencySymbol: string;
   theme?: string;
+  /** Overrides the theme preset with exact hex colors — set from Settings ▸
+   * Template Setting's custom color pickers. Falls back to the theme preset
+   * whenever a value is missing or fails to parse as #rrggbb. */
+  customColors?: { primary: string; accent: string } | null;
+  /** Extra line rendered under the business name in the header band, e.g. a
+   * tagline or slogan ("what to write at the top"). */
+  headerTagline?: string;
+  /** Replaces the default "Thank you for your business." footer line
+   * ("what to write at the bottom"). */
+  footerText?: string;
 };
 
 export async function buildDocumentPdf(data: PdfDocData): Promise<jsPDF> {
@@ -57,17 +82,21 @@ export async function buildDocumentPdf(data: PdfDocData): Promise<jsPDF> {
   const autoTableModule = await import("jspdf-autotable");
   const autoTable = autoTableModule.default;
 
-  const colors = THEME_HEX[data.theme ?? "prestige"] ?? THEME_HEX.prestige;
+  const colors = resolveColors(data);
   const symbol = /^[\x00-\x7F]*$/.test(data.currencySymbol) ? data.currencySymbol : "Rs";
   const money = (n: number) => `${symbol} ${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   const doc = new JsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   const marginX = 14;
+  // A custom header tagline needs an extra line of room — every fixed
+  // header/date/party/table coordinate below shifts down by this amount so
+  // the tagline never collides with the address/contact lines under it.
+  const shift = data.headerTagline ? 4 : 0;
 
   // Header band
   doc.setFillColor(...colors.primary);
-  doc.rect(0, 0, pageWidth, 36, "F");
+  doc.rect(0, 0, pageWidth, 36 + shift, "F");
   if (data.logoDataUrl) {
     try { doc.addImage(data.logoDataUrl, "PNG", marginX, 6, 20, 20); } catch { /* unsupported image format — skip */ }
   }
@@ -82,10 +111,17 @@ export async function buildDocumentPdf(data: PdfDocData): Promise<jsPDF> {
   // wrapped) so they can never collide inside this fixed-height header band.
   const oneLine = (s: string, maxWidth: number) => doc.splitTextToSize(s, maxWidth)[0];
   const headerTextWidth = pageWidth - textX - marginX - 60;
-  if (data.businessAddress) doc.text(oneLine(data.businessAddress, headerTextWidth), textX, 20);
+  let headerY = 15;
+  if (data.headerTagline) {
+    headerY += 4;
+    doc.setFont("helvetica", "italic");
+    doc.text(oneLine(data.headerTagline, headerTextWidth), textX, headerY);
+    doc.setFont("helvetica", "normal");
+  }
+  if (data.businessAddress) doc.text(oneLine(data.businessAddress, headerTextWidth), textX, headerY + 5);
   const contactLine = [data.businessPhone, data.businessEmail].filter(Boolean).join("  ·  ");
-  if (contactLine) doc.text(oneLine(contactLine, headerTextWidth), textX, 25);
-  if (data.businessTaxId) doc.text(`Tax ID: ${data.businessTaxId}`, textX, 30);
+  if (contactLine) doc.text(oneLine(contactLine, headerTextWidth), textX, headerY + 10);
+  if (data.businessTaxId) doc.text(`Tax ID: ${data.businessTaxId}`, textX, headerY + 15);
 
   doc.setFontSize(15);
   doc.setFont("helvetica", "bold");
@@ -96,7 +132,7 @@ export async function buildDocumentPdf(data: PdfDocData): Promise<jsPDF> {
   if (data.status) doc.text(data.status, pageWidth - marginX, 26, { align: "right" });
 
   // Date block + party block
-  let y = 46;
+  let y = 46 + shift;
   doc.setTextColor(90, 90, 90);
   doc.setFontSize(9);
   doc.text(data.dateLabel, pageWidth - marginX - 45, y);
@@ -116,14 +152,14 @@ export async function buildDocumentPdf(data: PdfDocData): Promise<jsPDF> {
   doc.setTextColor(...colors.primary);
   doc.setFontSize(9);
   doc.setFont("helvetica", "bold");
-  doc.text(data.partyLabel.toUpperCase(), marginX, 46);
+  doc.text(data.partyLabel.toUpperCase(), marginX, 46 + shift);
   doc.setTextColor(20, 20, 20);
   doc.setFontSize(11);
-  doc.text(data.partyName || "-", marginX, 53);
+  doc.text(data.partyName || "-", marginX, 53 + shift);
   doc.setFontSize(8.5);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(90, 90, 90);
-  let partyY = 58;
+  let partyY = 58 + shift;
   if (data.partyAddress) {
     const addressLines = doc.splitTextToSize(data.partyAddress, 90);
     doc.text(addressLines, marginX, partyY);
@@ -133,7 +169,7 @@ export async function buildDocumentPdf(data: PdfDocData): Promise<jsPDF> {
 
   // Items table
   const showPricing = data.showPricing !== false;
-  const tableStartY = 76;
+  const tableStartY = 76 + shift;
   autoTable(doc, {
     startY: tableStartY,
     margin: { left: marginX, right: marginX },
@@ -238,8 +274,181 @@ export async function buildDocumentPdf(data: PdfDocData): Promise<jsPDF> {
   doc.setTextColor(140, 140, 140);
   doc.setFontSize(8);
   doc.setFont("helvetica", "italic");
-  doc.text("Thank you for your business.", marginX, pageHeight - 10);
+  doc.text(data.footerText || "Thank you for your business.", marginX, pageHeight - 10);
   doc.text(data.businessName || "", pageWidth - marginX, pageHeight - 10, { align: "right" });
 
+  return doc;
+}
+
+export type ReceiptOptions = {
+  /** Paper width in mm — any value the shop's printer actually uses, not
+   * limited to the 58/80mm presets ("Photoshop custom size" style). */
+  widthMm: number;
+  /** When true (the default for receipt mode), the page grows downward as
+   * more items are added instead of staying a fixed rectangle. When false,
+   * the page is clipped/padded to fixedHeightMm regardless of item count. */
+  dynamicHeight?: boolean;
+  fixedHeightMm?: number;
+};
+
+function drawReceipt(doc: jsPDF, data: PdfDocData, width: number, colors: { primary: [number, number, number]; accent: [number, number, number] }, money: (n: number) => string): number {
+  const marginX = 3;
+  const contentWidth = width - marginX * 2;
+  const center = width / 2;
+  let y = 8;
+
+  const dashedLine = () => {
+    doc.setDrawColor(...colors.accent);
+    doc.setLineWidth(0.3);
+    doc.setLineDashPattern([1, 1], 0);
+    doc.line(marginX, y, width - marginX, y);
+    doc.setLineDashPattern([], 0);
+    y += 4;
+  };
+
+  doc.setTextColor(...colors.primary);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  const nameLines = doc.splitTextToSize(data.businessName || "Your Business", contentWidth);
+  doc.text(nameLines, center, y, { align: "center" });
+  y += nameLines.length * 4.6;
+
+  doc.setFont("helvetica", "italic");
+  doc.setFontSize(7);
+  doc.setTextColor(90, 90, 90);
+  if (data.headerTagline) {
+    const t = doc.splitTextToSize(data.headerTagline, contentWidth);
+    doc.text(t, center, y, { align: "center" });
+    y += t.length * 3.4;
+  }
+  doc.setFont("helvetica", "normal");
+  for (const line of [data.businessAddress, [data.businessPhone, data.businessEmail].filter(Boolean).join(" · ")]) {
+    if (!line) continue;
+    const l = doc.splitTextToSize(line, contentWidth);
+    doc.text(l, center, y, { align: "center" });
+    y += l.length * 3.4;
+  }
+  if (data.businessTaxId) { doc.text(`Tax ID: ${data.businessTaxId}`, center, y, { align: "center" }); y += 3.4; }
+  y += 2;
+  dashedLine();
+
+  doc.setTextColor(20, 20, 20);
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "bold");
+  doc.text(data.documentTitle.toUpperCase(), marginX, y);
+  doc.text(`#${data.documentNumber}`, width - marginX, y, { align: "right" });
+  y += 4;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.5);
+  doc.text(`${data.dateLabel}: ${data.dateValue}`, marginX, y);
+  y += 3.6;
+  if (data.status) { doc.text(`Status: ${data.status}`, marginX, y); y += 3.6; }
+  doc.setFont("helvetica", "bold");
+  doc.text(`${data.partyLabel}: ${data.partyName || "-"}`, marginX, y);
+  y += 3.6;
+  doc.setFont("helvetica", "normal");
+  if (data.partyPhone) { doc.text(data.partyPhone, marginX, y); y += 3.6; }
+  y += 1;
+  dashedLine();
+
+  const showPricing = data.showPricing !== false;
+  doc.setFontSize(7.5);
+  for (const it of data.items) {
+    doc.setFont("helvetica", "bold");
+    const nameL = doc.splitTextToSize(it.name, contentWidth);
+    doc.text(nameL, marginX, y);
+    y += nameL.length * 3.4;
+    doc.setFont("helvetica", "normal");
+    if (showPricing) {
+      const amount = it.qty * it.rate * (1 - it.discount / 100);
+      doc.text(`${it.qty} x ${money(it.rate)}${it.discount ? ` (-${it.discount}%)` : ""}`, marginX, y);
+      doc.text(money(amount), width - marginX, y, { align: "right" });
+    } else {
+      doc.text(`Qty: ${it.qty}`, width - marginX, y, { align: "right" });
+    }
+    y += 4;
+  }
+  y += 1;
+  dashedLine();
+
+  if (showPricing) {
+    const baseAmount = data.items.reduce((s, it) => s + it.qty * it.rate * (1 - it.discount / 100), 0);
+    doc.setFont("helvetica", "normal");
+    const rows: [string, string][] = [["Base Amount", money(baseAmount)]];
+    if (data.discountAmount) rows.push(["Discount", `-${money(data.discountAmount)}`]);
+    rows.push([`Tax${data.taxRate ? ` (${data.taxRate}%)` : ""}`, money(data.taxAmount ?? 0)]);
+    if (data.shippingAmount) rows.push(["Shipping", money(data.shippingAmount)]);
+    for (const [label, value] of rows) {
+      doc.text(label, marginX, y);
+      doc.text(value, width - marginX, y, { align: "right" });
+      y += 3.8;
+    }
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text("TOTAL", marginX, y);
+    doc.text(money(data.total ?? 0), width - marginX, y, { align: "right" });
+    y += 5;
+    if (data.balance !== undefined && data.balance !== data.total) {
+      doc.setFontSize(7.5);
+      doc.text("Balance due", marginX, y);
+      doc.text(money(data.balance), width - marginX, y, { align: "right" });
+      y += 4;
+    }
+  } else {
+    const totalQty = data.items.reduce((s, it) => s + it.qty, 0);
+    doc.setFont("helvetica", "bold");
+    doc.text(`Total Qty: ${totalQty}`, width - marginX, y, { align: "right" });
+    y += 5;
+  }
+
+  if (data.notes) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(60, 60, 60);
+    const n = doc.splitTextToSize(data.notes, contentWidth);
+    doc.text(n, marginX, y);
+    y += n.length * 3.2 + 2;
+  }
+
+  y += 1;
+  dashedLine();
+  doc.setFont("helvetica", "italic");
+  doc.setFontSize(7);
+  doc.setTextColor(90, 90, 90);
+  const footer = doc.splitTextToSize(data.footerText || "Thank you for your business.", contentWidth);
+  doc.text(footer, center, y, { align: "center" });
+  y += footer.length * 3.4 + 4;
+
+  return y;
+}
+
+/**
+ * Renders a narrow, thermal-receipt-style document at any custom width
+ * (not just the 58/80mm presets) whose page length grows downward as more
+ * items are added, instead of staying a fixed A4-shaped rectangle — the
+ * "Photoshop custom size" print mode requested for shops (e.g. medical
+ * stores) whose printers don't use a standard named paper size.
+ */
+export async function buildReceiptPdf(data: PdfDocData, opts: ReceiptOptions): Promise<jsPDF> {
+  const { default: JsPDF } = await import("jspdf");
+  const colors = resolveColors(data);
+  const symbol = /^[\x00-\x7F]*$/.test(data.currencySymbol) ? data.currencySymbol : "Rs";
+  const money = (n: number) => `${symbol} ${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const width = Math.max(30, opts.widthMm || 80);
+
+  if (opts.dynamicHeight === false) {
+    const height = Math.max(40, opts.fixedHeightMm || 200);
+    const doc = new JsPDF({ unit: "mm", format: [width, height] });
+    drawReceipt(doc, data, width, colors, money);
+    return doc;
+  }
+
+  // Two-pass: measure the real content height on a tall scratch page, then
+  // rebuild the page at exactly that height so it always fits — this is
+  // what makes 2 items render a short receipt and 50 items a long one.
+  const scratch = new JsPDF({ unit: "mm", format: [width, 2000] });
+  const measuredY = drawReceipt(scratch, data, width, colors, money);
+  const doc = new JsPDF({ unit: "mm", format: [width, measuredY + 4] });
+  drawReceipt(doc, data, width, colors, money);
   return doc;
 }
