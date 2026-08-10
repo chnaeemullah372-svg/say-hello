@@ -172,6 +172,12 @@ export const templateSettingsDefaults: Record<string, boolean | string> = {
   // the top", "what to write at the bottom").
   useCustomColors: false, primaryColor: "#0d5c47", accentColor: "#1f8a6b",
   headerTagline: "", footerText: "",
+  // Matches UNI Invoice's own Template setting: hide the branded header band
+  // in favor of blank space (for letterhead paper), a background watermark
+  // image with position/opacity, and an overall text-size scale.
+  hideHeaderBand: false, headerBandHeight: "12",
+  watermarkUrl: "", watermarkPosition: "bottom-right", watermarkOpacity: "15",
+  textSize: "M",
 };
 
 // NOTE: every text field below that describes a SPECIFIC business (name,
@@ -1395,6 +1401,41 @@ function TemplateSettingsPanel({ data, set }: { data: Record<string, boolean | s
         </div>
       </SettingBlock>
 
+      <SettingBlock title="Text Size" icon={FileText}>
+        <div className="grid grid-cols-5 gap-2">
+          {(["XS", "S", "M", "L", "XL"] as const).map((v) => (
+            <button key={v} type="button" onClick={() => set("textSize", v)}
+              className={`rounded-lg border px-3 py-2 text-sm font-medium transition ${(String(data.textSize || "M")) === v ? "border-primary bg-primary/10 text-primary" : "text-muted-foreground"}`}>
+              {v}
+            </button>
+          ))}
+        </div>
+      </SettingBlock>
+
+      <SettingBlock title="Watermark" icon={Image}>
+        <p className="mb-3 text-xs text-muted-foreground">A faint background image on every document — same idea as UNI Invoice's Template watermark.</p>
+        <UploadBox icon={Image} title="Watermark image" subtitle="PNG/JPG shown faintly behind the document" value={String(data.watermarkUrl || "")} assetKey="watermark" onUploaded={(url) => set("watermarkUrl", url)} />
+        {data.watermarkUrl ? (
+          <div className="mt-3">
+            <Grid>
+              <SelectField label="Position" value={String(data.watermarkPosition || "bottom-right")} onChange={(v) => set("watermarkPosition", v)}
+                options={["center", "top-left", "top-right", "bottom-left", "bottom-right"]} />
+              <TextField label="Opacity (%)" value={String(data.watermarkOpacity ?? "15")} onChange={(v) => set("watermarkOpacity", v)} type="number" />
+            </Grid>
+          </div>
+        ) : null}
+      </SettingBlock>
+
+      <SettingBlock title="Page Layout" icon={Printer}>
+        <div className="mb-3 flex items-center justify-between">
+          <span className="text-sm">Hide the branded header band (for letterhead paper)</span>
+          <Switch checked={!!data.hideHeaderBand} onCheckedChange={(v) => set("hideHeaderBand", v)} />
+        </div>
+        {data.hideHeaderBand ? (
+          <TextField label="Blank space left at the top (mm)" value={String(data.headerBandHeight ?? "12")} onChange={(v) => set("headerBandHeight", v)} type="number" />
+        ) : null}
+      </SettingBlock>
+
       <div className="divide-y rounded-lg border">
         {rows.map(([key, label]) => (
           <div key={key} className="flex items-center justify-between px-3 py-2.5">
@@ -2321,7 +2362,7 @@ function UploadBox({
   icon: Icon, title, subtitle, value, assetKey, onUploaded,
 }: {
   icon: typeof Store; title: string; subtitle: string;
-  value: string; assetKey: "logo" | "stamp"; onUploaded: (url: string) => void;
+  value: string; assetKey: "logo" | "stamp" | "watermark"; onUploaded: (url: string) => void;
 }) {
   const { user } = useAuth();
   const fileRef = useRef<HTMLInputElement>(null);

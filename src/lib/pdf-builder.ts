@@ -8,6 +8,10 @@ import type jsPDF from "jspdf";
 // what a customer actually receives looks like a real business document
 // instead of a debug printout.
 
+// UNI Invoice's Template setting offers an XS/S/M/L/XL text-size control —
+// a simple global font-scale multiplier, not distinct layouts.
+export const TEXT_SCALE: Record<string, number> = { XS: 0.85, S: 0.92, M: 1, L: 1.08, XL: 1.18 };
+
 const THEME_HEX: Record<string, { primary: [number, number, number]; accent: [number, number, number] }> = {
   prestige: { primary: [13, 92, 71], accent: [31, 138, 107] },
   emerald: { primary: [21, 128, 61], accent: [34, 197, 94] },
@@ -75,7 +79,43 @@ export type PdfDocData = {
   /** Replaces the default "Thank you for your business." footer line
    * ("what to write at the bottom"). */
   footerText?: string;
+  /** Hides the colored header band (business name/contact/logo + document
+   * title) entirely, leaving headerHeightMm of blank space at the top
+   * instead — for letterhead paper that already has its own header printed. */
+  hideHeader?: boolean;
+  headerHeightMm?: number;
+  /** A background graphic (any uploaded PNG/JPG) placed behind the document
+   * content at low opacity — UNI Invoice's own Template setting calls this
+   * a "watermark": pick an image, a corner/center position, and how faint
+   * it should be. */
+  watermarkUrl?: string;
+  watermarkPosition?: "center" | "top-left" | "top-right" | "bottom-left" | "bottom-right";
+  watermarkOpacity?: number;
+  /** Global font-scale multiplier — UNI Invoice's XS/S/M/L/XL text size
+   * control. 1 = unchanged. */
+  textScale?: number;
 };
+
+async function drawWatermark(doc: jsPDF, data: PdfDocData, pageWidth: number, bodyTop: number, bodyBottom: number) {
+  if (!data.watermarkUrl) return;
+  try {
+    const { GState } = await import("jspdf");
+    const size = Math.min(70, pageWidth * 0.4, Math.max(20, bodyBottom - bodyTop) * 0.6);
+    const inset = 10;
+    const positions: Record<string, [number, number]> = {
+      center: [pageWidth / 2 - size / 2, bodyTop + (bodyBottom - bodyTop) / 2 - size / 2],
+      "top-left": [inset, bodyTop + inset],
+      "top-right": [pageWidth - inset - size, bodyTop + inset],
+      "bottom-left": [inset, bodyBottom - inset - size],
+      "bottom-right": [pageWidth - inset - size, bodyBottom - inset - size],
+    };
+    const [x, y] = positions[data.watermarkPosition ?? "bottom-right"] ?? positions["bottom-right"];
+    doc.saveGraphicsState();
+    doc.setGState(new GState({ opacity: Math.max(0.03, Math.min(1, (data.watermarkOpacity ?? 15) / 100)) }));
+    doc.addImage(data.watermarkUrl, "PNG", x, y, size, size);
+    doc.restoreGraphicsState();
+  } catch { /* unsupported image format/CORS — skip rather than break the whole document */ }
+}
 
 export async function buildDocumentPdf(data: PdfDocData): Promise<jsPDF> {
   const { default: JsPDF } = await import("jspdf");
@@ -85,56 +125,68 @@ export async function buildDocumentPdf(data: PdfDocData): Promise<jsPDF> {
   const colors = resolveColors(data);
   const symbol = /^[\x00-\x7F]*$/.test(data.currencySymbol) ? data.currencySymbol : "Rs";
   const money = (n: number) => `${symbol} ${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const scale = data.textScale ?? 1;
+  const fs = (n: number) => n * scale;
 
   const doc = new JsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
   const marginX = 14;
+
+  await drawWatermark(doc, data, pageWidth, 0, pageHeight - 20);
+
   // A custom header tagline needs an extra line of room — every fixed
   // header/date/party/table coordinate below shifts down by this amount so
   // the tagline never collides with the address/contact lines under it.
   const shift = data.headerTagline ? 4 : 0;
+  // "Hide Header" leaves headerHeightMm of blank space instead of the
+  // colored band — for letterhead paper that already has its own header.
+  const bandHeight = data.hideHeader ? Math.max(4, data.headerHeightMm ?? 12) : 36 + shift;
 
-  // Header band
-  doc.setFillColor(...colors.primary);
-  doc.rect(0, 0, pageWidth, 36 + shift, "F");
-  if (data.logoDataUrl) {
-    try { doc.addImage(data.logoDataUrl, "PNG", marginX, 6, 20, 20); } catch { /* unsupported image format — skip */ }
-  }
-  const textX = data.logoDataUrl ? marginX + 24 : marginX;
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(16);
-  doc.setFont("helvetica", "bold");
-  doc.text(data.businessName || "Your Business", textX, 15);
-  doc.setFontSize(8.5);
-  doc.setFont("helvetica", "normal");
-  // Each held to a single line (long addresses truncated rather than
-  // wrapped) so they can never collide inside this fixed-height header band.
-  const oneLine = (s: string, maxWidth: number) => doc.splitTextToSize(s, maxWidth)[0];
-  const headerTextWidth = pageWidth - textX - marginX - 60;
-  let headerY = 15;
-  if (data.headerTagline) {
-    headerY += 4;
-    doc.setFont("helvetica", "italic");
-    doc.text(oneLine(data.headerTagline, headerTextWidth), textX, headerY);
+  if (!data.hideHeader) {
+    // Header band
+    doc.setFillColor(...colors.primary);
+    doc.rect(0, 0, pageWidth, bandHeight, "F");
+    if (data.logoDataUrl) {
+      try { doc.addImage(data.logoDataUrl, "PNG", marginX, 6, 20, 20); } catch { /* unsupported image format — skip */ }
+    }
+    const textX = data.logoDataUrl ? marginX + 24 : marginX;
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(fs(16));
+    doc.setFont("helvetica", "bold");
+    doc.text(data.businessName || "Your Business", textX, 15);
+    doc.setFontSize(fs(8.5));
     doc.setFont("helvetica", "normal");
-  }
-  if (data.businessAddress) doc.text(oneLine(data.businessAddress, headerTextWidth), textX, headerY + 5);
-  const contactLine = [data.businessPhone, data.businessEmail].filter(Boolean).join("  ·  ");
-  if (contactLine) doc.text(oneLine(contactLine, headerTextWidth), textX, headerY + 10);
-  if (data.businessTaxId) doc.text(`Tax ID: ${data.businessTaxId}`, textX, headerY + 15);
+    // Each held to a single line (long addresses truncated rather than
+    // wrapped) so they can never collide inside this fixed-height header band.
+    const oneLine = (s: string, maxWidth: number) => doc.splitTextToSize(s, maxWidth)[0];
+    const headerTextWidth = pageWidth - textX - marginX - 60;
+    let headerY = 15;
+    if (data.headerTagline) {
+      headerY += 4;
+      doc.setFont("helvetica", "italic");
+      doc.text(oneLine(data.headerTagline, headerTextWidth), textX, headerY);
+      doc.setFont("helvetica", "normal");
+    }
+    if (data.businessAddress) doc.text(oneLine(data.businessAddress, headerTextWidth), textX, headerY + 5);
+    const contactLine = [data.businessPhone, data.businessEmail].filter(Boolean).join("  ·  ");
+    if (contactLine) doc.text(oneLine(contactLine, headerTextWidth), textX, headerY + 10);
+    if (data.businessTaxId) doc.text(`Tax ID: ${data.businessTaxId}`, textX, headerY + 15);
 
-  doc.setFontSize(15);
-  doc.setFont("helvetica", "bold");
-  doc.text(data.documentTitle.toUpperCase(), pageWidth - marginX, 14, { align: "right" });
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
-  doc.text(`# ${data.documentNumber}`, pageWidth - marginX, 20, { align: "right" });
-  if (data.status) doc.text(data.status, pageWidth - marginX, 26, { align: "right" });
+    doc.setFontSize(fs(15));
+    doc.setFont("helvetica", "bold");
+    doc.text(data.documentTitle.toUpperCase(), pageWidth - marginX, 14, { align: "right" });
+    doc.setFontSize(fs(9));
+    doc.setFont("helvetica", "normal");
+    doc.text(`# ${data.documentNumber}`, pageWidth - marginX, 20, { align: "right" });
+    if (data.status) doc.text(data.status, pageWidth - marginX, 26, { align: "right" });
+  }
 
   // Date block + party block
-  let y = 46 + shift;
+  const afterHeaderY = bandHeight + 10;
+  let y = afterHeaderY;
   doc.setTextColor(90, 90, 90);
-  doc.setFontSize(9);
+  doc.setFontSize(fs(9));
   doc.text(data.dateLabel, pageWidth - marginX - 45, y);
   doc.setTextColor(20, 20, 20);
   doc.setFont("helvetica", "bold");
@@ -150,16 +202,16 @@ export async function buildDocumentPdf(data: PdfDocData): Promise<jsPDF> {
   }
 
   doc.setTextColor(...colors.primary);
-  doc.setFontSize(9);
+  doc.setFontSize(fs(9));
   doc.setFont("helvetica", "bold");
-  doc.text(data.partyLabel.toUpperCase(), marginX, 46 + shift);
+  doc.text(data.partyLabel.toUpperCase(), marginX, afterHeaderY);
   doc.setTextColor(20, 20, 20);
-  doc.setFontSize(11);
-  doc.text(data.partyName || "-", marginX, 53 + shift);
-  doc.setFontSize(8.5);
+  doc.setFontSize(fs(11));
+  doc.text(data.partyName || "-", marginX, afterHeaderY + 7);
+  doc.setFontSize(fs(8.5));
   doc.setFont("helvetica", "normal");
   doc.setTextColor(90, 90, 90);
-  let partyY = 58 + shift;
+  let partyY = afterHeaderY + 12;
   if (data.partyAddress) {
     const addressLines = doc.splitTextToSize(data.partyAddress, 90);
     doc.text(addressLines, marginX, partyY);
@@ -169,7 +221,7 @@ export async function buildDocumentPdf(data: PdfDocData): Promise<jsPDF> {
 
   // Items table
   const showPricing = data.showPricing !== false;
-  const tableStartY = 76 + shift;
+  const tableStartY = bandHeight + 40;
   autoTable(doc, {
     startY: tableStartY,
     margin: { left: marginX, right: marginX },
@@ -177,7 +229,7 @@ export async function buildDocumentPdf(data: PdfDocData): Promise<jsPDF> {
     body: data.items.map((it, i) => showPricing
       ? [String(i + 1), it.name, String(it.qty), money(it.rate), it.discount ? `${it.discount}%` : "-", money(it.qty * it.rate * (1 - it.discount / 100))]
       : [String(i + 1), it.name, String(it.qty)]),
-    styles: { fontSize: 9, cellPadding: 3 },
+    styles: { fontSize: fs(9), cellPadding: 3 },
     headStyles: { fillColor: colors.primary, textColor: [255, 255, 255], fontStyle: "bold" },
     alternateRowStyles: { fillColor: [246, 247, 245] },
     columnStyles: showPricing ? {
@@ -204,7 +256,7 @@ export async function buildDocumentPdf(data: PdfDocData): Promise<jsPDF> {
     totalsLines.push([`Tax${data.taxRate ? ` (${data.taxRate}%${data.taxInclusive ? ", incl." : ""})` : ""}`, money(data.taxAmount ?? 0)]);
     if (data.shippingAmount) totalsLines.push(["Shipping", money(data.shippingAmount)]);
 
-    doc.setFontSize(9);
+    doc.setFontSize(fs(9));
     doc.setFont("helvetica", "normal");
     doc.setTextColor(70, 70, 70);
     for (const [label, value] of totalsLines) {
@@ -216,7 +268,7 @@ export async function buildDocumentPdf(data: PdfDocData): Promise<jsPDF> {
     doc.setFillColor(...colors.primary);
     doc.rect(boxX - 4, finalY - 2, boxW + 4, 10, "F");
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(11);
+    doc.setFontSize(fs(11));
     doc.setFont("helvetica", "bold");
     doc.text("TOTAL", boxX, finalY + 5);
     doc.text(money(data.total ?? 0), pageWidth - marginX, finalY + 5, { align: "right" });
@@ -224,7 +276,7 @@ export async function buildDocumentPdf(data: PdfDocData): Promise<jsPDF> {
 
     if (data.balance !== undefined && data.balance !== data.total) {
       doc.setTextColor(20, 20, 20);
-      doc.setFontSize(9.5);
+      doc.setFontSize(fs(9.5));
       doc.text("Balance due", boxX, finalY);
       doc.text(money(data.balance), pageWidth - marginX, finalY, { align: "right" });
       finalY += 8;
@@ -232,7 +284,7 @@ export async function buildDocumentPdf(data: PdfDocData): Promise<jsPDF> {
   } else {
     const totalQty = data.items.reduce((s, it) => s + it.qty, 0);
     doc.setTextColor(...colors.primary);
-    doc.setFontSize(10);
+    doc.setFontSize(fs(10));
     doc.setFont("helvetica", "bold");
     doc.text(`Total Quantity: ${totalQty}`, pageWidth - marginX, finalY, { align: "right" });
     finalY += 8;
@@ -242,13 +294,13 @@ export async function buildDocumentPdf(data: PdfDocData): Promise<jsPDF> {
 
   if (data.notes) {
     doc.setTextColor(...colors.primary);
-    doc.setFontSize(9);
+    doc.setFontSize(fs(9));
     doc.setFont("helvetica", "bold");
     doc.text("NOTES", marginX, finalY);
     finalY += 5;
     doc.setTextColor(60, 60, 60);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.5);
+    doc.setFontSize(fs(8.5));
     const noteLines = doc.splitTextToSize(data.notes, pageWidth - marginX * 2);
     doc.text(noteLines, marginX, finalY);
     finalY += noteLines.length * 4.5 + 4;
@@ -256,23 +308,22 @@ export async function buildDocumentPdf(data: PdfDocData): Promise<jsPDF> {
 
   if (data.terms) {
     doc.setTextColor(...colors.primary);
-    doc.setFontSize(9);
+    doc.setFontSize(fs(9));
     doc.setFont("helvetica", "bold");
     doc.text("TERMS & CONDITIONS", marginX, finalY);
     finalY += 5;
     doc.setTextColor(60, 60, 60);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.5);
+    doc.setFontSize(fs(8.5));
     const termLines = doc.splitTextToSize(data.terms, pageWidth - marginX * 2);
     doc.text(termLines, marginX, finalY);
   }
 
-  const pageHeight = doc.internal.pageSize.getHeight();
   doc.setDrawColor(...colors.accent);
   doc.setLineWidth(0.5);
   doc.line(marginX, pageHeight - 16, pageWidth - marginX, pageHeight - 16);
   doc.setTextColor(140, 140, 140);
-  doc.setFontSize(8);
+  doc.setFontSize(fs(8));
   doc.setFont("helvetica", "italic");
   doc.text(data.footerText || "Thank you for your business.", marginX, pageHeight - 10);
   doc.text(data.businessName || "", pageWidth - marginX, pageHeight - 10, { align: "right" });

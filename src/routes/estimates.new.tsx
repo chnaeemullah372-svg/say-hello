@@ -149,7 +149,7 @@ function CreateEstimate() {
   const total = !taxEnabled || taxInclusive ? taxable + shippingAmount : taxable + taxAmount + shippingAmount;
 
   const buildDraftPdfDoc = async () => {
-    const { buildDocumentPdf, buildReceiptPdf } = await import("@/lib/pdf-builder");
+    const { buildDocumentPdf, buildReceiptPdf, TEXT_SCALE } = await import("@/lib/pdf-builder");
     const docData = {
       documentTitle: "Estimate",
       documentNumber: editingEstimate ? editingEstimate.number : "Draft",
@@ -182,6 +182,12 @@ function CreateEstimate() {
       customColors: templateDesign.useCustomColors ? { primary: String(templateDesign.primaryColor || ""), accent: String(templateDesign.accentColor || "") } : null,
       headerTagline: templateDesign.headerTagline ? String(templateDesign.headerTagline) : undefined,
       footerText: templateDesign.footerText ? String(templateDesign.footerText) : undefined,
+      hideHeader: !!templateDesign.hideHeaderBand,
+      headerHeightMm: Number(templateDesign.headerBandHeight) || 12,
+      watermarkUrl: templateDesign.watermarkUrl ? String(templateDesign.watermarkUrl) : undefined,
+      watermarkPosition: (templateDesign.watermarkPosition || "bottom-right"),
+      watermarkOpacity: Number(templateDesign.watermarkOpacity ?? 15),
+      textScale: TEXT_SCALE[String(templateDesign.textSize || "M")] ?? 1,
     };
     if (printSettings.printerChoice === "thermal") {
       return buildReceiptPdf(docData, {
