@@ -400,7 +400,7 @@ const defaults: SettingsState = {
   appearance: {
     language: "en",
     dateFormat: "dd-mm-yyyy",
-    numberFormat: "indian",
+    numberFormat: "international",
     density: "comfortable",
     dashboardStyle: "tile-grid",
     colorTheme: "prestige",
