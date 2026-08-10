@@ -1369,22 +1369,10 @@ function TemplateSettingsPanel({ data, set }: { data: Record<string, boolean | s
           <Switch checked={useCustomColors} onCheckedChange={(v) => set("useCustomColors", v)} />
         </div>
         {useCustomColors && (
-          <Grid>
-            <div className="grid gap-1.5">
-              <Label className="text-xs text-muted-foreground">Primary color</Label>
-              <div className="flex items-center gap-2">
-                <input type="color" value={String(data.primaryColor || "#0d5c47")} onChange={(e) => set("primaryColor", e.target.value)} className="h-9 w-12 rounded border" />
-                <Input value={String(data.primaryColor || "#0d5c47")} onChange={(e) => set("primaryColor", e.target.value)} />
-              </div>
-            </div>
-            <div className="grid gap-1.5">
-              <Label className="text-xs text-muted-foreground">Accent color</Label>
-              <div className="flex items-center gap-2">
-                <input type="color" value={String(data.accentColor || "#1f8a6b")} onChange={(e) => set("accentColor", e.target.value)} className="h-9 w-12 rounded border" />
-                <Input value={String(data.accentColor || "#1f8a6b")} onChange={(e) => set("accentColor", e.target.value)} />
-              </div>
-            </div>
-          </Grid>
+          <ColorSwatchPicker
+            value={String(data.primaryColor || "#0d5c47")}
+            onChange={(hex) => { set("primaryColor", hex); set("accentColor", lightenHex(hex, 0.35)); }}
+          />
         )}
       </SettingBlock>
 
@@ -2355,6 +2343,66 @@ function SettingBlock({ title, icon: Icon, children }: { title: string; icon: ty
       <div className="mb-3 flex items-center gap-2 font-display font-semibold"><Icon className="h-4 w-4 text-primary" />{title}</div>
       {children}
     </div>
+  );
+}
+
+function lightenHex(hex: string, amount: number): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  const mix = (channel: number) => Math.round(channel + (255 - channel) * amount);
+  const r = mix((n >> 16) & 255), g = mix((n >> 8) & 255), b = mix(n & 255);
+  return `#${[r, g, b].map((c) => c.toString(16).padStart(2, "0")).join("")}`;
+}
+
+// Matches UNI Invoice's own "Select colour" dialog: a grid of preset
+// swatches, a "Customised" option for picking any exact color, a live
+// preview, then Cancel/Set — rather than a bare hex text box.
+const COLOR_PRESETS = ["#e02020", "#00c8d4", "#1a3fd6", "#12c92e", "#e020c0", "#e6d800", "#000000", "#ffffff"];
+
+function ColorSwatchPicker({ value, onChange }: { value: string; onChange: (hex: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const [customizing, setCustomizing] = useState(false);
+
+  return (
+    <>
+      <button type="button" onClick={() => { setDraft(value); setCustomizing(false); setOpen(true); }}
+        className="flex items-center gap-3 rounded-lg border px-3 py-2 text-sm hover:bg-muted/50">
+        <span className="h-8 w-8 rounded border" style={{ backgroundColor: value }} />
+        <span>Template Color</span>
+      </button>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader><DialogTitle>Select colour</DialogTitle></DialogHeader>
+          <div className="grid grid-cols-4 gap-3">
+            {COLOR_PRESETS.map((hex) => (
+              <button key={hex} type="button" onClick={() => { setDraft(hex); setCustomizing(false); }}
+                className={`h-12 w-12 rounded border-2 ${draft.toLowerCase() === hex ? "border-primary" : "border-transparent"}`}
+                style={{ backgroundColor: hex }} aria-label={hex} />
+            ))}
+          </div>
+          <button type="button" onClick={() => setCustomizing((v) => !v)} className="mt-3 text-left text-sm font-medium text-emerald-600 hover:underline">
+            Customised
+          </button>
+          {customizing && (
+            <div className="flex items-center gap-2">
+              <input type="color" value={draft} onChange={(e) => setDraft(e.target.value)} className="h-9 w-12 rounded border" />
+              <Input value={draft} onChange={(e) => setDraft(e.target.value)} />
+            </div>
+          )}
+          <div className="mt-2 flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">Chosen colour</span>
+            <span className="h-8 w-8 rounded border" style={{ backgroundColor: draft }} />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button onClick={() => { onChange(draft); setOpen(false); }}>Set</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
