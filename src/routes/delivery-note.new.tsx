@@ -104,6 +104,8 @@ function CreateDeliveryNote() {
 
   const [business, setBusiness] = useState<Record<string, string>>({});
   const [colorTheme, setColorTheme] = useState("prestige");
+  const [printSettings, setPrintSettings] = useState<Record<string, any>>({});
+  const [templateDesign, setTemplateDesign] = useState<Record<string, any>>({});
   useEffect(() => {
     supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.business").maybeSingle()
       .then(({ data }) => setBusiness((data?.setting_value as Record<string, string>) ?? {}));
@@ -112,6 +114,10 @@ function CreateDeliveryNote() {
         const theme = (data?.setting_value as Record<string, string> | null)?.colorTheme;
         if (theme) setColorTheme(theme);
       });
+    supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.print").maybeSingle()
+      .then(({ data }) => setPrintSettings((data?.setting_value as Record<string, any>) ?? {}));
+    supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.templateSettings").maybeSingle()
+      .then(({ data }) => setTemplateDesign((data?.setting_value as Record<string, any>) ?? {}));
   }, []);
   const businessName = business.businessName || business.legalName || "Your Business";
 
@@ -119,8 +125,8 @@ function CreateDeliveryNote() {
   const totalQty = useMemo(() => items.reduce((s, it) => s + it.qty, 0), [items]);
 
   const buildDraftPdfDoc = async () => {
-    const { buildDocumentPdf } = await import("@/lib/pdf-builder");
-    return buildDocumentPdf({
+    const { buildDocumentPdf, buildReceiptPdf } = await import("@/lib/pdf-builder");
+    const docData = {
       documentTitle: "Delivery Note",
       documentNumber: editingNote ? editingNote.number : "Draft",
       dateLabel: "Note Date",
@@ -132,7 +138,7 @@ function CreateDeliveryNote() {
       businessPhone: business.mobile,
       businessEmail: business.email,
       logoDataUrl: business.logoUrl,
-      partyLabel: "Bill To",
+      partyLabel: "Bill To" as const,
       partyName: customer?.name || "",
       partyAddress: customer?.address,
       partyPhone: customer?.phone,
@@ -143,7 +149,18 @@ function CreateDeliveryNote() {
       terms,
       currencySymbol: getCurrencySymbol(),
       theme: colorTheme,
-    });
+      customColors: templateDesign.useCustomColors ? { primary: String(templateDesign.primaryColor || ""), accent: String(templateDesign.accentColor || "") } : null,
+      headerTagline: templateDesign.headerTagline ? String(templateDesign.headerTagline) : undefined,
+      footerText: templateDesign.footerText ? String(templateDesign.footerText) : undefined,
+    };
+    if (printSettings.printerChoice === "thermal") {
+      return buildReceiptPdf(docData, {
+        widthMm: Number(printSettings.printerSize) || 80,
+        dynamicHeight: printSettings.dynamicReceiptHeight !== false,
+        fixedHeightMm: Number(printSettings.fixedReceiptHeight) || 200,
+      });
+    }
+    return buildDocumentPdf(docData);
   };
 
   const previewPdf = async () => {
@@ -485,12 +502,12 @@ function CreateDeliveryNote() {
         <DialogContent className="max-w-md p-0">
           <DialogHeader className="border-b p-4"><DialogTitle>Select Client</DialogTitle></DialogHeader>
           <Command>
-            <CommandInput placeholder="Search clients…" />
+            <CommandInput placeholder="Search by name, phone, WhatsApp or referral…" />
             <CommandList className="max-h-[50vh]">
               <CommandEmpty>No clients found.</CommandEmpty>
               <CommandGroup>
                 {customers.filter((c) => c.partyType !== "supplier").map((c) => (
-                  <CommandItem key={c.id} value={c.name} onSelect={() => { setCustomerId(c.id); setCustOpen(false); }}>
+                  <CommandItem key={c.id} value={[c.name, c.phone, c.whatsapp, c.whatsapp2, c.referralName].filter(Boolean).join(" ")} onSelect={() => { setCustomerId(c.id); setCustOpen(false); }}>
                     <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-bold text-primary">
                       {c.name.split(" ").map((w) => w[0]).slice(0, 2).join("")}
                     </div>
