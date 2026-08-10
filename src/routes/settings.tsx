@@ -216,8 +216,8 @@ const defaults: SettingsState = {
     receivedBalance: true,
     qrCode: true,
     signature: true,
-    terms: "Goods once sold will not be taken back. Subject to local jurisdiction.",
-    notes: "Thank you for your business.",
+    terms: "",
+    notes: "",
   },
   tax: {
     currency: "INR",
@@ -239,12 +239,19 @@ const defaults: SettingsState = {
     tds194q: "0.1",
   },
   terms: {
-    invoiceTerms: "Goods once sold will not be taken back. Subject to local jurisdiction.",
-    estimateTerms: "This estimate is valid for 15 days from the date of issue.",
-    purchaseTerms: "Payment due within 30 days of invoice date.",
-    purchaseOrderTerms: "3 Once will not be refunded.",
-    saleOrderTerms: "Payment 30 days after invoice date, order will be charged.",
-    deliveryNoteTerms: "Goods once delivered will not be returned unless a manufacturing defect is present.",
+    // Every field here used to start pre-filled with plausible-sounding
+    // canned text ("Goods once sold will not be taken back...") that a new
+    // tenant never actually typed — it then got silently copied onto every
+    // new document's Terms & Conditions and printed as if the business
+    // itself wrote it. These must start blank; a document's terms should
+    // only ever show what an admin actually typed in Settings or on the
+    // document itself.
+    invoiceTerms: "",
+    estimateTerms: "",
+    purchaseTerms: "",
+    purchaseOrderTerms: "",
+    saleOrderTerms: "",
+    deliveryNoteTerms: "",
   },
   numbering: {
     invoicePrefix: "INV-",
@@ -593,6 +600,9 @@ function SettingsPage() {
     }
     toast.success(`${activeCategory?.title ?? "Settings"} saved`);
     if (section === "tax" && settings.tax.symbol) setCurrencySymbol(settings.tax.symbol);
+    if (section === "appearance") {
+      document.documentElement.setAttribute("data-theme", (settings.appearance.colorTheme as string) || "prestige");
+    }
     // Best-effort — a settings save should never fail because the audit
     // insert had a hiccup, so this is fire-and-forget rather than awaited.
     if (user?.tenantId && user?.id) {
