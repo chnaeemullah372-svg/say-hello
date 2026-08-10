@@ -171,14 +171,18 @@ function CreateInvoice() {
   // template-driven rendering (logo, bank details, custom fields, paper
   // size) lives on the saved-invoice view; this is a draft, so it's a
   // lighter document by design.
-  const [businessName, setBusinessName] = useState("Your Business");
+  const [business, setBusiness] = useState<Record<string, string>>({});
+  const [colorTheme, setColorTheme] = useState("prestige");
   useEffect(() => {
     supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.business").maybeSingle()
+      .then(({ data }) => setBusiness((data?.setting_value as Record<string, string>) ?? {}));
+    supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.appearance").maybeSingle()
       .then(({ data }) => {
-        const b = (data?.setting_value as Record<string, string>) ?? {};
-        if (b.businessName || b.legalName) setBusinessName(b.businessName || b.legalName);
+        const theme = (data?.setting_value as Record<string, string> | null)?.colorTheme;
+        if (theme) setColorTheme(theme);
       });
   }, []);
+  const businessName = business.businessName || business.legalName || "Your Business";
 
   const customer = customers.find((c) => c.id === customerId);
 
@@ -218,35 +222,38 @@ function CreateInvoice() {
   // real rendered document from the CURRENT draft, not the placeholder
   // bullet-list this used to be. Draft-only, so it never touches the DB.
   const buildDraftPdfDoc = async () => {
-    const { default: jsPDF } = await import("jspdf");
-    const autoTableModule = await import("jspdf-autotable");
-    const autoTable = autoTableModule.default;
-    const symbol = /^[\x00-\x7F]*$/.test(getCurrencySymbol()) ? getCurrencySymbol() : "Rs";
-    const money = (n: number) => `${symbol} ${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
-    const doc = new jsPDF();
-    doc.setFontSize(16);
-    doc.text(businessName, 14, 16);
-    doc.setFontSize(10);
-    doc.text(editingInvoice ? editingInvoice.number : "Draft", 14, 23);
-    doc.text(`Date: ${invoiceDate.toISOString().slice(0, 10)}`, 140, 16);
-    doc.text(`Due: ${dueDate || "-"}`, 140, 21);
-    doc.text(`Bill To: ${customer?.name || ""}`, 14, 30);
-    autoTable(doc, {
-      startY: 36,
-      head: [["Description", "Qty", "Rate", "Disc", "Amount"]],
-      body: items.map((it) => [it.name, String(it.qty), money(it.rate), `${it.discount}%`, money(it.qty * it.rate * (1 - it.discount / 100))]),
-      styles: { fontSize: 9 },
+    const { buildDocumentPdf } = await import("@/lib/pdf-builder");
+    return buildDocumentPdf({
+      documentTitle: "Invoice",
+      documentNumber: editingInvoice ? editingInvoice.number : "Draft",
+      dateLabel: "Invoice Date",
+      dateValue: invoiceDate.toISOString().slice(0, 10),
+      secondDateLabel: "Due Date",
+      secondDateValue: dueDate || undefined,
+      businessName,
+      businessAddress: business.address,
+      businessPhone: business.mobile,
+      businessEmail: business.email,
+      businessTaxId: business.gstin,
+      logoDataUrl: business.logoUrl,
+      partyLabel: "Bill To",
+      partyName: customer?.name || "",
+      partyAddress: customer?.address,
+      partyPhone: customer?.phone,
+      items,
+      discountAmount,
+      taxAmount,
+      taxRate: taxEnabled ? taxPct : 0,
+      taxInclusive,
+      shippingAmount,
+      total,
+      balance,
+      status: balance <= 0 ? "Paid" : paymentAmount > 0 ? "Partial" : "Unpaid",
+      notes,
+      terms,
+      currencySymbol: getCurrencySymbol(),
+      theme: colorTheme,
     });
-    const finalY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
-    doc.setFontSize(10);
-    doc.text(`Discount: - ${money(discountAmount)}`, 140, finalY);
-    doc.text(`Tax: ${money(taxAmount)}`, 140, finalY + 5);
-    doc.text(`Shipping: ${money(shippingAmount)}`, 140, finalY + 10);
-    doc.setFontSize(12);
-    doc.text(`Total: ${money(total)}`, 140, finalY + 18);
-    doc.text(`Balance due: ${money(balance)}`, 140, finalY + 25);
-    return doc;
   };
 
   const previewPdf = async () => {
