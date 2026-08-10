@@ -1,5 +1,7 @@
 # Prestige Invoice — Backend Specification (Handoff to Backend Developer)
 
+> **⚠️ OUTDATED — do not use.** This describes a pre-Supabase, in-memory/`localStorage` prototype under an old project name ("Prestige Invoice"). The real backend (Supabase, multi-tenant, WhatsApp engine, etc.) has since been built and looks nothing like what's described below. See **`ONBOARDING.md`** at the repo root for the current, accurate picture. Kept here only for project history.
+
 > **Status:** Frontend-only prototype. All data is in-memory (React state + `localStorage` for auth). This document lists every screen, action and data shape the backend must support so a developer can build it without re-reading the UI.
 
 ---
