@@ -147,42 +147,42 @@ function InvoiceView() {
   // label in the PDF only; the on-screen/print view is unaffected. Shared
   // by "Download PDF" and the WhatsApp document attachment below so both
   // produce the exact same file.
-  const buildPdfDoc = () => {
+  const buildPdfDoc = async () => {
     if (!inv) return null;
     const totals = calcInvoiceTotals(inv.items, inv.taxRate, inv.discountMode, inv.discountValue, inv.shippingAmount, inv.taxInclusive);
-    const balance = totals.total - inv.paid;
-    const pdfSymbol = /^[\x00-\x7F]*$/.test(getCurrencySymbol()) ? getCurrencySymbol() : "Rs";
-    const pdfFmt = (n: number) => `${pdfSymbol} ${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    const doc = new jsPDF();
-    doc.setFontSize(16);
-    doc.text(business.businessName || business.legalName || "Your Business", 14, 16);
-    doc.setFontSize(10);
-    doc.text(`Invoice ${inv.number}`, 14, 23);
-    doc.text(`Date: ${inv.date}`, 140, 16);
-    doc.text(`Due: ${inv.dueDate || "-"}`, 140, 21);
-    doc.text(`Bill To: ${customer?.name || ""}`, 14, 30);
-    autoTable(doc, {
-      startY: 36,
-      head: [["Description", "Qty", "Rate", "Disc", "Tax", "Amount"]],
-      body: inv.items.map((it) => [
-        it.name,
-        String(it.qty),
-        pdfFmt(it.rate),
-        `${it.discount}%`,
-        `${inv.taxRate}%`,
-        pdfFmt(it.qty * it.rate * (1 - it.discount / 100)),
-      ]),
-      styles: { fontSize: 9 },
+    const balance = Math.max(0, totals.total - inv.paid);
+    const { buildDocumentPdf } = await import("@/lib/pdf-builder");
+    return buildDocumentPdf({
+      documentTitle: "Invoice",
+      documentNumber: inv.number,
+      dateLabel: "Invoice Date",
+      dateValue: inv.date,
+      secondDateLabel: "Due Date",
+      secondDateValue: inv.dueDate || undefined,
+      businessName: business.businessName || business.legalName || "Your Business",
+      businessAddress: business.address,
+      businessPhone: business.mobile,
+      businessEmail: business.email,
+      businessTaxId: business.gstin,
+      logoDataUrl: business.logoUrl,
+      partyLabel: "Bill To",
+      partyName: customer?.name || "",
+      partyAddress: customer?.address,
+      partyPhone: customer?.phone,
+      items: inv.items,
+      discountAmount: totals.discount,
+      taxAmount: totals.tax,
+      taxRate: inv.taxEnabled ? inv.taxRate : 0,
+      taxInclusive: inv.taxInclusive,
+      shippingAmount: inv.shippingAmount ?? 0,
+      total: totals.total,
+      balance,
+      status: inv.status === "paid" ? "Paid" : inv.status === "partial" ? "Partial" : "Unpaid",
+      notes: inv.notes,
+      terms: inv.terms,
+      currencySymbol: getCurrencySymbol(),
+      theme: colorTheme,
     });
-    const finalY = (doc as any).lastAutoTable.finalY + 8;
-    doc.setFontSize(10);
-    doc.text(`Discount: - ${pdfFmt(totals.discount)}`, 140, finalY);
-    doc.text(`Tax${inv.taxInclusive ? " (included)" : ""}: ${pdfFmt(totals.tax)}`, 140, finalY + 5);
-    doc.text(`Shipping: ${pdfFmt(inv.shippingAmount ?? 0)}`, 140, finalY + 10);
-    doc.setFontSize(12);
-    doc.text(`Total: ${pdfFmt(totals.total)}`, 140, finalY + 18);
-    doc.text(`Balance due: ${pdfFmt(Math.max(0, balance))}`, 140, finalY + 25);
-    return doc;
   };
 
   // Sends the invoice PDF (plus the templated text) to the customer's
@@ -198,7 +198,7 @@ function InvoiceView() {
         .replace("{customer}", customer.name)
         .replace("{invoice_no}", inv.number)
         .replace("{amount}", fmt(totals.total));
-      const doc = buildPdfDoc();
+      const doc = await buildPdfDoc();
       const pdfBase64 = doc?.output("datauristring").split(",")[1];
       const result = await sendAndLogWhatsApp({
         customerId: customer.id,
@@ -258,8 +258,8 @@ function InvoiceView() {
   // Print button, and on most setups that opens the browser's print
   // dialog rather than actually downloading a file. This builds and saves
   // a real .pdf using the same library already used for Products exports.
-  const downloadPdf = () => {
-    const doc = buildPdfDoc();
+  const downloadPdf = async () => {
+    const doc = await buildPdfDoc();
     if (!doc) return;
     doc.save(`${inv.number}.pdf`);
     toast.success("PDF downloaded");

@@ -14,7 +14,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useStore } from "@/lib/store";
-import { fmt } from "@/lib/dummy-data";
+import { fmt, getCurrencySymbol } from "@/lib/dummy-data";
 import type { DeliveryNote } from "@/lib/dummy-data";
 import { normalizeWhatsAppNumber } from "@/lib/phone";
 import { supabase } from "@/integrations/supabase/client";
@@ -102,38 +102,48 @@ function CreateDeliveryNote() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const [businessName, setBusinessName] = useState("Your Business");
+  const [business, setBusiness] = useState<Record<string, string>>({});
+  const [colorTheme, setColorTheme] = useState("prestige");
   useEffect(() => {
     supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.business").maybeSingle()
+      .then(({ data }) => setBusiness((data?.setting_value as Record<string, string>) ?? {}));
+    supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.appearance").maybeSingle()
       .then(({ data }) => {
-        const b = (data?.setting_value as Record<string, string>) ?? {};
-        if (b.businessName || b.legalName) setBusinessName(b.businessName || b.legalName);
+        const theme = (data?.setting_value as Record<string, string> | null)?.colorTheme;
+        if (theme) setColorTheme(theme);
       });
   }, []);
+  const businessName = business.businessName || business.legalName || "Your Business";
 
   const customer = customers.find((c) => c.id === customerId);
   const totalQty = useMemo(() => items.reduce((s, it) => s + it.qty, 0), [items]);
 
   const buildDraftPdfDoc = async () => {
-    const { default: jsPDF } = await import("jspdf");
-    const autoTableModule = await import("jspdf-autotable");
-    const autoTable = autoTableModule.default;
-
-    const doc = new jsPDF();
-    doc.setFontSize(16);
-    doc.text(businessName, 14, 16);
-    doc.setFontSize(10);
-    doc.text(editingNote ? editingNote.number : "Draft Delivery Note", 14, 23);
-    doc.text(`Date: ${noteDate.toISOString().slice(0, 10)}`, 140, 16);
-    doc.text(`Expected: ${expectedDate || "-"}`, 140, 21);
-    doc.text(`Bill To: ${customer?.name || ""}`, 14, 30);
-    autoTable(doc, {
-      startY: 36,
-      head: [["Description", "Qty"]],
-      body: items.map((it) => [it.name, String(it.qty)]),
-      styles: { fontSize: 9 },
+    const { buildDocumentPdf } = await import("@/lib/pdf-builder");
+    return buildDocumentPdf({
+      documentTitle: "Delivery Note",
+      documentNumber: editingNote ? editingNote.number : "Draft",
+      dateLabel: "Note Date",
+      dateValue: noteDate.toISOString().slice(0, 10),
+      secondDateLabel: "Expected Delivery Date",
+      secondDateValue: expectedDate || undefined,
+      businessName,
+      businessAddress: business.address,
+      businessPhone: business.mobile,
+      businessEmail: business.email,
+      logoDataUrl: business.logoUrl,
+      partyLabel: "Bill To",
+      partyName: customer?.name || "",
+      partyAddress: customer?.address,
+      partyPhone: customer?.phone,
+      items,
+      showPricing: false,
+      status: statusOptions.find((s) => s.value === status)?.label,
+      notes,
+      terms,
+      currencySymbol: getCurrencySymbol(),
+      theme: colorTheme,
     });
-    return doc;
   };
 
   const previewPdf = async () => {
