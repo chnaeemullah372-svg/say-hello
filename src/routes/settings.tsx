@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
   ArrowLeft,
   ArrowLeftRight,
@@ -8,6 +8,7 @@ import {
   Boxes,
   Building2,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Check,
   Copy,
@@ -109,7 +110,7 @@ export const Route = createFileRoute("/settings")({
 });
 
 type SectionKey = keyof SettingsState;
-type ActiveKey = SectionKey | "accounts" | "fundManagement" | "import";
+type ActiveKey = SectionKey | "accounts" | "fundManagement" | "import" | "templateDesign";
 type SettingsGroup = "Company Information" | "General Settings" | "Template Settings" | "Communication";
 type Category = {
   key: ActiveKey;
@@ -623,6 +624,20 @@ function SettingsPage() {
     }
   };
 
+  if (active === "templateDesign") {
+    return (
+      <TemplateDesignScreen
+        data={settings.templateSettings}
+        set={(k, v) => setField("templateSettings", k, v)}
+        business={settings.business}
+        onOpenContent={() => setActive("templateSettings")}
+        onCancel={() => setActive("templateSettings")}
+        onSave={async () => { await saveSection("templateSettings"); setActive("templateSettings"); }}
+        saving={saving === "templateSettings"}
+      />
+    );
+  }
+
   if (active && activeCategory) {
     return (
       <div className="space-y-4">
@@ -656,7 +671,7 @@ function SettingsPage() {
         {active === "print" && <PrintPanel data={settings.print} set={(k, v) => setField("print", k, v)} />}
         {active === "renameFields" && <RenameFieldsPanel data={settings.renameFields} set={(k, v) => setField("renameFields", k, v)} />}
         {active === "customFields" && <CustomFieldsPanel data={settings.customFields} set={(v) => setField("customFields", "fields", v)} />}
-        {active === "templateSettings" && <TemplateSettingsPanel data={settings.templateSettings} set={(k, v) => setField("templateSettings", k, v)} />}
+        {active === "templateSettings" && <TemplateSettingsPanel data={settings.templateSettings} set={(k, v) => setField("templateSettings", k, v)} onOpenDesign={() => setActive("templateDesign")} />}
         {active === "items" && <ItemsPanel data={settings.items} set={(k, v) => setField("items", k, v)} />}
         {active === "payment" && <PaymentPanel data={settings.payment} set={(k, v) => setField("payment", k, v)} />}
         {active === "bank" && <BankPanel data={settings.bank} set={(k, v) => setField("bank", k, v)} />}
@@ -1330,8 +1345,7 @@ function CustomFieldsPanel({ data, set }: { data: { fields: CustomFieldDef[] }; 
   );
 }
 
-function TemplateSettingsPanel({ data, set }: { data: Record<string, boolean | string>; set: (k: string, v: boolean | string) => void }) {
-  const useCustomColors = !!data.useCustomColors;
+function TemplateSettingsPanel({ data, set, onOpenDesign }: { data: Record<string, boolean | string>; set: (k: string, v: boolean | string) => void; onOpenDesign: () => void }) {
   const rows: [string, string][] = [
     ["showBankInEstimate", "Show bank / payment information in estimate"],
     ["showAmountInWords", "Show amount in words"],
@@ -1364,77 +1378,15 @@ function TemplateSettingsPanel({ data, set }: { data: Record<string, boolean | s
     <Panel>
       <PanelHeader icon={FileText} title="Template Settings" subtitle="Control what appears on invoices/documents. Show or hide fields and totals." />
 
-      <div className="rounded-xl border-2 border-primary/30 bg-primary/5 p-4">
-        <div className="mb-3 flex items-center gap-2 font-display text-base font-bold text-primary">
-          <Wand2 className="h-5 w-5" /> Template Design
+      <button type="button" onClick={onOpenDesign}
+        className="mb-5 flex w-full items-center gap-3 rounded-xl border-2 border-primary/30 bg-primary/5 p-4 text-left hover:bg-primary/10">
+        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary"><Wand2 className="h-5 w-5" /></div>
+        <div className="min-w-0 flex-1">
+          <div className="font-display font-bold text-primary">Template Design</div>
+          <div className="text-xs text-muted-foreground">Color, watermark, text size, header/footer — with a live preview. Same idea as UNI Invoice's own Template Design screen.</div>
         </div>
-        <p className="mb-4 text-xs text-muted-foreground">
-          Everything that controls how documents look — color, watermark, text size and header/footer text.
-          Same idea as UNI Invoice's own Template Design screen.
-        </p>
-        <div className="grid gap-4">
-          <SettingBlock title="Template Color" icon={Palette}>
-            <div className="mb-3 flex items-center justify-between">
-              <span className="text-sm">Use custom colors instead of the theme preset</span>
-              <Switch checked={useCustomColors} onCheckedChange={(v) => set("useCustomColors", v)} />
-            </div>
-            {useCustomColors && (
-              <ColorSwatchPicker
-                value={String(data.primaryColor || "#0d5c47")}
-                onChange={(hex) => { set("primaryColor", hex); set("accentColor", lightenHex(hex, 0.35)); }}
-              />
-            )}
-          </SettingBlock>
-
-          <SettingBlock title="Template Text" icon={PenLine}>
-            <div className="grid gap-3">
-              <div className="grid gap-1.5">
-                <Label className="text-xs text-muted-foreground">Header tagline (shown under your business name)</Label>
-                <Input value={String(data.headerTagline || "")} onChange={(e) => set("headerTagline", e.target.value)} placeholder="e.g. Quality you can trust" />
-              </div>
-              <div className="grid gap-1.5">
-                <Label className="text-xs text-muted-foreground">Footer text (shown at the bottom, replaces "Thank you for your business.")</Label>
-                <Input value={String(data.footerText || "")} onChange={(e) => set("footerText", e.target.value)} placeholder="Thank you for your business." />
-              </div>
-            </div>
-          </SettingBlock>
-
-          <SettingBlock title="Text Size" icon={FileText}>
-            <div className="grid grid-cols-5 gap-2">
-              {(["XS", "S", "M", "L", "XL"] as const).map((v) => (
-                <button key={v} type="button" onClick={() => set("textSize", v)}
-                  className={`rounded-lg border px-3 py-2 text-sm font-medium transition ${(String(data.textSize || "M")) === v ? "border-primary bg-primary/10 text-primary" : "text-muted-foreground"}`}>
-                  {v}
-                </button>
-              ))}
-            </div>
-          </SettingBlock>
-
-          <SettingBlock title="Watermark" icon={Image}>
-            <p className="mb-3 text-xs text-muted-foreground">A faint background image on every document — same idea as UNI Invoice's Template watermark.</p>
-            <UploadBox icon={Image} title="Watermark image" subtitle="PNG/JPG shown faintly behind the document" value={String(data.watermarkUrl || "")} assetKey="watermark" onUploaded={(url) => set("watermarkUrl", url)} />
-            {data.watermarkUrl ? (
-              <div className="mt-3">
-                <Grid>
-                  <SelectField label="Position" value={String(data.watermarkPosition || "bottom-right")} onChange={(v) => set("watermarkPosition", v)}
-                    options={["center", "top-left", "top-right", "bottom-left", "bottom-right"]} />
-                  <TextField label="Opacity (%)" value={String(data.watermarkOpacity ?? "15")} onChange={(v) => set("watermarkOpacity", v)} type="number" />
-                </Grid>
-              </div>
-            ) : null}
-          </SettingBlock>
-
-          <SettingBlock title="Page Layout" icon={Printer}>
-            <div className="mb-3 flex items-center justify-between">
-              <span className="text-sm">Hide the branded header band (for letterhead paper)</span>
-              <Switch checked={!!data.hideHeaderBand} onCheckedChange={(v) => set("hideHeaderBand", v)} />
-            </div>
-            {data.hideHeaderBand ? (
-              <TextField label="Blank space left at the top (mm)" value={String(data.headerBandHeight ?? "12")} onChange={(v) => set("headerBandHeight", v)} type="number" />
-            ) : null}
-          </SettingBlock>
-        </div>
-      </div>
+        <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
+      </button>
 
       <div className="mb-2 mt-5 text-sm font-semibold text-muted-foreground">Template Content</div>
       <div className="divide-y rounded-lg border">
@@ -1446,6 +1398,229 @@ function TemplateSettingsPanel({ data, set }: { data: Record<string, boolean | s
         ))}
       </div>
     </Panel>
+  );
+}
+
+// Matches UNI Invoice's own Template Design screen exactly (per the user's
+// screen recording): a live document preview on top, then a template
+// pager, a Setting/Text-size/Color toolbar, a Watermark row with a
+// position/opacity/icon gallery, and Cancel/Save at the bottom — a
+// dedicated design canvas, not just more fields inside the generic
+// Settings form.
+function TemplateDesignScreen({
+  data, set, business, onOpenContent, onCancel, onSave, saving,
+}: {
+  data: Record<string, boolean | string>;
+  set: (k: string, v: boolean | string) => void;
+  business: Record<string, string | boolean>;
+  onOpenContent: () => void;
+  onCancel: () => void;
+  onSave: () => void;
+  saving: boolean;
+}) {
+  const [opacityOpen, setOpacityOpen] = useState(false);
+  const [opacityDraft, setOpacityDraft] = useState(String(data.watermarkOpacity ?? "15"));
+  const useCustomColors = !!data.useCustomColors;
+  const color = useCustomColors ? String(data.primaryColor || "#0d5c47") : "#0d5c47";
+  const textSize = String(data.textSize || "M");
+  const PREVIEW_SCALE: Record<string, number> = { XS: 0.82, S: 0.9, M: 1, L: 1.12, XL: 1.28 };
+  const scale = PREVIEW_SCALE[textSize] ?? 1;
+  const businessName = String(business.businessName || business.legalName || "Your Business");
+
+  const watermarkStyle: CSSProperties | undefined = data.watermarkUrl ? (() => {
+    const pos = String(data.watermarkPosition || "bottom-right");
+    const base: CSSProperties = {
+      position: "absolute", width: "38%", aspectRatio: "1 / 1",
+      opacity: Math.max(0.03, Math.min(1, Number(data.watermarkOpacity ?? 15) / 100)),
+      backgroundImage: `url(${data.watermarkUrl})`, backgroundSize: "contain", backgroundRepeat: "no-repeat",
+    };
+    if (pos === "center") return { ...base, top: "35%", left: "31%" };
+    if (pos === "top-left") return { ...base, top: "8%", left: "4%" };
+    if (pos === "top-right") return { ...base, top: "8%", right: "4%" };
+    if (pos === "bottom-left") return { ...base, bottom: "6%", left: "4%" };
+    return { ...base, bottom: "6%", right: "4%" };
+  })() : undefined;
+
+  return (
+    <div className="space-y-4 pb-2">
+      {/* Live preview — recomputed on every change below, no Save needed to see it */}
+      <div className="relative overflow-hidden rounded-xl border bg-white p-6 text-black shadow-sm" style={{ fontSize: `${scale * 0.8}rem` }}>
+        {watermarkStyle && <div style={watermarkStyle} />}
+        {!data.hideHeaderBand ? (
+          <div className="relative mb-4 flex items-start justify-between gap-4">
+            <div>
+              <div className="text-[10px] font-semibold uppercase text-muted-foreground">Bill To</div>
+              <div className="font-bold">Umpire Enterprise Private Limited</div>
+              <div>Joseph John</div>
+              <div className="text-xs text-muted-foreground">99, Shore Bardolph, NG14 2DD</div>
+              {data.headerTagline ? <div className="mt-1 text-xs italic" style={{ color }}>{String(data.headerTagline)}</div> : null}
+            </div>
+            <div className="text-right">
+              <div className="font-bold">{businessName}</div>
+              <div className="text-xs text-muted-foreground">INV0001</div>
+              <div className="text-xs text-muted-foreground">Date: 16 Feb 2026</div>
+            </div>
+          </div>
+        ) : (
+          <div style={{ height: `${Number(data.headerBandHeight) || 12}mm` }} />
+        )}
+        <table className="relative w-full border-collapse text-xs">
+          <thead>
+            <tr style={{ backgroundColor: color, color: "#fff" }}>
+              <th className="p-1.5 text-left">Product</th>
+              <th className="p-1.5 text-right">Qty</th>
+              <th className="p-1.5 text-right">Rate</th>
+              <th className="p-1.5 text-right">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr className="border-b"><td className="p-1.5">Butter Paper</td><td className="p-1.5 text-right">1</td><td className="p-1.5 text-right">9,000.00</td><td className="p-1.5 text-right">9,000.00</td></tr>
+            <tr className="border-b bg-muted/40"><td className="p-1.5">Pencil Box</td><td className="p-1.5 text-right">20</td><td className="p-1.5 text-right">2,000.00</td><td className="p-1.5 text-right">40,000.00</td></tr>
+          </tbody>
+        </table>
+        <div className="relative mt-3 flex justify-end">
+          <div className="w-40 text-right text-xs">
+            <div className="flex justify-between text-muted-foreground"><span>Base Amount</span><span>Rs 49,000.00</span></div>
+            <div className="flex justify-between font-bold" style={{ color }}><span>Total</span><span>Rs 49,550.00</span></div>
+          </div>
+        </div>
+        <div className="relative mt-4 inline-block border-b-2 pb-0.5 text-xs font-semibold" style={{ color, borderColor: color }}>Thank you! Happy Business!</div>
+        <div className="relative mt-6 text-[10px] text-muted-foreground">
+          <div className="font-semibold text-foreground">Terms &amp; Condition</div>
+          <div>1. Payment 30 days after invoice date</div>
+        </div>
+        {data.footerText ? <div className="relative mt-3 text-[10px] italic text-muted-foreground">{String(data.footerText)}</div> : null}
+      </div>
+
+      {/* Template pager — one layout today, so the arrows are disabled rather than faked */}
+      <div className="flex items-center justify-center gap-3">
+        <Button type="button" variant="ghost" size="icon" disabled className="opacity-40"><ChevronLeft className="h-5 w-5" /></Button>
+        <span className="rounded-full border-2 border-amber-400 bg-amber-50 px-4 py-1 text-sm font-semibold text-amber-700">Template Design</span>
+        <Button type="button" variant="ghost" size="icon" disabled className="opacity-40"><ChevronRight className="h-5 w-5" /></Button>
+      </div>
+
+      {/* Setting / Text size / Color */}
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border p-2">
+        <Button type="button" variant="secondary" size="sm" onClick={onOpenContent}>Setting</Button>
+        <div className="flex gap-1">
+          {(["XS", "S", "M", "L", "XL"] as const).map((v) => (
+            <button key={v} type="button" onClick={() => set("textSize", v)}
+              className={`rounded-md border px-2.5 py-1.5 text-xs font-semibold ${textSize === v ? "border-primary bg-primary text-primary-foreground" : "text-muted-foreground"}`}>
+              {v}
+            </button>
+          ))}
+        </div>
+        <div className="ml-auto flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">Custom color</span>
+          <Switch checked={useCustomColors} onCheckedChange={(v) => set("useCustomColors", v)} />
+          {useCustomColors && (
+            <ColorSwatchPicker value={color} onChange={(hex) => { set("primaryColor", hex); set("accentColor", lightenHex(hex, 0.35)); }} />
+          )}
+        </div>
+      </div>
+
+      {/* Watermark */}
+      <div className="rounded-lg border p-3">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Watermark</span>
+          <div className="flex items-center gap-2">
+            <select value={String(data.watermarkPosition || "bottom-right")} onChange={(e) => set("watermarkPosition", e.target.value)}
+              className="h-8 rounded-md border bg-background px-2 text-xs">
+              {["center", "top-left", "top-right", "bottom-left", "bottom-right"].map((p) => (
+                <option key={p} value={p}>{humanize(p)}</option>
+              ))}
+            </select>
+            <Button type="button" variant="ghost" size="sm" onClick={() => { setOpacityDraft(String(data.watermarkOpacity ?? "15")); setOpacityOpen(true); }}>Set Opacity</Button>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+          <button type="button" onClick={() => set("watermarkUrl", "")}
+            className={`grid h-16 w-16 shrink-0 place-items-center rounded-lg border-2 text-xs font-medium ${!data.watermarkUrl ? "border-primary bg-primary/10 text-primary" : "text-muted-foreground"}`}>
+            NONE
+          </button>
+          {data.watermarkUrl ? (
+            <button type="button" onClick={() => set("watermarkUrl", data.watermarkUrl)}
+              className="h-16 w-16 shrink-0 rounded-lg border-2 border-primary bg-cover bg-center" style={{ backgroundImage: `url(${data.watermarkUrl})` }} />
+          ) : null}
+          <WatermarkUploadTile onUploaded={(url) => set("watermarkUrl", url)} />
+        </div>
+      </div>
+
+      <Dialog open={opacityOpen} onOpenChange={setOpacityOpen}>
+        <DialogContent className="sm:max-w-xs">
+          <DialogHeader><DialogTitle>Set Opacity</DialogTitle></DialogHeader>
+          <Input type="number" min={0} max={100} value={opacityDraft} onChange={(e) => setOpacityDraft(e.target.value)} />
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setOpacityOpen(false)}>Close</Button>
+            <Button onClick={() => { set("watermarkOpacity", opacityDraft); setOpacityOpen(false); }}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Header/footer text + hide-header, kept here since they're part of the design too */}
+      <div className="rounded-lg border p-3">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-sm">Hide the branded header band (for letterhead paper)</span>
+          <Switch checked={!!data.hideHeaderBand} onCheckedChange={(v) => set("hideHeaderBand", v)} />
+        </div>
+        {data.hideHeaderBand ? (
+          <TextField label="Blank space left at the top (mm)" value={String(data.headerBandHeight ?? "12")} onChange={(v) => set("headerBandHeight", v)} type="number" />
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-1.5">
+              <Label className="text-xs text-muted-foreground">Header tagline</Label>
+              <Input value={String(data.headerTagline || "")} onChange={(e) => set("headerTagline", e.target.value)} placeholder="e.g. Quality you can trust" />
+            </div>
+            <div className="grid gap-1.5">
+              <Label className="text-xs text-muted-foreground">Footer text</Label>
+              <Input value={String(data.footerText || "")} onChange={(e) => set("footerText", e.target.value)} placeholder="Thank you for your business." />
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="flex gap-3">
+        <Button type="button" variant="outline" className="flex-1" onClick={onCancel}>Cancel</Button>
+        <Button type="button" className="flex-1" onClick={onSave} disabled={saving}>
+          {saving ? <RefreshCw className="mr-1.5 h-4 w-4 animate-spin" /> : null}Save
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function WatermarkUploadTile({ onUploaded }: { onUploaded: (url: string) => void }) {
+  const { user } = useAuth();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const pick = async (file: File) => {
+    if (!user?.tenantId) return;
+    setUploading(true);
+    try {
+      const ext = file.name.split(".").pop() || "png";
+      const path = `${user.tenantId}/watermark.${ext}`;
+      const { error } = await supabase.storage.from("business-assets").upload(path, file, { upsert: true, contentType: file.type });
+      if (error) throw error;
+      const { data } = supabase.storage.from("business-assets").getPublicUrl(path);
+      onUploaded(`${data.publicUrl}?v=${Date.now()}`);
+      toast.success("Watermark uploaded");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not upload watermark");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <>
+      <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) void pick(f); e.target.value = ""; }} />
+      <button type="button" disabled={uploading} onClick={() => fileRef.current?.click()}
+        className="grid h-16 w-16 shrink-0 place-items-center rounded-lg border-2 border-dashed text-muted-foreground hover:border-primary hover:text-primary">
+        {uploading ? <RefreshCw className="h-5 w-5 animate-spin" /> : <Plus className="h-5 w-5" />}
+      </button>
+    </>
   );
 }
 
