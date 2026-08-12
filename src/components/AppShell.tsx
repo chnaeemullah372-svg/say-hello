@@ -48,10 +48,17 @@ export function AppShell({ children }: { children: ReactNode }) {
   // used to show a literal "0" that staff had to backspace before typing the
   // real number, on every single line item. Auto-selecting the value on
   // focus means the first keystroke just overwrites it, app-wide.
+  //
+  // type="number" inputs are excluded here on purpose: selectionStart/End
+  // (and .select() in some mobile browsers, notably Android Chrome) are
+  // unreliable or spec-undefined for that input type, so the item dialog's
+  // Qty/Rate/Discount fields were switched to type="text" + inputMode
+  // (still shows the numeric keyboard) specifically so this actually works
+  // on the phones this app is used on, not just desktop.
   useEffect(() => {
     const handler = (e: FocusEvent) => {
       const t = e.target;
-      if (t instanceof HTMLInputElement && t.type === "number") {
+      if (t instanceof HTMLInputElement && (t.type === "number" || (t.type === "text" && (t.inputMode === "decimal" || t.inputMode === "numeric")))) {
         t.select();
       }
     };
