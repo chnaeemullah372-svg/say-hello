@@ -250,7 +250,12 @@ export async function buildDocumentPdf(data: PdfDocData): Promise<jsPDF> {
     // Totals box, right-aligned
     const boxW = 78;
     const boxX = pageWidth - marginX - boxW;
-    const baseAmount = data.items.reduce((s, it) => s + it.qty * it.rate * (1 - it.discount / 100), 0);
+    // `discountAmount` below is line+document discount combined (matches
+    // calcInvoiceTotals' `discount`), so Base Amount here must be the raw
+    // pre-discount subtotal — subtracting a per-item discount into this
+    // figure too double-counts it against Discount, understating the
+    // printed Total by the line-discount amount versus the real total.
+    const baseAmount = data.items.reduce((s, it) => s + it.qty * it.rate, 0);
     const totalsLines: [string, string][] = [["Base Amount", money(baseAmount)]];
     if (data.discountAmount) totalsLines.push(["Discount", `- ${money(data.discountAmount)}`]);
     totalsLines.push([`Tax${data.taxRate ? ` (${data.taxRate}%${data.taxInclusive ? ", incl." : ""})` : ""}`, money(data.taxAmount ?? 0)]);
@@ -423,7 +428,12 @@ function drawReceipt(doc: jsPDF, data: PdfDocData, width: number, colors: { prim
   dashedLine();
 
   if (showPricing) {
-    const baseAmount = data.items.reduce((s, it) => s + it.qty * it.rate * (1 - it.discount / 100), 0);
+    // `discountAmount` below is line+document discount combined (matches
+    // calcInvoiceTotals' `discount`), so Base Amount here must be the raw
+    // pre-discount subtotal — subtracting a per-item discount into this
+    // figure too double-counts it against Discount, understating the
+    // printed Total by the line-discount amount versus the real total.
+    const baseAmount = data.items.reduce((s, it) => s + it.qty * it.rate, 0);
     doc.setFont("helvetica", "normal");
     const rows: [string, string][] = [["Base Amount", money(baseAmount)]];
     if (data.discountAmount) rows.push(["Discount", `-${money(data.discountAmount)}`]);
