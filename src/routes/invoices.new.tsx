@@ -1488,8 +1488,8 @@ export function ItemDialog({
             <label className="border-r px-4 py-2">
               <span className="text-[11px] uppercase tracking-wider text-muted-foreground">Quantity</span>
               <Input
-                type="number"
-                min={0}
+                type="text"
+                inputMode="numeric"
                 value={qty}
                 onChange={(e) => setQty(Math.max(0, +e.target.value || 0))}
                 className="h-8 border-0 p-0 text-base shadow-none focus-visible:ring-0"
@@ -1498,8 +1498,8 @@ export function ItemDialog({
             <label className="px-4 py-2">
               <span className="text-[11px] uppercase tracking-wider text-muted-foreground">Rate</span>
               <Input
-                type="number"
-                min={0}
+                type="text"
+                inputMode="decimal"
                 value={rate}
                 onChange={(e) => setRate(Math.max(0, +e.target.value || 0))}
                 className="h-8 border-0 p-0 text-base shadow-none focus-visible:ring-0"
@@ -1519,9 +1519,8 @@ export function ItemDialog({
             <label className="border-r px-4 py-2">
               <span className="text-[11px] uppercase tracking-wider text-muted-foreground">Discount %</span>
               <Input
-                type="number"
-                min={0}
-                max={100}
+                type="text"
+                inputMode="decimal"
                 value={lineDiscount}
                 onChange={(e) => setLineDiscount(Math.min(100, Math.max(0, +e.target.value || 0)))}
                 className="h-8 border-0 p-0 text-base shadow-none focus-visible:ring-0"
