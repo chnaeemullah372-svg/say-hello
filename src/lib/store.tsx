@@ -535,7 +535,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (patch.referralAddress !== undefined) dbPatch.referral_address = patch.referralAddress || null;
       if (patch.maxCreditLimit !== undefined) dbPatch.max_credit_limit = patch.maxCreditLimit ?? null;
       if (patch.paymentTerms !== undefined) dbPatch.payment_terms = patch.paymentTerms;
-      if (patch.openingBalance !== undefined) dbPatch.opening_balance = patch.openingBalance;
+      // Opening Balance edited after the customer already exists used to
+      // silently desync the Customers-list/invoice "Old Balance" figure
+      // (the stored `balance` column, incrementally patched elsewhere on
+      // invoice/payment/return) from the Statement page (which always
+      // recomputes live from openingBalance + invoices + payments) — by
+      // the exact size of the edit, permanently, until someone noticed.
+      // Shifting `balance` by the same delta keeps both in sync, unless the
+      // caller is already setting `balance` explicitly itself.
+      if (patch.openingBalance !== undefined) {
+        dbPatch.opening_balance = patch.openingBalance;
+        if (patch.balance === undefined) {
+          const before = customers.find((c) => c.id === id);
+          if (before) dbPatch.balance = before.balance + (patch.openingBalance - (before.openingBalance ?? 0));
+        }
+      }
       if (patch.openingDate !== undefined) dbPatch.opening_date = patch.openingDate;
       if (patch.bankName !== undefined) dbPatch.bank_name = patch.bankName || null;
       if (patch.payableTo !== undefined) dbPatch.payable_to = patch.payableTo || null;

@@ -111,14 +111,23 @@ function InvoiceView() {
     a4: "A4", a5: "A5", a3: "A3", letter: "letter", legal: "legal",
     "thermal-80mm": "80mm 297mm", "thermal-58mm": "58mm 297mm",
   };
-  // Thermal/receipt mode uses a fixed width but `auto` height — the browser
-  // then sizes the printed page to however tall the content actually is,
-  // which is what makes it grow downward as items are added instead of
-  // padding out to a fixed A4-shaped rectangle.
+  // `size: <length> auto` is not valid CSS — the `size` property only
+  // accepts a bare `auto` OR one/two lengths, never a mix, so browsers
+  // silently dropped this whole rule and fell back to their own default
+  // (Letter/A4) instead of a receipt-shaped page. Fixed-length mode gets a
+  // real height from Settings; "grows with items" mode (no way to know the
+  // rendered height before print, unlike the two-pass measured PDF download
+  // below) gets a generously tall fixed page instead — the same approach
+  // real-world browser-to-thermal-printer setups use, since a continuous
+  // receipt roll just cuts at the actual content length regardless of how
+  // tall the page box was declared.
   const isReceiptMode = printSettings.printerChoice === "thermal";
   const receiptWidthMm = Math.max(30, Number(printSettings.printerSize) || 80);
+  const receiptHeightMm = printSettings.dynamicReceiptHeight === false
+    ? Math.max(30, Number(printSettings.fixedReceiptHeight) || 200)
+    : 1500;
   const pageCss = isReceiptMode
-    ? `@page { size: ${receiptWidthMm}mm auto; margin: 2mm; }`
+    ? `@page { size: ${receiptWidthMm}mm ${receiptHeightMm}mm; margin: 2mm; }`
     : `@page { size: ${PAGE_SIZE[printSettings.paper] ?? "A4"} ${printSettings.orientation === "landscape" ? "landscape" : "portrait"}; margin: ${printSettings.marginTop ?? 12}mm ${printSettings.marginRight ?? 10}mm ${printSettings.marginBottom ?? 12}mm ${printSettings.marginLeft ?? 10}mm; }`;
 
   // Falls back to the plain English label if nothing's been renamed in

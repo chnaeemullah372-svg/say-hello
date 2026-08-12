@@ -196,7 +196,16 @@ function CreatePurchaseReturn() {
   };
 
   const openNewItem = () => { setEditingIndex(null); setItemDlgOpen(true); };
-  const openEditItem = (i: number) => { setEditingIndex(i); setItemDlgOpen(true); };
+  // See invoices.new.tsx's openEditItem for why this matters: `mode` is the
+  // page's current Product/Service/Fixed-Amount tab, not tied to the item
+  // being edited — leaving it unset here let a typed Service/Fixed line get
+  // silently auto-registered as a real Product on save whenever the page
+  // happened to be sitting on the "Product" tab.
+  const openEditItem = (i: number) => {
+    setMode(items[i]?.productId ? "product" : "fixed");
+    setEditingIndex(i);
+    setItemDlgOpen(true);
+  };
   const saveLine = (line: DraftLine) => {
     if (editingIndex === null) {
       setItems((p) => [...p, line]);

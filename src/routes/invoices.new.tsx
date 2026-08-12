@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
-import { fmt, getCurrencySymbol, type InvoiceItem, type Product } from "@/lib/dummy-data";
+import { calcInvoiceTotals, fmt, getCurrencySymbol, type InvoiceItem, type Product } from "@/lib/dummy-data";
 import { normalizeWhatsAppNumber } from "@/lib/phone";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -139,8 +139,16 @@ function CreateInvoice() {
   // For a brand-new invoice, default the terms text from Settings ->
   // Terms & Condition -> Invoice Terms (previously this box always started
   // blank and ignored the configured default entirely).
+  //
+  // Guarding on `editingInvoice` here was a race: it comes from `invoices`,
+  // which loads asynchronously, so on first render of an EDIT page it's
+  // still undefined — this effect's guard would pass, kick off the
+  // settings fetch, and its `.then()` would land later and stomp the
+  // just-loaded invoice's real saved terms/tax with the tenant's defaults,
+  // whichever fetch happened to resolve second. `editId` comes straight off
+  // the URL and is correct from the very first render, so it can't race.
   useEffect(() => {
-    if (editingInvoice) return;
+    if (editId) return;
     supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.terms").maybeSingle()
       .then(({ data }) => {
         const t = (data?.setting_value as Record<string, string>) ?? {};
@@ -152,8 +160,10 @@ function CreateInvoice() {
   // For a brand-new invoice, default the tax rate from Settings -> Tax's
   // first enabled tax (previously this screen's tax fields were entirely
   // disconnected from Settings -> Tax, always starting at a hardcoded 0%).
+  // See the terms effect above for why this checks `editId`, not
+  // `editingInvoice`.
   useEffect(() => {
-    if (editingInvoice) return;
+    if (editId) return;
     supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.tax").maybeSingle()
       .then(({ data }) => {
         const t = data?.setting_value as { taxList?: { pct: string; inclusive: boolean; enabled: boolean }[] } | undefined;
@@ -293,7 +303,22 @@ function CreateInvoice() {
   };
 
   const openNewItem = () => { setEditingIndex(null); setItemDlgOpen(true); };
-  const openEditItem = (i: number) => { setEditingIndex(i); setItemDlgOpen(true); };
+  // `mode` is just "whichever tab (Product/Service/Fixed Amount) the page
+  // happens to be on" — opening an existing line for edit never touched it,
+  // so a Service/Fixed-Amount line reopened while the page sat on its
+  // default "Product" tab hit the dialog's `if (!pid && mode === "product")`
+  // auto-register-as-product path on save: it silently created (or matched)
+  // a real Product from the typed name and rewrote the line's productId,
+  // permanently turning a one-off typed line into a stock-tracked, tax-rated
+  // product line. Only a real product line should ever open in "product"
+  // mode; anything without a productId is safe to reopen as "fixed" (the
+  // dialog has no stored way to tell Service apart from Fixed Amount, but
+  // both skip that auto-register path, so either is a safe default).
+  const openEditItem = (i: number) => {
+    setMode(items[i]?.productId ? "product" : "fixed");
+    setEditingIndex(i);
+    setItemDlgOpen(true);
+  };
   const saveLine = (line: DraftLine) => {
     if (editingIndex === null) {
       setItems((p) => [...p, line]);
@@ -355,6 +380,27 @@ function CreateInvoice() {
         invoiceId = editingInvoice.id;
         invoiceNumber = editingInvoice.number;
         toast.success(`Invoice ${editingInvoice.number} updated`);
+
+        // Editing an invoice's items/tax/discount/paid amount never
+        // touched `customer.balance` — only a brand-new invoice did — so
+        // Statement (which recomputes live from the invoice's current
+        // total) and the Customers-list/"Old Balance" figure (which reads
+        // this stored column) would permanently disagree by however much
+        // the edit changed what's owed. Reconcile by the exact delta, same
+        // as advance/payment does for a new invoice; unlike those, this is
+        // safe to redo on every edit since it's not creating a ledger
+        // entry, just correcting the running total.
+        if (customer) {
+          const before = calcInvoiceTotals(
+            editingInvoice.items, editingInvoice.taxRate, editingInvoice.discountMode,
+            editingInvoice.discountValue, editingInvoice.shippingAmount, editingInvoice.taxInclusive,
+          );
+          const owedDelta = (total - paymentAmount) - (before.total - editingInvoice.paid);
+          if (owedDelta !== 0) {
+            updateCustomer(customer.id, { balance: customer.balance + owedDelta })
+              .catch(() => toast.error("Invoice updated, but the client's balance could not be corrected"));
+          }
+        }
       } else {
         // Use the prefix + next-number configured in Settings -> Prefix &
         // Localization (previously this was ignored entirely — the DB

@@ -105,8 +105,12 @@ function CreatePurchaseOrder() {
     }
   }, [editingOrder, loadedEditId]);
 
+  // Guards on `editId` (known synchronously from the URL), not
+  // `editingOrder` (loads asynchronously, so on an EDIT page's first render
+  // it's still undefined — guarding on it would let this effect's `.then()`
+  // land after the real order loads and stomp its actual saved terms).
   useEffect(() => {
-    if (editingOrder) return;
+    if (editId) return;
     supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.terms").maybeSingle()
       .then(({ data }) => {
         const t = (data?.setting_value as Record<string, string>) ?? {};
@@ -203,7 +207,16 @@ function CreatePurchaseOrder() {
   };
 
   const openNewItem = () => { setEditingIndex(null); setItemDlgOpen(true); };
-  const openEditItem = (i: number) => { setEditingIndex(i); setItemDlgOpen(true); };
+  // See invoices.new.tsx's openEditItem for why this matters: `mode` is the
+  // page's current Product/Service/Fixed-Amount tab, not tied to the item
+  // being edited — leaving it unset here let a typed Service/Fixed line get
+  // silently auto-registered as a real Product on save whenever the page
+  // happened to be sitting on the "Product" tab.
+  const openEditItem = (i: number) => {
+    setMode(items[i]?.productId ? "product" : "fixed");
+    setEditingIndex(i);
+    setItemDlgOpen(true);
+  };
   const saveLine = (line: DraftLine) => {
     if (editingIndex === null) {
       setItems((p) => [...p, line]);

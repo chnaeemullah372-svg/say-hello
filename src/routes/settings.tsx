@@ -306,7 +306,6 @@ const defaults: SettingsState = {
     marginBottom: "12",
     marginLeft: "10",
     copies: "1",
-    thermal: false,
     repeatHeader: true,
     pageNumbers: true,
     paidWatermark: true,
@@ -1164,7 +1163,6 @@ function PrintPanel({ data, set }: PanelProps) {
         <TextField label="Copies per print" value={data.copies} onChange={(v) => set("copies", v)} type="number" />
       </Grid>
       <ToggleGrid>
-        <ToggleField label="Thermal printer mode" checked={data.thermal} onChange={(v) => set("thermal", v)} />
         <ToggleField label="Repeat header on each page" checked={data.repeatHeader} onChange={(v) => set("repeatHeader", v)} />
         <ToggleField label="Show page numbers" checked={data.pageNumbers} onChange={(v) => set("pageNumbers", v)} />
         <ToggleField label="Paid watermark" checked={data.paidWatermark} onChange={(v) => set("paidWatermark", v)} />
