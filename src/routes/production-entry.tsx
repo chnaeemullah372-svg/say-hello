@@ -181,7 +181,7 @@ function ProductionEntryPage() {
                   </div>
                   <div className="grid gap-1.5"><Label>Date</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
                 </div>
-                <div className="grid gap-1.5"><Label>Quantity produced</Label><Input type="number" value={quantityProduced} onChange={(e) => setQuantityProduced(+e.target.value || 0)} /></div>
+                <div className="grid gap-1.5"><Label>Quantity produced</Label><Input type="text" inputMode="decimal" value={quantityProduced} onChange={(e) => setQuantityProduced(+e.target.value || 0)} /></div>
 
                 <div className="rounded-lg border">
                   <div className="border-b bg-muted/40 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Raw materials consumed</div>
@@ -202,7 +202,7 @@ function ProductionEntryPage() {
                         onChange={(e) => { setMatName(e.target.value); setMatProductId(""); setMatSearchOpen(true); }}
                         onFocus={() => setMatSearchOpen(true)}
                       />
-                      <Input type="number" placeholder="Qty" value={matQty} onChange={(e) => setMatQty(+e.target.value || 0)} />
+                      <Input type="text" inputMode="decimal" placeholder="Qty" value={matQty} onChange={(e) => setMatQty(+e.target.value || 0)} />
                       <Button type="button" variant="outline" size="icon" onClick={addMaterial}><Plus className="h-4 w-4" /></Button>
                     </div>
                     {matSearchOpen && matMatches.length > 0 && (

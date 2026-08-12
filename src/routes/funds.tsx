@@ -100,7 +100,7 @@ function FundsPage() {
                       <SelectContent>{accounts.map((a) => <SelectItem key={a.id} value={a.id}>{a.name} ({a.currentBalance.toFixed(2)})</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
-                  <div className="grid gap-1.5"><Label>Amount</Label><Input type="number" value={amount} onChange={(e) => setAmount(+e.target.value || 0)} /></div>
+                  <div className="grid gap-1.5"><Label>Amount</Label><Input type="text" inputMode="decimal" value={amount} onChange={(e) => setAmount(+e.target.value || 0)} /></div>
                   <div className="grid gap-1.5"><Label>Remarks</Label><Input value={remarks} onChange={(e) => setRemarks(e.target.value)} /></div>
                 </div>
                 <DialogFooter>

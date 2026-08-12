@@ -472,7 +472,7 @@ function CreateEstimate() {
               </SelectContent>
             </Select>
             <div className="relative">
-              <Input type="number" min={0} value={discountValue} onChange={(e) => setDiscountValue(Math.max(0, +e.target.value || 0))} className="h-9 pr-8 text-right" />
+              <Input type="text" inputMode="decimal" value={discountValue} onChange={(e) => setDiscountValue(Math.max(0, +e.target.value || 0))} className="h-9 pr-8 text-right" />
               <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">
                 {discountMode === "rate" ? "%" : getCurrencySymbol()}
               </span>
@@ -489,7 +489,7 @@ function CreateEstimate() {
               </button>
             </label>
             <div className="relative">
-              <Input type="number" min={0} disabled={!taxEnabled} value={taxPct} onChange={(e) => setTaxPct(Math.max(0, +e.target.value || 0))} className="h-9 pr-8 text-right" />
+              <Input type="text" inputMode="decimal" disabled={!taxEnabled} value={taxPct} onChange={(e) => setTaxPct(Math.max(0, +e.target.value || 0))} className="h-9 pr-8 text-right" />
               <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">%</span>
             </div>
             <span className="min-w-[80px] text-right text-sm font-semibold tabular-nums">{fmt(taxAmount)}</span>
@@ -499,7 +499,7 @@ function CreateEstimate() {
             <span className="text-xs font-semibold">Shipping Amount</span>
             <div className="relative">
               <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">{getCurrencySymbol()}</span>
-              <Input type="number" min={0} value={shippingAmount} onChange={(e) => setShippingAmount(Math.max(0, +e.target.value || 0))} className="h-9 pl-6 text-right" />
+              <Input type="text" inputMode="decimal" value={shippingAmount} onChange={(e) => setShippingAmount(Math.max(0, +e.target.value || 0))} className="h-9 pl-6 text-right" />
             </div>
             <span className="min-w-[80px] text-right text-sm font-semibold tabular-nums">{fmt(shippingAmount)}</span>
           </div>

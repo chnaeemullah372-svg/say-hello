@@ -745,8 +745,8 @@ function CreateInvoice() {
             </Select>
             <div className="relative">
               <Input
-                type="number"
-                min={0}
+                type="text"
+                inputMode="decimal"
                 value={discountValue}
                 onChange={(e) => setDiscountValue(Math.max(0, +e.target.value || 0))}
                 className="h-9 pr-8 text-right"
@@ -778,8 +778,8 @@ function CreateInvoice() {
             </label>
             <div className="relative">
               <Input
-                type="number"
-                min={0}
+                type="text"
+                inputMode="decimal"
                 disabled={!taxEnabled}
                 value={taxPct}
                 onChange={(e) => setTaxPct(Math.max(0, +e.target.value || 0))}
@@ -796,8 +796,8 @@ function CreateInvoice() {
             <div className="relative">
               <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">{getCurrencySymbol()}</span>
               <Input
-                type="number"
-                min={0}
+                type="text"
+                inputMode="decimal"
                 value={shippingAmount}
                 onChange={(e) => setShippingAmount(Math.max(0, +e.target.value || 0))}
                 className="h-9 pl-6 text-right"
@@ -852,8 +852,8 @@ function CreateInvoice() {
               <div className="grid gap-1">
                 <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Amount</Label>
                 <Input
-                  type="number"
-                  min={0}
+                  type="text"
+                  inputMode="decimal"
                   value={paymentAmount}
                   onChange={(e) => setPaymentAmount(Math.max(0, +e.target.value || 0))}
                 />
@@ -900,8 +900,8 @@ function CreateInvoice() {
               <div className="grid gap-1">
                 <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Rate (%)</Label>
                 <Input
-                  type="number"
-                  min={0}
+                  type="text"
+                  inputMode="decimal"
                   value={commissionPct}
                   onChange={(e) => setCommissionPct(Math.max(0, +e.target.value || 0))}
                 />

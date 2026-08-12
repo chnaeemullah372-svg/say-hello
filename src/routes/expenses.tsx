@@ -123,7 +123,7 @@ function ExpensesPage() {
                 </div>
                 <div className="grid gap-1.5"><Label>Description</Label><Input value={description} onChange={(e) => setDescription(e.target.value)} /></div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="grid gap-1.5"><Label>Amount</Label><Input type="number" value={amount} onChange={(e) => setAmount(+e.target.value || 0)} /></div>
+                  <div className="grid gap-1.5"><Label>Amount</Label><Input type="text" inputMode="decimal" value={amount} onChange={(e) => setAmount(+e.target.value || 0)} /></div>
                   <div className="grid gap-1.5"><Label>Date</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
                 </div>
                 <div className="grid gap-1.5">

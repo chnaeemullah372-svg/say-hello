@@ -82,7 +82,7 @@ function AgentPage() {
                   </Select>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="grid gap-1.5"><Label>Commission amount</Label><Input type="number" value={commission} onChange={(e) => setCommission(+e.target.value || 0)} /></div>
+                  <div className="grid gap-1.5"><Label>Commission amount</Label><Input type="text" inputMode="decimal" value={commission} onChange={(e) => setCommission(+e.target.value || 0)} /></div>
                   <div className="grid gap-1.5"><Label>Date</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
                 </div>
               </div>

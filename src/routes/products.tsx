@@ -192,10 +192,10 @@ function ProductsPage() {
                   </div>
                 )}
                 <div className="grid gap-3 sm:grid-cols-4">
-                  <Field label="MRP"><Input type="number" value={form.mrp} onChange={(e) => setForm({ ...form, mrp: +e.target.value })} /></Field>
-                  <Field label="Sale Rate"><Input type="number" value={form.saleRate} onChange={(e) => setForm({ ...form, saleRate: +e.target.value })} /></Field>
-                  <Field label="Whole Sale Rate"><Input type="number" value={form.wholesaleRate} onChange={(e) => setForm({ ...form, wholesaleRate: +e.target.value })} /></Field>
-                  <Field label="Purchase Rate"><Input type="number" value={form.purchaseRate} onChange={(e) => setForm({ ...form, purchaseRate: +e.target.value })} /></Field>
+                  <Field label="MRP"><Input type="text" inputMode="decimal" value={form.mrp} onChange={(e) => setForm({ ...form, mrp: +e.target.value })} /></Field>
+                  <Field label="Sale Rate"><Input type="text" inputMode="decimal" value={form.saleRate} onChange={(e) => setForm({ ...form, saleRate: +e.target.value })} /></Field>
+                  <Field label="Whole Sale Rate"><Input type="text" inputMode="decimal" value={form.wholesaleRate} onChange={(e) => setForm({ ...form, wholesaleRate: +e.target.value })} /></Field>
+                  <Field label="Purchase Rate"><Input type="text" inputMode="decimal" value={form.purchaseRate} onChange={(e) => setForm({ ...form, purchaseRate: +e.target.value })} /></Field>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-4">
                   <Field label="Product Category">
@@ -207,12 +207,12 @@ function ProductsPage() {
                     </Select>
                   </Field>
                   <Field label="Unit"><Input value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} /></Field>
-                  <Field label="Tax %"><Input type="number" value={form.taxPct} onChange={(e) => setForm({ ...form, taxPct: +e.target.value })} /></Field>
+                  <Field label="Tax %"><Input type="text" inputMode="decimal" value={form.taxPct} onChange={(e) => setForm({ ...form, taxPct: +e.target.value })} /></Field>
                   <Field label="Warehouse"><Input value={form.warehouse} onChange={(e) => setForm({ ...form, warehouse: e.target.value })} /></Field>
                 </div>
                 {form.itemType !== "service" && (
                   <div className="grid gap-3 rounded-xl border bg-muted/25 p-3 sm:grid-cols-3">
-                    <Field label="Opening Stock"><Input type="number" value={form.stock} onChange={(e) => setForm({ ...form, stock: +e.target.value })} /></Field>
+                    <Field label="Opening Stock"><Input type="text" inputMode="decimal" value={form.stock} onChange={(e) => setForm({ ...form, stock: +e.target.value })} /></Field>
                     <Field label="Low Stock Alert"><Input type="number" value={form.lowStockAt} onChange={(e) => setForm({ ...form, lowStockAt: +e.target.value })} /></Field>
                     <Field label="Opening Stock Date"><Input type="date" value={form.openingDate} onChange={(e) => setForm({ ...form, openingDate: e.target.value })} /></Field>
                     <div className="flex items-center justify-between rounded-lg bg-card px-3 py-2 sm:col-span-3">

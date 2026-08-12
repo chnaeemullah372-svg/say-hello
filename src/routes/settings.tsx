@@ -977,7 +977,7 @@ function TaxPanel({ data, set, country }: PanelProps & { country: string }) {
           {taxList.map((t) => (
             <div key={t.id} className="grid grid-cols-1 items-center gap-2 rounded-lg border bg-card p-2 sm:grid-cols-[1fr_90px_auto_auto_auto]">
               <Input value={t.name} onChange={(e) => updateTax(t.id, { name: e.target.value })} placeholder="Tax name" />
-              <Input type="number" value={t.pct} onChange={(e) => updateTax(t.id, { pct: e.target.value })} placeholder="%" />
+              <Input type="text" inputMode="decimal" value={t.pct} onChange={(e) => updateTax(t.id, { pct: e.target.value })} placeholder="%" />
               <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Switch checked={t.inclusive} onCheckedChange={(v) => updateTax(t.id, { inclusive: v })} />
                 Inclusive

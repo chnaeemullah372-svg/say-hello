@@ -136,7 +136,7 @@ function InventoryPage() {
             </div>
             <div className="grid gap-1.5">
               <Label>{mode === "set" ? "New stock level" : "Quantity"}</Label>
-              <Input type="number" min={0} value={qty} onChange={(e) => setQty(Math.max(0, +e.target.value || 0))} />
+              <Input type="text" inputMode="decimal" value={qty} onChange={(e) => setQty(Math.max(0, +e.target.value || 0))} />
             </div>
             <div className="rounded-lg border bg-muted/30 px-3 py-2 text-sm">
               Resulting stock: <span className="font-semibold">{Math.max(0, resultingStock)} {target?.unit}</span>

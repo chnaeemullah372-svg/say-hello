@@ -153,7 +153,7 @@ function PaymentsPage() {
                   )}
                 </Field>
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="Amount"><Input type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: +e.target.value })} /></Field>
+                  <Field label="Amount"><Input type="text" inputMode="decimal" value={form.amount} onChange={(e) => setForm({ ...form, amount: +e.target.value })} /></Field>
                   <Field label="Payment Mode">
                     <Select value={form.method} onValueChange={(v) => setForm({ ...form, method: v })}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
