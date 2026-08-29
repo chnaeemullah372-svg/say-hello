@@ -317,6 +317,8 @@ export type Database = {
           shipping_amount: number
           status: string
           tax_rate: number
+          tax_enabled: boolean
+          tax_inclusive: boolean
           updated_at: string
           valid_until: string | null
           tenant_id: string
@@ -335,6 +337,8 @@ export type Database = {
           shipping_amount?: number
           status?: string
           tax_rate?: number
+          tax_enabled?: boolean
+          tax_inclusive?: boolean
           updated_at?: string
           valid_until?: string | null
           tenant_id?: string
@@ -353,6 +357,8 @@ export type Database = {
           shipping_amount?: number
           status?: string
           tax_rate?: number
+          tax_enabled?: boolean
+          tax_inclusive?: boolean
           updated_at?: string
           valid_until?: string | null
           tenant_id?: string

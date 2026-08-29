@@ -197,6 +197,8 @@ function estimateFromRow(row: any): Estimate {
     validUntil: row.valid_until ?? "",
     items: (row.items ?? []) as InvoiceItem[],
     taxRate: Number(row.tax_rate ?? 0),
+    taxEnabled: row.tax_enabled ?? true,
+    taxInclusive: row.tax_inclusive ?? false,
     discountMode: (row.discount_mode as Estimate["discountMode"]) ?? "rate",
     discountValue: Number(row.discount_value ?? 0),
     shippingAmount: Number(row.shipping_amount ?? 0),
@@ -775,6 +777,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         valid_until: e.validUntil || null,
         items: e.items as unknown as import("@/integrations/supabase/types").Json,
         tax_rate: e.taxRate,
+        tax_enabled: e.taxEnabled,
+        tax_inclusive: e.taxInclusive,
         discount_mode: e.discountMode ?? "rate",
         discount_value: e.discountValue ?? 0,
         shipping_amount: e.shippingAmount ?? 0,
@@ -795,6 +799,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (patch.validUntil !== undefined) dbPatch.valid_until = patch.validUntil || null;
       if (patch.items !== undefined) dbPatch.items = patch.items;
       if (patch.taxRate !== undefined) dbPatch.tax_rate = patch.taxRate;
+      if (patch.taxEnabled !== undefined) dbPatch.tax_enabled = patch.taxEnabled;
+      if (patch.taxInclusive !== undefined) dbPatch.tax_inclusive = patch.taxInclusive;
       if (patch.discountMode !== undefined) dbPatch.discount_mode = patch.discountMode;
       if (patch.discountValue !== undefined) dbPatch.discount_value = patch.discountValue;
       if (patch.shippingAmount !== undefined) dbPatch.shipping_amount = patch.shippingAmount;

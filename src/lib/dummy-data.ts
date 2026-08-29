@@ -152,6 +152,8 @@ export type Estimate = {
   validUntil: string;
   items: InvoiceItem[];
   taxRate: number;
+  taxEnabled: boolean;
+  taxInclusive: boolean;
   discountMode?: "rate" | "flat";
   discountValue?: number;
   shippingAmount?: number;

@@ -98,6 +98,8 @@ function CreateEstimate() {
       setItems(editingEstimate.items.map((it) => ({ ...it })));
       setDiscountMode(editingEstimate.discountMode ?? "rate");
       setDiscountValue(editingEstimate.discountValue ?? 0);
+      setTaxEnabled(editingEstimate.taxEnabled);
+      setTaxInclusive(editingEstimate.taxInclusive);
       setTaxPct(editingEstimate.taxRate);
       setShippingAmount(editingEstimate.shippingAmount ?? 0);
       setValidUntil(editingEstimate.validUntil || "");
@@ -228,7 +230,7 @@ function CreateEstimate() {
       date: estimateDate.toISOString().slice(0, 10),
       validUntil,
       items: items.map(({ productId, name, qty, rate, discount }) => ({ productId, name, qty, rate, discount })),
-      taxRate: taxEnabled ? taxPct : 0, discountMode, discountValue, shippingAmount, notes,
+      taxRate: taxEnabled ? taxPct : 0, taxEnabled, taxInclusive, discountMode, discountValue, shippingAmount, notes,
       status: status as (typeof statusOptions)[number]["value"] as any,
     };
     try {

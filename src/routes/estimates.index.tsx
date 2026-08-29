@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useStore } from "@/lib/store";
-import { fmt } from "@/lib/dummy-data";
+import { calcInvoiceTotals, fmt } from "@/lib/dummy-data";
 import { useStaffPermissions } from "@/lib/permissions";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -41,9 +41,10 @@ function EstimatesPage() {
 
   const rows = useMemo(
     () => estimates.map((e) => {
-      const base = e.items.reduce((s, it) => s + it.qty * it.rate * (1 - it.discount / 100), 0);
-      const disc = e.discountMode === "flat" ? (e.discountValue ?? 0) : (base * (e.discountValue ?? 0)) / 100;
-      const total = (base - disc) * (1 + e.taxRate / 100) + (e.shippingAmount ?? 0);
+      // Used to be a separate, hand-rolled formula that always treated tax
+      // as exclusive — silently overstating any estimate saved as tax-
+      // inclusive. Now shares the same canonical calculation invoices use.
+      const { total } = calcInvoiceTotals(e.items, e.taxRate, e.discountMode, e.discountValue, e.shippingAmount, e.taxInclusive);
       return { ...e, total, customer: customers.find((c) => c.id === e.customerId) };
     }),
     [estimates, customers]
@@ -62,8 +63,8 @@ function EstimatesPage() {
         dueDate: new Date().toISOString().slice(0, 10),
         items: row.items,
         taxRate: row.taxRate,
-        taxEnabled: row.taxRate > 0,
-        taxInclusive: false,
+        taxEnabled: row.taxEnabled,
+        taxInclusive: row.taxInclusive,
         discountMode: row.discountMode ?? "rate",
         discountValue: row.discountValue ?? 0,
         shippingAmount: row.shippingAmount ?? 0,
