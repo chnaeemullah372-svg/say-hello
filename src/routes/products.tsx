@@ -123,6 +123,17 @@ function ProductsPage() {
 
   const save = async () => {
     if (!form.name) return toast.error("Name is required");
+    if (form.mrp < 0) return toast.error("MRP can't be negative");
+    if (form.saleRate <= 0) return toast.error("Sale Rate must be greater than zero");
+    if (form.wholesaleRate < 0) return toast.error("Whole Sale Rate can't be negative");
+    if (form.purchaseRate < 0) return toast.error("Purchase Rate can't be negative");
+    if (form.stock < 0) return toast.error("Opening Stock can't be negative");
+    const sku = form.sku.trim().toLowerCase();
+    const barcode = form.barcode.trim().toLowerCase();
+    const skuClash = sku && products.some((p) => p.id !== editingId && (p.sku ?? "").trim().toLowerCase() === sku);
+    if (skuClash) return toast.error("Another product already uses this Product Code / SKU");
+    const barcodeClash = barcode && products.some((p) => p.id !== editingId && (p.barcode ?? "").trim().toLowerCase() === barcode);
+    if (barcodeClash) return toast.error("Another product already uses this Barcode");
     if (saving) return;
     setSaving(true);
     const payload = {
