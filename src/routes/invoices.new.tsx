@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
-import { fmt, getCurrencySymbol, type InvoiceItem, type Product } from "@/lib/dummy-data";
+import { calcInvoiceTotals, fmt, getCurrencySymbol, type InvoiceItem, type Product } from "@/lib/dummy-data";
 import { normalizeWhatsAppNumber } from "@/lib/phone";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -355,6 +355,51 @@ function CreateInvoice() {
         invoiceId = editingInvoice.id;
         invoiceNumber = editingInvoice.number;
         toast.success(`Invoice ${editingInvoice.number} updated`);
+
+        // Editing an invoice's items/tax/discount/shipping/paid used to only
+        // patch the invoice row — the client's outstanding balance and the
+        // stock this invoice consumes were never re-reconciled, so an edited
+        // invoice quietly went out of sync with the Customers list,
+        // Statement and Reports (and with actual stock on hand) until
+        // someone noticed the drift. Reconcile both by delta, mirroring how
+        // deleteInvoice() already reverses these same two side effects.
+        const oldTotals = calcInvoiceTotals(
+          editingInvoice.items,
+          editingInvoice.taxRate,
+          editingInvoice.discountMode,
+          editingInvoice.discountValue,
+          editingInvoice.shippingAmount,
+          editingInvoice.taxInclusive,
+        );
+        const balanceDelta = total - paymentAmount - (oldTotals.total - editingInvoice.paid);
+        if (balanceDelta !== 0 && customer) {
+          updateCustomer(customer.id, { balance: customer.balance + balanceDelta }).catch(() =>
+            toast.error("Invoice updated, but the client's balance could not be reconciled"),
+          );
+        }
+
+        const oldQtyByProduct = new Map<string, number>();
+        for (const it of editingInvoice.items) {
+          if (!it.productId) continue;
+          oldQtyByProduct.set(it.productId, (oldQtyByProduct.get(it.productId) ?? 0) + it.qty);
+        }
+        const newQtyByProduct = new Map<string, number>();
+        for (const it of items) {
+          if (!it.productId) continue;
+          newQtyByProduct.set(it.productId, (newQtyByProduct.get(it.productId) ?? 0) + it.qty);
+        }
+        const touchedProductIds = new Set([...oldQtyByProduct.keys(), ...newQtyByProduct.keys()]);
+        for (const productId of touchedProductIds) {
+          const stockDelta =
+            (oldQtyByProduct.get(productId) ?? 0) - (newQtyByProduct.get(productId) ?? 0);
+          if (!stockDelta) continue;
+          const p = products.find((x) => x.id === productId);
+          if (p) {
+            updateProduct(p.id, { stock: p.stock + stockDelta }).catch(() =>
+              toast.error(`Invoice updated, but stock for "${p.name}" could not be reconciled`),
+            );
+          }
+        }
       } else {
         // Use the prefix + next-number configured in Settings -> Prefix &
         // Localization (previously this was ignored entirely — the DB
