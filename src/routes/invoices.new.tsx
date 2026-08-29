@@ -442,11 +442,11 @@ function CreateInvoice() {
       if (isNew) {
         const freshAmount = Math.max(0, paymentAmount - advanceApplied);
         if (advanceApplied > 0) {
-          addPayment({ invoiceNumber, customerName: customer?.name ?? "", amount: advanceApplied, method: "Advance Adjustment", date: invoiceDate.toISOString().slice(0, 10) })
+          addPayment({ invoiceNumber, customerName: customer?.name ?? "", amount: advanceApplied, method: "Advance Adjustment", date: invoiceDate.toISOString().slice(0, 10), invoiceId, customerId: customer?.id })
             .catch(() => toast.error("Invoice saved, but the advance-payment record could not be created"));
         }
         if (freshAmount > 0) {
-          addPayment({ invoiceNumber, customerName: customer?.name ?? "", amount: freshAmount, method: paymentMethod, date: invoiceDate.toISOString().slice(0, 10) })
+          addPayment({ invoiceNumber, customerName: customer?.name ?? "", amount: freshAmount, method: paymentMethod, date: invoiceDate.toISOString().slice(0, 10), invoiceId, customerId: customer?.id })
             .catch(() => toast.error("Invoice saved, but the payment record could not be created"));
           const account = accounts.find((a) => a.accountType === "payment" && a.name === paymentMethod);
           if (account) {

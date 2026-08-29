@@ -70,24 +70,31 @@ function PaymentsPage() {
   const save = async () => {
     if (!form.reference || form.amount <= 0) return toast.error(`${type === "client" ? "Invoice" : "Purchase bill"} and amount required`);
     try {
-      await addPayment({ invoiceNumber: form.reference, customerName: form.customerName, amount: form.amount, method: form.method, date: form.date });
+      const customer = type === "client" && selectedInvoice ? customers.find((c) => c.id === selectedInvoice.customerId) : undefined;
+      const supplier = type === "supplier" && selectedPurchase ? customers.find((c) => c.id === selectedPurchase.supplierId) : undefined;
+      await addPayment({
+        invoiceNumber: form.reference, customerName: form.customerName, amount: form.amount, method: form.method, date: form.date,
+        invoiceId: selectedInvoice?.id, purchaseId: selectedPurchase?.id, customerId: (customer ?? supplier)?.id,
+      });
 
       if (type === "client" && selectedInvoice) {
-        const newPaid = selectedInvoice.paid + form.amount;
         const totals = calcInvoiceTotals(selectedInvoice.items, selectedInvoice.taxRate, selectedInvoice.discountMode, selectedInvoice.discountValue, selectedInvoice.shippingAmount, selectedInvoice.taxInclusive);
+        // The invoice itself must never show more than fully paid — any
+        // amount beyond what's owed on THIS invoice is real money
+        // collected, but it settles as unapplied credit on the customer's
+        // balance below, not as an invoice "paid" past its own total.
+        const newPaid = Math.min(selectedInvoice.paid + form.amount, totals.total);
         const newStatus = newPaid >= totals.total ? "paid" : newPaid > 0 ? "partial" : "unpaid";
         await updateInvoice(selectedInvoice.id, { paid: newPaid, status: newStatus });
         // The invoice's outstanding amount is what raised the client's
         // balance when it was created — a payment against it needs to
         // lower that same balance, or Customers / Statement / Reports
         // silently stop agreeing with what's actually still owed.
-        const customer = customers.find((c) => c.id === selectedInvoice.customerId);
         if (customer) await updateCustomer(customer.id, { balance: customer.balance - form.amount });
       } else if (type === "supplier" && selectedPurchase) {
-        const newPaid = selectedPurchase.paid + form.amount;
+        const newPaid = Math.min(selectedPurchase.paid + form.amount, selectedPurchase.total);
         const newStatus = newPaid >= selectedPurchase.total ? "paid" : newPaid > 0 ? "partial" : "unpaid";
         await updatePurchase(selectedPurchase.id, { paid: newPaid, status: newStatus });
-        const supplier = customers.find((c) => c.id === selectedPurchase.supplierId);
         if (supplier) await updateCustomer(supplier.id, { payableBalance: (supplier.payableBalance ?? 0) - form.amount });
       }
 
@@ -269,27 +276,10 @@ function PaymentsPage() {
               onClick={async () => {
                 if (!deleteTarget) return;
                 try {
-                  const inv = invoices.find((i) => i.number === deleteTarget.invoiceNumber);
-                  const pur = purchases.find((p) => p.number === deleteTarget.invoiceNumber);
-                  if (inv) {
-                    const newPaid = Math.max(0, inv.paid - deleteTarget.amount);
-                    const totals = calcInvoiceTotals(inv.items, inv.taxRate, inv.discountMode, inv.discountValue, inv.shippingAmount, inv.taxInclusive);
-                    const newStatus = newPaid >= totals.total ? "paid" : newPaid > 0 ? "partial" : "unpaid";
-                    await updateInvoice(inv.id, { paid: newPaid, status: newStatus });
-                    const customer = customers.find((c) => c.id === inv.customerId);
-                    if (customer) await updateCustomer(customer.id, { balance: customer.balance + deleteTarget.amount });
-                  } else if (pur) {
-                    const newPaid = Math.max(0, pur.paid - deleteTarget.amount);
-                    const newStatus = newPaid >= pur.total ? "paid" : newPaid > 0 ? "partial" : "unpaid";
-                    await updatePurchase(pur.id, { paid: newPaid, status: newStatus });
-                    const supplier = customers.find((c) => c.id === pur.supplierId);
-                    if (supplier) await updateCustomer(supplier.id, { payableBalance: (supplier.payableBalance ?? 0) + deleteTarget.amount });
-                  }
-                  const account = paymentAccounts.find((a) => a.name === deleteTarget.method);
-                  if (account) {
-                    const delta = pur ? deleteTarget.amount : -deleteTarget.amount;
-                    await updateAccount(account.id, { currentBalance: account.currentBalance + delta });
-                  }
+                  // deletePayment now reverses the invoice/purchase paid
+                  // amount, the customer/supplier balance, and the cash
+                  // account itself — centralized in the store so this
+                  // page (and any future caller) can't skip a step.
                   await deletePayment(deleteTarget.id);
                   toast.success("Payment voided");
                 } catch (err) {

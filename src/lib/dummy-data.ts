@@ -107,6 +107,9 @@ export type Payment = {
   amount: number;
   method: string;
   date: string;
+  invoiceId?: string;
+  purchaseId?: string;
+  customerId?: string;
 };
 
 export type AccountType = "payment" | "category";

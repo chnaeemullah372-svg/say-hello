@@ -585,6 +585,9 @@ export type Database = {
           method: string
           updated_at: string
           tenant_id: string
+          invoice_id: string | null
+          purchase_id: string | null
+          customer_id: string | null
         }
         Insert: {
           amount?: number
@@ -597,6 +600,9 @@ export type Database = {
           method?: string
           updated_at?: string
           tenant_id?: string
+          invoice_id?: string | null
+          purchase_id?: string | null
+          customer_id?: string | null
         }
         Update: {
           amount?: number
@@ -609,6 +615,9 @@ export type Database = {
           method?: string
           updated_at?: string
           tenant_id?: string
+          invoice_id?: string | null
+          purchase_id?: string | null
+          customer_id?: string | null
         }
         Relationships: []
       }

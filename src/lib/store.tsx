@@ -185,6 +185,9 @@ function paymentFromRow(row: any): Payment {
     amount: Number(row.amount ?? 0),
     method: row.method as Payment["method"],
     date: row.date,
+    invoiceId: row.invoice_id ?? undefined,
+    purchaseId: row.purchase_id ?? undefined,
+    customerId: row.customer_id ?? undefined,
   };
 }
 
@@ -663,6 +666,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         amount: p.amount,
         method: p.method,
         date: p.date,
+        invoice_id: p.invoiceId || null,
+        purchase_id: p.purchaseId || null,
+        customer_id: p.customerId || null,
         created_by: userData.user?.id,
         tenant_id: tenantId,
       }).select().single();
@@ -673,6 +679,53 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
 
     deletePayment: async (id) => {
+      // Voiding a payment used to only delete this row — the invoice/
+      // purchase paid amount, the customer/supplier balance, and the cash
+      // account it was recorded against were all reversed by hand in the
+      // Payments page's UI code instead of here, so any other caller of
+      // deletePayment would silently skip that reversal. Centralize it,
+      // mirroring deleteInvoice. Prefer the relational invoice_id/
+      // purchase_id (set on every payment recorded from now on); fall back
+      // to the invoice-number string match for payments recorded before
+      // that link existed.
+      const p = payments.find((x) => x.id === id);
+      if (p) {
+        const inv = (p.invoiceId ? invoices.find((i) => i.id === p.invoiceId) : undefined)
+          ?? invoices.find((i) => i.number === p.invoiceNumber);
+        const pur = inv ? undefined : (p.purchaseId ? purchases.find((x) => x.id === p.purchaseId) : undefined)
+          ?? (inv ? undefined : purchases.find((x) => x.number === p.invoiceNumber));
+
+        if (inv) {
+          const newPaid = Math.max(0, inv.paid - p.amount);
+          const totals = calcInvoiceTotals(inv.items, inv.taxRate, inv.discountMode, inv.discountValue, inv.shippingAmount, inv.taxInclusive);
+          const newStatus = newPaid >= totals.total ? "paid" : newPaid > 0 ? "partial" : "unpaid";
+          const { data: invData } = await supabase.from("invoices").update({ paid: newPaid, status: newStatus }).eq("id", inv.id).select().single();
+          if (invData) setInvoices((prev) => prev.map((x) => (x.id === inv.id ? invoiceFromRow(invData) : x)));
+          const customer = customers.find((c) => c.id === inv.customerId);
+          if (customer) {
+            const { data: custData } = await supabase.from("customers").update({ balance: customer.balance + p.amount }).eq("id", customer.id).select().single();
+            if (custData) setCustomers((prev) => prev.map((c) => (c.id === customer.id ? customerFromRow(custData) : c)));
+          }
+        } else if (pur) {
+          const newPaid = Math.max(0, pur.paid - p.amount);
+          const newStatus = newPaid >= pur.total ? "paid" : newPaid > 0 ? "partial" : "unpaid";
+          const { data: purData } = await supabase.from("purchases").update({ paid: newPaid, status: newStatus }).eq("id", pur.id).select().single();
+          if (purData) setPurchases((prev) => prev.map((x) => (x.id === pur.id ? purchaseFromRow(purData) : x)));
+          const supplier = customers.find((c) => c.id === pur.supplierId);
+          if (supplier) {
+            const { data: supData } = await supabase.from("customers").update({ payable_balance: (supplier.payableBalance ?? 0) + p.amount }).eq("id", supplier.id).select().single();
+            if (supData) setCustomers((prev) => prev.map((c) => (c.id === supplier.id ? customerFromRow(supData) : c)));
+          }
+        }
+
+        const account = accounts.find((a) => a.accountType === "payment" && a.name === p.method);
+        if (account) {
+          const delta = pur ? p.amount : -p.amount;
+          const { data: acctData } = await supabase.from("accounts").update({ current_balance: account.currentBalance + delta }).eq("id", account.id).select().single();
+          if (acctData) setAccounts((prev) => prev.map((a) => (a.id === account.id ? accountFromRow(acctData) : a)));
+        }
+      }
+
       const { error } = await supabase.from("payments").delete().eq("id", id);
       if (error) throw new Error(error.message);
       setPayments((prev) => prev.filter((p) => p.id !== id));
