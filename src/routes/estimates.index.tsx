@@ -30,6 +30,8 @@ const statusMeta: Record<string, { label: string; tone: string }> = {
   accepted: { label: "Finalised", tone: "border-accent/40 text-accent" },
 };
 
+type Filter = "all" | keyof typeof statusMeta;
+
 function EstimatesPage() {
   const { estimates, customers, updateEstimate, deleteEstimate, addInvoice } = useStore();
   const { can } = useStaffPermissions();
@@ -38,17 +40,27 @@ function EstimatesPage() {
   const canCreate = can("estimates", "create");
   const nav = useNavigate();
   const [toDelete, setToDelete] = useState<string | null>(null);
+  const [filter, setFilter] = useState<Filter>("all");
 
   const rows = useMemo(
-    () => estimates.map((e) => {
-      // Used to be a separate, hand-rolled formula that always treated tax
-      // as exclusive — silently overstating any estimate saved as tax-
-      // inclusive. Now shares the same canonical calculation invoices use.
-      const { total } = calcInvoiceTotals(e.items, e.taxRate, e.discountMode, e.discountValue, e.shippingAmount, e.taxInclusive);
-      return { ...e, total, customer: customers.find((c) => c.id === e.customerId) };
-    }),
-    [estimates, customers]
+    () => estimates
+      .filter((e) => filter === "all" || e.status === filter)
+      .map((e) => {
+        // Used to be a separate, hand-rolled formula that always treated
+        // tax as exclusive — silently overstating any estimate saved as
+        // tax-inclusive. Now shares the same canonical calculation
+        // invoices use.
+        const { total } = calcInvoiceTotals(e.items, e.taxRate, e.discountMode, e.discountValue, e.shippingAmount, e.taxInclusive);
+        return { ...e, total, customer: customers.find((c) => c.id === e.customerId) };
+      }),
+    [estimates, customers, filter]
   );
+
+  const counts = useMemo(() => {
+    const c: Record<Filter, number> = { all: estimates.length } as Record<Filter, number>;
+    for (const key of Object.keys(statusMeta)) c[key as Filter] = estimates.filter((e) => e.status === key).length;
+    return c;
+  }, [estimates]);
 
   // Standard invoice-maker feature: once a client accepts an estimate,
   // convert it straight into a real invoice instead of re-typing every
@@ -90,6 +102,46 @@ function EstimatesPage() {
         ) : undefined}
       />
 
+      {/* Status filter — same pill-with-count pattern as the Invoices list */}
+      <Card className="border-border/70">
+        <CardContent className="p-3 sm:p-4">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {(["all", ...Object.keys(statusMeta)] as Filter[]).map((f) => {
+              const active = filter === f;
+              const label = f === "all" ? "All" : statusMeta[f]?.label ?? f;
+              return (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => setFilter(f)}
+                  className={`inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-medium transition ${
+                    active
+                      ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                      : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                  }`}
+                >
+                  {label}
+                  <span className={`rounded-full px-1.5 py-0.5 text-[10px] leading-none ${
+                    active ? "bg-primary-foreground/20 text-primary-foreground" : "bg-muted text-muted-foreground"
+                  }`}>
+                    {counts[f]}
+                  </span>
+                </button>
+              );
+            })}
+            {filter !== "all" && (
+              <button
+                type="button"
+                onClick={() => setFilter("all")}
+                className="ml-auto inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[11px] font-medium text-muted-foreground hover:text-destructive"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Desktop table */}
       <Card className="hidden md:block">
         <CardContent className="overflow-x-auto p-0">
@@ -107,7 +159,8 @@ function EstimatesPage() {
             <tbody>
               {rows.length === 0 && (
                 <tr><td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
-                  <FileText className="mx-auto mb-2 h-8 w-8" />No estimates yet — tap "New Estimate" to create one.
+                  <FileText className="mx-auto mb-2 h-8 w-8" />
+                  {estimates.length === 0 ? 'No estimates yet — tap "New Estimate" to create one.' : "No estimates match this filter."}
                 </td></tr>
               )}
               {rows.map((r) => (
@@ -153,7 +206,8 @@ function EstimatesPage() {
       <div className="space-y-3 md:hidden">
         {rows.length === 0 && (
           <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">
-            <FileText className="mx-auto mb-2 h-7 w-7" />No estimates yet — tap "New Estimate" to create one.
+            <FileText className="mx-auto mb-2 h-7 w-7" />
+            {estimates.length === 0 ? 'No estimates yet — tap "New Estimate" to create one.' : "No estimates match this filter."}
           </CardContent></Card>
         )}
         {rows.map((r) => (

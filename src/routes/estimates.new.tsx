@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useBlocker, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Plus, Trash2, Send, Save, Printer, Eye, Calendar,
@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -110,12 +111,17 @@ function CreateEstimate() {
   }, [editingEstimate, loadedEditId]);
 
   // Default Terms from Settings -> Terms & Condition -> Estimate Terms.
+  // The loaded default becomes part of the form's "untouched" baseline
+  // (see isDirty below) so simply opening a brand-new estimate and leaving
+  // again — without typing anything — doesn't trigger an unsaved-changes
+  // warning just because Settings pre-filled this box.
+  const [defaultTerms, setDefaultTerms] = useState("");
   useEffect(() => {
     if (editingEstimate) return;
     supabase.from("app_settings").select("setting_value").eq("setting_key", "settings.terms").maybeSingle()
       .then(({ data }) => {
         const t = (data?.setting_value as Record<string, string>) ?? {};
-        if (t.estimateTerms) setTerms(t.estimateTerms);
+        if (t.estimateTerms) { setTerms(t.estimateTerms); setDefaultTerms(t.estimateTerms); }
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -140,6 +146,51 @@ function CreateEstimate() {
   const businessName = business.businessName || business.legalName || "Your Business";
 
   const customer = customers.find((c) => c.id === customerId);
+
+  // Unsaved-change protection — mirrors the "Unsaved changes" confirmation
+  // dialog invoices.new.tsx already shows (there, only guarding its
+  // add/edit-item dialog closing); here it guards leaving this whole page.
+  // Dirty means any of these fields differ from what the form started
+  // with: the loaded estimate when editing, or the form's own empty
+  // defaults (plus whatever default Terms text Settings pre-filled) when
+  // creating a new one.
+  const initial = useMemo(() => ({
+    customerId: editingEstimate?.customerId ?? "",
+    items: editingEstimate?.items ?? [],
+    discountValue: editingEstimate?.discountValue ?? 0,
+    taxEnabled: editingEstimate ? editingEstimate.taxEnabled : true,
+    taxInclusive: editingEstimate ? editingEstimate.taxInclusive : false,
+    taxPct: editingEstimate ? editingEstimate.taxRate : 0,
+    shippingAmount: editingEstimate?.shippingAmount ?? 0,
+    notes: editingEstimate?.notes ?? "",
+    terms: editingEstimate ? "" : defaultTerms,
+  }), [editingEstimate, defaultTerms]);
+
+  const isDirty =
+    customerId !== initial.customerId ||
+    JSON.stringify(items) !== JSON.stringify(initial.items) ||
+    discountValue !== initial.discountValue ||
+    taxEnabled !== initial.taxEnabled ||
+    taxInclusive !== initial.taxInclusive ||
+    taxPct !== initial.taxPct ||
+    shippingAmount !== initial.shippingAmount ||
+    notes.trim() !== initial.notes.trim() ||
+    terms.trim() !== initial.terms.trim();
+
+  // Set right before navigating away after a successful save — the data is
+  // safely persisted at that point, so the very next line (nav() to the
+  // list) must NOT trigger the same "unsaved changes" prompt it exists to
+  // prevent.
+  const [savedAndExiting, setSavedAndExiting] = useState(false);
+
+  // Blocks in-app navigation away from this page (the back arrow above,
+  // sidebar links, browser back/forward) and warns before closing/
+  // refreshing the tab while the form is dirty.
+  const blocker = useBlocker({
+    shouldBlockFn: () => isDirty && !savedAndExiting,
+    enableBeforeUnload: () => isDirty && !savedAndExiting,
+    withResolver: true,
+  });
 
   const baseAmount = useMemo(
     () => items.reduce((s, it) => s + it.qty * it.rate * (1 - it.discount / 100), 0),
@@ -267,6 +318,7 @@ function CreateEstimate() {
         window.open(doc.output("bloburl"), "_blank");
       }
 
+      setSavedAndExiting(true);
       setTimeout(() => nav({ to: "/estimates" }), 150);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not save estimate");
@@ -727,6 +779,22 @@ function CreateEstimate() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Unsaved-change confirmation — shown by useBlocker above whenever
+          in-app navigation, browser back/forward, or the back arrow tries
+          to leave this page while the form is dirty. */}
+      <AlertDialog open={blocker.status === "blocked"} onOpenChange={(o) => { if (!o) blocker.reset?.(); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unsaved changes</AlertDialogTitle>
+            <AlertDialogDescription>Are you sure you want to exit? What you've entered here hasn't been added yet.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep editing</AlertDialogCancel>
+            <AlertDialogAction onClick={() => blocker.proceed?.()}>Discard &amp; exit</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <ItemDialog
         open={itemDlgOpen}
