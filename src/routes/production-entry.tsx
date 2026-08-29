@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useStore } from "@/lib/store";
+import { supabase } from "@/integrations/supabase/client";
 import type { InvoiceItem, ProductionEntryStatus } from "@/lib/dummy-data";
 import { toast } from "sonner";
 
@@ -41,7 +42,7 @@ function netQtyByProduct(oldItems: InvoiceItem[], newItems: InvoiceItem[]) {
 }
 
 function ProductionEntryPage() {
-  const { productionEntries, products, addProductionEntry, updateProductionEntry, deleteProductionEntry, updateProduct } = useStore();
+  const { productionEntries, products, addProductionEntry, updateProductionEntry, deleteProductionEntry, updateProduct, refresh } = useStore();
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -126,17 +127,44 @@ function ProductionEntryPage() {
     if (!productName.trim()) return toast.error("Product name is required");
     if (saving) return;
     setSaving(true);
-    const payload = { productName: productName.trim(), date, items: materials, quantityProduced, status, notes };
     try {
       const existing = editingId ? productionEntries.find((x) => x.id === editingId) : undefined;
-      const oldFinishedId = existing ? (products.find((p) => p.name === existing.productName)?.id ?? "") : "";
-      if (editingId) { await updateProductionEntry(editingId, payload); toast.success("Updated"); }
-      else { await addProductionEntry(payload); toast.success("Saved"); }
-      await applyStockForCompletion(
-        existing?.status === "completed", status === "completed",
-        existing?.items ?? [], materials,
-        oldFinishedId, existing?.quantityProduced ?? 0, productId, quantityProduced,
-      );
+      const wasCompleted = existing?.status === "completed";
+      const willComplete = status === "completed" && !wasCompleted;
+
+      if (willComplete) {
+        // Freshly completing a run (planned/in_progress -> completed, or a
+        // brand-new entry saved as Completed) is the stock-affecting
+        // transition — move it atomically through complete_production_entry()
+        // instead of a sequence of separate updateProduct() calls. The row's
+        // own status is never written as "completed" by this client call;
+        // only the RPC flips it, in the same transaction as the stock
+        // movement, so the two can never end up out of sync.
+        const payload = { productName: productName.trim(), date, items: materials, quantityProduced, notes, status: existing?.status ?? "planned" };
+        const entryId = editingId ?? (await addProductionEntry(payload)).id;
+        if (editingId) await updateProductionEntry(editingId, payload);
+
+        const { error } = await supabase.rpc("complete_production_entry", {
+          p_entry_id: entryId,
+          p_finished_product_id: productId || null,
+        });
+        if (error) throw new Error(error.message);
+        await refresh(); // pull the RPC's stock + status changes into local state
+        toast.success(editingId ? "Updated" : "Saved");
+      } else {
+        // Every other transition (planned/in_progress/cancelled changes,
+        // editing an already-completed run, or un-completing one) is
+        // unchanged — net-delta stock adjustment via applyStockForCompletion.
+        const payload = { productName: productName.trim(), date, items: materials, quantityProduced, status, notes };
+        const oldFinishedId = existing ? (products.find((p) => p.name === existing.productName)?.id ?? "") : "";
+        if (editingId) { await updateProductionEntry(editingId, payload); toast.success("Updated"); }
+        else { await addProductionEntry(payload); toast.success("Saved"); }
+        await applyStockForCompletion(
+          wasCompleted, status === "completed",
+          existing?.items ?? [], materials,
+          oldFinishedId, existing?.quantityProduced ?? 0, productId, quantityProduced,
+        );
+      }
       setOpen(false); resetForm(); setEditingId(null);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not save");

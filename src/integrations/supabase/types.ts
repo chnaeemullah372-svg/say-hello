@@ -1409,6 +1409,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      complete_production_entry: {
+        Args: { p_entry_id: string; p_finished_product_id: string | null }
+        Returns: undefined
+      }
       next_document_number: {
         Args: { p_doc_type: string; p_tenant_id: string }
         Returns: string
