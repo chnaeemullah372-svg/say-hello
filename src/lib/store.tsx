@@ -1076,6 +1076,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (data) setSaleReturns((prev) => prev.map((x) => (x.id === id ? saleReturnFromRow(data) : x)));
     },
     deleteSaleReturn: async (id) => {
+      // Same orphaned-side-effect bug as deleteInvoice/deletePurchase: the
+      // customer balance credit and the restocked items a sale return
+      // applies were never reversed on delete. Reverse both first.
+      const r = saleReturns.find((x) => x.id === id);
+      if (r) {
+        const customer = customers.find((c) => c.id === r.customerId);
+        if (customer && r.total !== 0) {
+          const { data } = await supabase.from("customers").update({ balance: customer.balance + r.total }).eq("id", customer.id).select().single();
+          if (data) setCustomers((prev) => prev.map((c) => (c.id === customer.id ? customerFromRow(data) : c)));
+        }
+        for (const it of r.items) {
+          if (!it.productId) continue;
+          const prod = products.find((x) => x.id === it.productId);
+          if (prod) {
+            const { data } = await supabase.from("products").update({ stock: prod.stock - it.qty }).eq("id", prod.id).select().single();
+            if (data) setProducts((prev) => prev.map((x) => (x.id === prod.id ? productFromRow(data) : x)));
+          }
+        }
+      }
+
       const { error } = await supabase.from("sale_returns").delete().eq("id", id);
       if (error) throw new Error(error.message);
       setSaleReturns((prev) => prev.filter((x) => x.id !== id));
@@ -1113,6 +1133,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (data) setPurchaseReturns((prev) => prev.map((x) => (x.id === id ? purchaseReturnFromRow(data) : x)));
     },
     deletePurchaseReturn: async (id) => {
+      // Same orphaned-side-effect bug as deleteInvoice/deletePurchase: the
+      // supplier payable-balance credit and the stock a purchase return
+      // sends back out were never reversed on delete. Reverse both first.
+      const r = purchaseReturns.find((x) => x.id === id);
+      if (r) {
+        const supplier = customers.find((c) => c.id === r.supplierId);
+        if (supplier && r.total !== 0) {
+          const { data } = await supabase.from("customers").update({ payable_balance: (supplier.payableBalance ?? 0) + r.total }).eq("id", supplier.id).select().single();
+          if (data) setCustomers((prev) => prev.map((c) => (c.id === supplier.id ? customerFromRow(data) : c)));
+        }
+        for (const it of r.items) {
+          if (!it.productId) continue;
+          const prod = products.find((x) => x.id === it.productId);
+          if (prod) {
+            const { data } = await supabase.from("products").update({ stock: prod.stock + it.qty }).eq("id", prod.id).select().single();
+            if (data) setProducts((prev) => prev.map((x) => (x.id === prod.id ? productFromRow(data) : x)));
+          }
+        }
+      }
+
       const { error } = await supabase.from("purchase_returns").delete().eq("id", id);
       if (error) throw new Error(error.message);
       setPurchaseReturns((prev) => prev.filter((x) => x.id !== id));
@@ -1271,6 +1311,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (data) setPurchases((prev) => prev.map((x) => (x.id === id ? purchaseFromRow(data) : x)));
     },
     deletePurchase: async (id) => {
+      // Deleting a purchase used to leave the supplier's payable balance and
+      // the stock it brought in untouched — the same orphaned-side-effect
+      // bug already fixed for deleteInvoice. Reverse both first.
+      const p = purchases.find((x) => x.id === id);
+      if (p) {
+        const supplier = customers.find((c) => c.id === p.supplierId);
+        if (supplier) {
+          const outstanding = p.total - p.paid;
+          if (outstanding !== 0) {
+            const { data } = await supabase.from("customers").update({ payable_balance: (supplier.payableBalance ?? 0) - outstanding }).eq("id", supplier.id).select().single();
+            if (data) setCustomers((prev) => prev.map((c) => (c.id === supplier.id ? customerFromRow(data) : c)));
+          }
+        }
+        for (const it of p.items) {
+          if (!it.productId) continue;
+          const prod = products.find((x) => x.id === it.productId);
+          if (prod) {
+            const { data } = await supabase.from("products").update({ stock: prod.stock - it.qty }).eq("id", prod.id).select().single();
+            if (data) setProducts((prev) => prev.map((x) => (x.id === prod.id ? productFromRow(data) : x)));
+          }
+        }
+      }
+
       const { error } = await supabase.from("purchases").delete().eq("id", id);
       if (error) throw new Error(error.message);
       setPurchases((prev) => prev.filter((x) => x.id !== id));
