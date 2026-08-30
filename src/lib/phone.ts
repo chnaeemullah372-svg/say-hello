@@ -10,6 +10,9 @@
  *   "923001234567"     -> "+923001234567"
  *   "+92 300 1234567"  -> "+923001234567"
  *   "0092 300 1234567" -> "+923001234567"
+ *   "+919876543210"    -> "+919876543210" (already has a non-PK country
+ *                          code — left as-is instead of getting "92" glued
+ *                          on top and turned into a garbled number)
  */
 export function normalizeWhatsAppNumber(raw: string): string {
   if (!raw) return "";
@@ -26,8 +29,14 @@ export function normalizeWhatsAppNumber(raw: string): string {
     digits = digits.slice(1);
   }
 
-  // If it doesn't already carry the country code, add Pakistan's (92)
-  if (!digits.startsWith("92")) {
+  // Pakistani numbers (mobile or landline w/ area code) are always a
+  // 10-digit subscriber number once the trunk 0 / country code is gone.
+  // Only prepend "92" when what's left actually looks like a bare local
+  // number (10 digits) — a customer's already-international number (a
+  // different, or typo'd, country code — e.g. an Indian "+91..." number)
+  // is 11+ digits and must NOT get "92" glued on top of it, or it silently
+  // turns into a garbled, undeliverable number instead of the real one.
+  if (!digits.startsWith("92") && digits.length === 10) {
     digits = `92${digits}`;
   }
 
