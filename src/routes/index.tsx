@@ -47,7 +47,7 @@ const modules = [
 ];
 
 function Dashboard() {
-  const { invoices, payments, purchases, expenses, saleOrders } = useStore();
+  const { invoices, payments, purchases, expenses, saleOrders, saleReturns, purchaseReturns, commissions } = useStore();
   const { user } = useAuth();
 
   // These summary tiles used to show a mix of real totals and hardcoded
@@ -69,6 +69,15 @@ function Dashboard() {
   const paymentPaidThisMonth = purchases.filter((p) => isThisMonth(p.date)).reduce((s, p) => s + p.paid, 0);
   const outstandingPayment = purchases.reduce((s, p) => s + (p.total - p.paid), 0);
   const expenseMonth = expenses.filter((e) => isThisMonth(e.date)).reduce((s, e) => s + e.amount, 0);
+  // Profit/Loss used to be a bare Sales − Expenses subtraction that ignored
+  // purchase cost, sales/purchase returns and agent commissions entirely —
+  // the same components Reports' Profit / Loss report nets out — so this
+  // tile disagreed with Reports for the very same numbers. Mirror that
+  // formula here, scoped to the current month like the tile's own label.
+  const salesReturnsMonth = saleReturns.filter((r) => isThisMonth(r.date)).reduce((s, r) => s + r.total, 0);
+  const purchaseReturnsMonth = purchaseReturns.filter((r) => isThisMonth(r.date)).reduce((s, r) => s + r.total, 0);
+  const commissionsMonth = commissions.filter((c) => isThisMonth(c.date)).reduce((s, c) => s + c.commission, 0);
+  const profitMonth = (sales - salesReturnsMonth) - (purchasesThisMonth - purchaseReturnsMonth) - expenseMonth - commissionsMonth;
   const openOrders = saleOrders.filter((o) => o.status === "booked" || o.status === "processing").length;
   const orderStats = {
     booked: saleOrders.filter((o) => o.status === "booked").length,
@@ -182,7 +191,7 @@ function Dashboard() {
                 <div className="text-xs text-muted-foreground">Net for the current month</div>
               </div>
               <div className="text-right">
-                <div className="font-display text-lg font-bold text-accent">{fmt(sales - expenseMonth)}</div>
+                <div className="font-display text-lg font-bold text-accent">{fmt(profitMonth)}</div>
                 <div className="text-[10px] uppercase tracking-wider text-accent">Profit</div>
               </div>
             </div>

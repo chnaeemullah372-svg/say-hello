@@ -119,9 +119,14 @@ function buildReport(
       return purchaseTable(store.purchases.filter((p) => p.total - p.paid > 0));
 
     case "Purchase::Purchase Tax Report": {
+      // This used to sum only the line-level item discount, silently
+      // dropping the purchase-level Discount-Rate/Flat field — the same
+      // class of bug already fixed for estimates — overstating Taxable
+      // Amount for any purchase with a global discount. subtotal − discount
+      // from calcInvoiceTotals is that same taxable figure, kept in sync.
       const rows = store.purchases.map((p) => {
-        const taxable = p.items.reduce((s, it) => s + it.qty * it.rate * (1 - it.discount / 100), 0);
-        return { ...p, taxable };
+        const t = calcInvoiceTotals(p.items, p.taxRate, p.discountMode, p.discountValue, p.shippingAmount);
+        return { ...p, taxable: t.subtotal - t.discount };
       });
       return {
         columns: ["Purchase #", "Supplier", "Date", "Taxable Amount", "Total"],
