@@ -832,6 +832,8 @@ export type Database = {
           supplier_id: string | null
           supplier_name: string
           tax_rate: number
+          tax_enabled: boolean
+          tax_inclusive: boolean
           total: number
           updated_at: string
           tenant_id: string
@@ -851,6 +853,8 @@ export type Database = {
           supplier_id?: string | null
           supplier_name?: string
           tax_rate?: number
+          tax_enabled?: boolean
+          tax_inclusive?: boolean
           total?: number
           updated_at?: string
           tenant_id?: string
@@ -870,6 +874,8 @@ export type Database = {
           supplier_id?: string | null
           supplier_name?: string
           tax_rate?: number
+          tax_enabled?: boolean
+          tax_inclusive?: boolean
           total?: number
           updated_at?: string
           tenant_id?: string
@@ -1012,6 +1018,8 @@ export type Database = {
           shipping_amount: number
           status: string
           tax_rate: number
+          tax_enabled: boolean
+          tax_inclusive: boolean
           updated_at: string
           tenant_id: string
         }
@@ -1030,6 +1038,8 @@ export type Database = {
           shipping_amount?: number
           status?: string
           tax_rate?: number
+          tax_enabled?: boolean
+          tax_inclusive?: boolean
           updated_at?: string
           tenant_id?: string
         }
@@ -1048,6 +1058,8 @@ export type Database = {
           shipping_amount?: number
           status?: string
           tax_rate?: number
+          tax_enabled?: boolean
+          tax_inclusive?: boolean
           updated_at?: string
           tenant_id?: string
         }

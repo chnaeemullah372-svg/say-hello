@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useStore } from "@/lib/store";
-import { fmt } from "@/lib/dummy-data";
+import { calcInvoiceTotals, fmt } from "@/lib/dummy-data";
 import { useStaffPermissions } from "@/lib/permissions";
 import { supabase } from "@/integrations/supabase/client";
 import { sendOrderStatusUpdate } from "@/lib/whatsapp";
@@ -50,12 +50,14 @@ function SaleOrderPage() {
   };
 
   const rows = useMemo(
-    () => saleOrders.map((s) => {
-      const base = s.items.reduce((sum, it) => sum + it.qty * it.rate * (1 - it.discount / 100), 0);
-      const disc = s.discountMode === "flat" ? (s.discountValue ?? 0) : (base * (s.discountValue ?? 0)) / 100;
-      const total = (base - disc) * (1 + s.taxRate / 100) + (s.shippingAmount ?? 0);
-      return { ...s, total, customer: customers.find((c) => c.id === s.customerId) };
-    }),
+    () => saleOrders.map((s) => ({
+      ...s,
+      // Same formula every other document type uses (calcInvoiceTotals) so
+      // a tax-inclusive order isn't double-counted here as tax-on-top —
+      // the ad-hoc formula this replaced always assumed exclusive tax.
+      ...calcInvoiceTotals(s.items, s.taxRate, s.discountMode, s.discountValue, s.shippingAmount, s.taxInclusive),
+      customer: customers.find((c) => c.id === s.customerId),
+    })),
     [saleOrders, customers]
   );
 
@@ -67,8 +69,8 @@ function SaleOrderPage() {
         dueDate: new Date().toISOString().slice(0, 10),
         items: row.items,
         taxRate: row.taxRate,
-        taxEnabled: row.taxRate > 0,
-        taxInclusive: false,
+        taxEnabled: row.taxEnabled,
+        taxInclusive: row.taxInclusive,
         discountMode: row.discountMode ?? "rate",
         discountValue: row.discountValue ?? 0,
         shippingAmount: row.shippingAmount ?? 0,

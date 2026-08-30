@@ -98,6 +98,8 @@ function CreateSaleOrder() {
       setDiscountMode(editingOrder.discountMode ?? "rate");
       setDiscountValue(editingOrder.discountValue ?? 0);
       setTaxPct(editingOrder.taxRate);
+      setTaxEnabled(editingOrder.taxEnabled);
+      setTaxInclusive(editingOrder.taxInclusive);
       setShippingAmount(editingOrder.shippingAmount ?? 0);
       setDeliveryDate(editingOrder.deliveryDate || "");
       setStatus(editingOrder.status);
@@ -227,7 +229,7 @@ function CreateSaleOrder() {
       date: orderDate.toISOString().slice(0, 10),
       deliveryDate,
       items: items.map(({ productId, name, qty, rate, discount }) => ({ productId, name, qty, rate, discount })),
-      taxRate: taxEnabled ? taxPct : 0, discountMode, discountValue, shippingAmount, notes,
+      taxRate: taxEnabled ? taxPct : 0, taxEnabled, taxInclusive, discountMode, discountValue, shippingAmount, notes,
       status: status as (typeof statusOptions)[number]["value"] as any,
     };
     try {

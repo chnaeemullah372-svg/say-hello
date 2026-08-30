@@ -98,6 +98,8 @@ function CreatePurchaseOrder() {
       setDiscountMode(editingOrder.discountMode ?? "rate");
       setDiscountValue(editingOrder.discountValue ?? 0);
       setTaxPct(editingOrder.taxRate);
+      setTaxEnabled(editingOrder.taxEnabled);
+      setTaxInclusive(editingOrder.taxInclusive);
       setShippingAmount(editingOrder.shippingAmount ?? 0);
       setStatus(editingOrder.status);
       setNotes(editingOrder.notes || "");
@@ -228,7 +230,7 @@ function CreatePurchaseOrder() {
       if (editingOrder) {
         await updatePurchaseOrder(editingOrder.id, {
           supplierId, supplierName: supplier?.name, items: plainItems,
-          taxRate: effectiveTaxRate, discountMode, discountValue, shippingAmount, notes,
+          taxRate: effectiveTaxRate, taxEnabled, taxInclusive, discountMode, discountValue, shippingAmount, notes,
           total, status: status as PurchaseOrder["status"],
         });
         orderNumber = editingOrder.number;
@@ -236,7 +238,7 @@ function CreatePurchaseOrder() {
       } else {
         const order = await addPurchaseOrder({
           supplierId, supplierName: supplier?.name ?? "", date: orderDate.toISOString().slice(0, 10), items: plainItems,
-          taxRate: effectiveTaxRate, discountMode, discountValue, shippingAmount, notes,
+          taxRate: effectiveTaxRate, taxEnabled, taxInclusive, discountMode, discountValue, shippingAmount, notes,
           total, status: status as PurchaseOrder["status"],
         });
         orderNumber = order.number;

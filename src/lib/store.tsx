@@ -220,6 +220,8 @@ function saleOrderFromRow(row: any): SaleOrder {
     deliveryDate: row.delivery_date ?? "",
     items: (row.items ?? []) as InvoiceItem[],
     taxRate: Number(row.tax_rate ?? 0),
+    taxEnabled: row.tax_enabled ?? true,
+    taxInclusive: row.tax_inclusive ?? false,
     discountMode: (row.discount_mode as SaleOrder["discountMode"]) ?? "rate",
     discountValue: Number(row.discount_value ?? 0),
     shippingAmount: Number(row.shipping_amount ?? 0),
@@ -238,6 +240,8 @@ function purchaseOrderFromRow(row: any): PurchaseOrder {
     date: row.date,
     items: (row.items ?? []) as InvoiceItem[],
     taxRate: Number(row.tax_rate ?? 0),
+    taxEnabled: row.tax_enabled ?? true,
+    taxInclusive: row.tax_inclusive ?? false,
     discountMode: row.discount_mode ?? "rate",
     discountValue: Number(row.discount_value ?? 0),
     shippingAmount: Number(row.shipping_amount ?? 0),
@@ -906,6 +910,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         delivery_date: s.deliveryDate || null,
         items: s.items as unknown as import("@/integrations/supabase/types").Json,
         tax_rate: s.taxRate,
+        tax_enabled: s.taxEnabled,
+        tax_inclusive: s.taxInclusive,
         discount_mode: s.discountMode ?? "rate",
         discount_value: s.discountValue ?? 0,
         shipping_amount: s.shippingAmount ?? 0,
@@ -926,6 +932,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (patch.deliveryDate !== undefined) dbPatch.delivery_date = patch.deliveryDate || null;
       if (patch.items !== undefined) dbPatch.items = patch.items;
       if (patch.taxRate !== undefined) dbPatch.tax_rate = patch.taxRate;
+      if (patch.taxEnabled !== undefined) dbPatch.tax_enabled = patch.taxEnabled;
+      if (patch.taxInclusive !== undefined) dbPatch.tax_inclusive = patch.taxInclusive;
       if (patch.discountMode !== undefined) dbPatch.discount_mode = patch.discountMode;
       if (patch.discountValue !== undefined) dbPatch.discount_value = patch.discountValue;
       if (patch.shippingAmount !== undefined) dbPatch.shipping_amount = patch.shippingAmount;
@@ -954,7 +962,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         supplier_name: p.supplierName,
         date: p.date,
         items: p.items as unknown as import("@/integrations/supabase/types").Json,
-        tax_rate: p.taxRate ?? 0, discount_mode: p.discountMode ?? "rate", discount_value: p.discountValue ?? 0,
+        tax_rate: p.taxRate ?? 0, tax_enabled: p.taxEnabled, tax_inclusive: p.taxInclusive,
+        discount_mode: p.discountMode ?? "rate", discount_value: p.discountValue ?? 0,
         shipping_amount: p.shippingAmount ?? 0, notes: p.notes || null,
         total: p.total,
         status: p.status,
@@ -973,6 +982,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (patch.date !== undefined) dbPatch.date = patch.date;
       if (patch.items !== undefined) dbPatch.items = patch.items;
       if (patch.taxRate !== undefined) dbPatch.tax_rate = patch.taxRate;
+      if (patch.taxEnabled !== undefined) dbPatch.tax_enabled = patch.taxEnabled;
+      if (patch.taxInclusive !== undefined) dbPatch.tax_inclusive = patch.taxInclusive;
       if (patch.discountMode !== undefined) dbPatch.discount_mode = patch.discountMode;
       if (patch.discountValue !== undefined) dbPatch.discount_value = patch.discountValue;
       if (patch.shippingAmount !== undefined) dbPatch.shipping_amount = patch.shippingAmount;

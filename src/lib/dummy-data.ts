@@ -174,6 +174,8 @@ export type SaleOrder = {
   deliveryDate: string;
   items: InvoiceItem[];
   taxRate: number;
+  taxEnabled: boolean;
+  taxInclusive: boolean;
   discountMode?: "rate" | "flat";
   discountValue?: number;
   shippingAmount?: number;
@@ -218,6 +220,8 @@ export type PurchaseOrder = {
   date: string;
   items: InvoiceItem[];
   taxRate: number;
+  taxEnabled: boolean;
+  taxInclusive: boolean;
   discountMode?: "rate" | "flat";
   discountValue?: number;
   shippingAmount?: number;
