@@ -498,8 +498,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         bank_account_no: c.bankAccountNo || null,
         ifsc_code: c.ifscCode || null,
         upi_id: c.upiId || null,
-        balance: c.balance ?? c.openingBalance ?? 0,
-        payable_balance: c.payableBalance ?? 0,
+        // `balance` is what a client owes us; `payableBalance` is what we
+        // owe a supplier — a supplier's Opening Balance was always seeded
+        // into `balance` regardless of party type, so a brand-new
+        // supplier's opening payable silently vanished (the Customers
+        // page reads `payableBalance` for suppliers, which stayed 0).
+        balance: c.balance ?? (c.partyType === "supplier" ? 0 : c.openingBalance ?? 0),
+        payable_balance: c.payableBalance ?? (c.partyType === "supplier" ? c.openingBalance ?? 0 : 0),
         created_by: userData.user?.id,
         tenant_id: tenantId,
       }).select().single();
@@ -510,6 +515,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
 
     updateCustomer: async (id, patch) => {
+      const existing = customers.find((c) => c.id === id);
       const dbPatch: Record<string, unknown> = {};
       if (patch.partyType !== undefined) dbPatch.party_type = patch.partyType;
       if (patch.name !== undefined) dbPatch.name = patch.name;
@@ -540,7 +546,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (patch.referralAddress !== undefined) dbPatch.referral_address = patch.referralAddress || null;
       if (patch.maxCreditLimit !== undefined) dbPatch.max_credit_limit = patch.maxCreditLimit ?? null;
       if (patch.paymentTerms !== undefined) dbPatch.payment_terms = patch.paymentTerms;
-      if (patch.openingBalance !== undefined) dbPatch.opening_balance = patch.openingBalance;
+      if (patch.openingBalance !== undefined) {
+        dbPatch.opening_balance = patch.openingBalance;
+        // Correcting the Opening Balance long after invoices/payments have
+        // already moved the running balance away from it must shift that
+        // running balance by the same delta, not overwrite it outright —
+        // overwriting would silently erase every invoice/payment that
+        // happened since (the same class of drift the statement page's
+        // own opening-balance fix addressed, but on the write side here).
+        // Skipped when the caller also passes balance/payableBalance
+        // explicitly (e.g. an invoice/purchase save) — that value wins below.
+        if (existing && patch.balance === undefined && patch.payableBalance === undefined) {
+          const delta = patch.openingBalance - (existing.openingBalance ?? 0);
+          if (delta !== 0) {
+            if (existing.partyType === "supplier") dbPatch.payable_balance = (existing.payableBalance ?? 0) + delta;
+            else dbPatch.balance = existing.balance + delta;
+          }
+        }
+      }
       if (patch.openingDate !== undefined) dbPatch.opening_date = patch.openingDate;
       if (patch.bankName !== undefined) dbPatch.bank_name = patch.bankName || null;
       if (patch.payableTo !== undefined) dbPatch.payable_to = patch.payableTo || null;

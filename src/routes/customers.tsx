@@ -242,6 +242,18 @@ function CustomersPage() {
       return c.partyType === form.partyType;
     });
     if (duplicate) return toast.error(`${form.partyType === "supplier" ? "Supplier" : "Client"} with this name already exists`);
+    // A duplicate phone number (unlike a duplicate name) is very rarely two
+    // genuine contacts — almost always the same person/business re-entered
+    // by mistake, so it's worth blocking the same way a duplicate name is.
+    // Same same-party-type scoping as the name check above.
+    const trimmedPhone = form.phone.trim();
+    const phoneDuplicate = !!trimmedPhone && customers.some((c) => {
+      if (c.id === editingId) return false;
+      if ((c.phone ?? "").trim() !== trimmedPhone) return false;
+      if (c.partyType === "both" || form.partyType === "both") return true;
+      return c.partyType === form.partyType;
+    });
+    if (phoneDuplicate) return toast.error(`${form.partyType === "supplier" ? "Supplier" : "Client"} with this phone number already exists`);
     if (saving) return;
     setSaving(true);
     const payload = {
