@@ -46,6 +46,10 @@ function SubsPage() {
 
   const save = async () => {
     if (!customerId || !planName.trim()) return toast.error("Select a customer and plan name");
+    // A zero/negative amount used to sail through silently — the billing
+    // engine would then either raise a zero-value invoice forever or add a
+    // negative amount to the customer's balance on every cycle.
+    if (!(amount > 0)) return toast.error("Amount must be greater than 0");
     setSaving(true);
     try {
       await addSubscription({ customerId, planName: planName.trim(), amount, billingCycle, status: "active", nextBillingDate });

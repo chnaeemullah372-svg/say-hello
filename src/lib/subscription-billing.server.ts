@@ -24,13 +24,18 @@ function nextCycleDate(from: string, cycle: string): string {
 // two businesses could otherwise have subscriptions due the same day and
 // each would need its own invoice numbering/customer balance untouched by
 // the other.
-export async function runSubscriptionBillingCheck(): Promise<{ billed: number; failed: number }> {
+export async function runSubscriptionBillingCheck(opts?: { tenantId?: string }): Promise<{ billed: number; failed: number }> {
   const today = todayInBusinessTimezone();
   let billed = 0;
   let failed = 0;
 
-  const { data: activeBusinesses, error: businessesError } = await supabaseAdmin
-    .from("businesses").select("id").eq("status", "active");
+  // opts.tenantId scopes this to one business — used by the "Run billing
+  // check now" button so a staff member can only ever trigger billing for
+  // their own tenant, never every business on the platform. Omitted (the
+  // daily heartbeat call) means every active business, as before.
+  let businessesQuery = supabaseAdmin.from("businesses").select("id").eq("status", "active");
+  if (opts?.tenantId) businessesQuery = businessesQuery.eq("id", opts.tenantId);
+  const { data: activeBusinesses, error: businessesError } = await businessesQuery;
   if (businessesError) throw businessesError;
 
   for (const biz of activeBusinesses ?? []) {
