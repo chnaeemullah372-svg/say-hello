@@ -102,11 +102,16 @@ export type ReminderCheckStats = { checked: number; sent: number; skipped: numbe
 // settings, its own unpaid invoices, its own WhatsApp connection. One
 // business having reminders disabled (or no WhatsApp connected) never
 // affects any other business's run.
-export async function runDueReminderCheck(): Promise<ReminderCheckStats> {
+export async function runDueReminderCheck(opts?: { tenantId?: string }): Promise<ReminderCheckStats> {
   const stats: ReminderCheckStats = { checked: 0, sent: 0, skipped: 0, failed: 0 };
 
-  const { data: activeBusinesses, error: businessesError } = await supabaseAdmin
-    .from("businesses").select("id").eq("status", "active");
+  // opts.tenantId scopes this to one business — used by the "Run check now"
+  // button so a staff member can only ever trigger reminders for their own
+  // tenant, never every business on the platform. Omitted (the daily
+  // heartbeat call) means every active business, as before.
+  let businessesQuery = supabaseAdmin.from("businesses").select("id").eq("status", "active");
+  if (opts?.tenantId) businessesQuery = businessesQuery.eq("id", opts.tenantId);
+  const { data: activeBusinesses, error: businessesError } = await businessesQuery;
   if (businessesError) throw businessesError;
 
   for (const biz of activeBusinesses ?? []) {
