@@ -279,6 +279,11 @@ function InvoiceView() {
   if (!inv) return <div className="p-10 text-center text-muted-foreground">Invoice not found. <Link to="/invoices" className="text-accent underline">Back to invoices</Link></div>;
   const totals = calcInvoiceTotals(inv.items, inv.taxRate, inv.discountMode, inv.discountValue, inv.shippingAmount, inv.taxInclusive);
   const balance = totals.total - inv.paid;
+  // What the client owed from their OTHER invoices/transactions, i.e.
+  // everything in customer.balance except this invoice's own contribution
+  // — the print template's "Old Balance" row used to hardcode 0 here
+  // regardless of a real running balance from earlier bills.
+  const oldBalance = customer ? customer.balance - balance : 0;
 
   // "Download PDF" used to just call window.print() — identical to the
   // Print button, and on most setups that opens the browser's print
@@ -447,7 +452,7 @@ function InvoiceView() {
               <dd className="font-display text-xl font-bold text-primary">{fmt(totals.total)}</dd>
             </div>
             <Row label={L("paid", "Paid")} value={fmt(inv.paid)} />
-            {tpl.showOldBalance && <Row label={L("oldBalance", "Old Balance")} value={fmt(0)} />}
+            {tpl.showOldBalance && <Row label={L("oldBalance", "Old Balance")} value={fmt(Math.max(0, oldBalance))} />}
             <div className="flex items-baseline justify-between rounded-lg bg-gold/10 px-3 py-2 text-gold-foreground">
               <dt className="text-xs font-semibold uppercase tracking-wider">{L("balance", "Balance")} due</dt>
               <dd className="font-display text-lg font-bold">{fmt(Math.max(0, balance))}</dd>
